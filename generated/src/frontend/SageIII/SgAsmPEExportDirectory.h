@@ -1,0 +1,758 @@
+
+#ifndef ROSE_SgAsmPEExportDirectory_H
+#define ROSE_SgAsmPEExportDirectory_H
+#include <RoseFirst.h>
+#include <Cxx_GrammarDeclarations.h>
+#include <SgAsmExecutableFileFormat.h>
+
+
+
+/* #line 1 "/workspace/generated/src/ROSETTA/Grammar/grammarClassDeclarationMacros.macro" */
+
+// WARNING -- GENERATED CODE -- DO NOT MODIFY THIS CODE -- WARNING!
+//      This code is automatically generated for each 
+//      terminal and non-terminal within the defined 
+//      grammar.  There is a simple way to change the 
+//      code to fix bugs etc.  See the ROSE README file
+//      for directions.
+
+// tps: (02/22/2010): Adding DLL export requirements
+#include "rosedll.h"
+
+// predeclarations for SgAsmPEExportDirectory
+
+/* #line 25 "/workspace/generated/src/frontend/SageIII//SgAsmPEExportDirectory.h" */
+/* #line 5113 "/workspace/src/ROSETTA/src/binaryInstruction.C" */
+
+#include <Rose/BinaryAnalysis/RelativeVirtualAddress.h>
+
+#ifdef ROSE_SgAsmPEExportDirectory_IMPL
+#include <SgAsmGenericString.h>
+#endif
+
+
+/* #line 13 "/workspace/generated/src/ROSETTA/Grammar/grammarClassDeclarationMacros.macro after subst for $PREDECLARATIONS" */
+
+/* #line 14 "/workspace/generated/src/ROSETTA/Grammar/grammarClassDeclarationMacros.macro" */
+
+#if !defined(DOCUMENTATION)
+// Class Definition for SgAsmPEExportDirectory
+class ROSE_DLL_API SgAsmPEExportDirectory  : public SgAsmExecutableFileFormat
+   {
+     public:
+
+
+/* #line 46 "/workspace/generated/src/frontend/SageIII//SgAsmPEExportDirectory.h" */
+
+          virtual SgNode* copy ( SgCopyHelp& help) const override;
+// Start of memberFunctionString
+/* #line 5199 "/workspace/src/ROSETTA/src/binaryInstruction.C" */
+
+
+    //----------------------- Boost serialization for SgAsmPEExportDirectory -----------------------
+#ifdef ROSE_ENABLE_BOOST_SERIALIZATION
+private:
+    friend class boost::serialization::access;
+
+    template<class S>
+    void serialize(S &s, const unsigned /*version*/) {
+        debugSerializationBegin("SgAsmPEExportDirectory");
+        s & BOOST_SERIALIZATION_BASE_OBJECT_NVP(SgAsmExecutableFileFormat);
+        s & BOOST_SERIALIZATION_NVP(p_res1);
+        s & BOOST_SERIALIZATION_NVP(p_timestamp);
+        s & BOOST_SERIALIZATION_NVP(p_vmajor);
+        s & BOOST_SERIALIZATION_NVP(p_vminor);
+        s & BOOST_SERIALIZATION_NVP(p_name_rva);
+        s & BOOST_SERIALIZATION_NVP(p_ord_base);
+        s & BOOST_SERIALIZATION_NVP(p_expaddr_n);
+        s & BOOST_SERIALIZATION_NVP(p_nameptr_n);
+        s & BOOST_SERIALIZATION_NVP(p_expaddr_rva);
+        s & BOOST_SERIALIZATION_NVP(p_nameptr_rva);
+        s & BOOST_SERIALIZATION_NVP(p_ordinals_rva);
+        s & BOOST_SERIALIZATION_NVP(p_name);
+        debugSerializationEnd("SgAsmPEExportDirectory");
+    }
+#endif // ROSE_ENABLE_BOOST_SERIALIZATION
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    // Local types
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+public:
+#ifdef _MSC_VER
+# pragma pack (1)
+#endif
+    /* An Export Section begins with the Export Directory */
+    struct PEExportDirectory_disk {
+        uint32_t res1;         /* 0x00 Reserved, must be zero */
+        uint32_t timestamp;    /* 0x04 Time that export data was created */
+        uint16_t vmajor;       /* 0x08 Major version number (user defined) */
+        uint16_t vminor;       /* 0x0a Minor version number (user defined) */
+        uint32_t name_rva;     /* 0x0c Location of name of DLL */
+        uint32_t ord_base;     /* 0x10 Starting ordinal for exports in this image (usually 1) */
+        uint32_t expaddr_n;    /* 0x14 Number of entries in the export address table */
+        uint32_t nameptr_n;    /* 0x18 Number of entries in the name pointer table and ordinal table */
+        uint32_t expaddr_rva;  /* 0x1c Location of Export Address Table */
+        uint32_t nameptr_rva;  /* 0x20 Location of Export Name Pointer Table */
+        uint32_t ordinals_rva; /* 0x24 Location of Ordinal Table */
+    }                               /* 0x28 */
+#if !defined(SWIG) && !defined(_MSC_VER)
+    __attribute__((packed))
+#endif
+    ;
+#ifdef _MSC_VER
+# pragma pack ()
+#endif
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    // Properties
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+public:
+public:
+    /** Property: Reserved aread #1.
+     *
+     *  See PE specification. 
+     *  
+     *  @{ */
+    unsigned const& get_res1() const;
+    void set_res1(unsigned const&);
+    /** @} */
+
+public:
+    /** Property: Time stamp.
+     *
+     *  See PE specification. 
+     *  
+     *  @{ */
+    time_t const& get_timestamp() const;
+    void set_timestamp(time_t const&);
+    /** @} */
+
+public:
+    /** Property: VMajor.
+     *
+     *  See PE specification. 
+     *  
+     *  @{ */
+    unsigned const& get_vmajor() const;
+    void set_vmajor(unsigned const&);
+    /** @} */
+
+public:
+    /** Property: VMinor.
+     *
+     *  See PE specification. 
+     *  
+     *  @{ */
+    unsigned const& get_vminor() const;
+    void set_vminor(unsigned const&);
+    /** @} */
+
+public:
+    /** Property: RVA for name.
+     *
+     *  See PE specification. 
+     *  
+     *  @{ */
+    Rose::BinaryAnalysis::RelativeVirtualAddress const& get_name_rva() const;
+    Rose::BinaryAnalysis::RelativeVirtualAddress& get_name_rva();
+    void set_name_rva(Rose::BinaryAnalysis::RelativeVirtualAddress const&);
+    /** @} */
+
+public:
+    /** Property: Ordinal base.
+     *
+     *  See PE specification. 
+     *  
+     *  @{ */
+    unsigned const& get_ord_base() const;
+    void set_ord_base(unsigned const&);
+    /** @} */
+
+public:
+    /** Property: Expaddr_n.
+     *
+     *  See PE specification. 
+     *  
+     *  @{ */
+    size_t const& get_expaddr_n() const;
+    void set_expaddr_n(size_t const&);
+    /** @} */
+
+public:
+    /** Property: Nameptr_n.
+     *
+     *  See PE specification. 
+     *  
+     *  @{ */
+    size_t const& get_nameptr_n() const;
+    void set_nameptr_n(size_t const&);
+    /** @} */
+
+public:
+    /** Property: Expaddr RVA.
+     *
+     *  See PE specification. 
+     *  
+     *  @{ */
+    Rose::BinaryAnalysis::RelativeVirtualAddress const& get_expaddr_rva() const;
+    Rose::BinaryAnalysis::RelativeVirtualAddress& get_expaddr_rva();
+    void set_expaddr_rva(Rose::BinaryAnalysis::RelativeVirtualAddress const&);
+    /** @} */
+
+public:
+    /** Property: Name pointer RVA.
+     *
+     *  See PE specification. 
+     *  
+     *  @{ */
+    Rose::BinaryAnalysis::RelativeVirtualAddress const& get_nameptr_rva() const;
+    Rose::BinaryAnalysis::RelativeVirtualAddress& get_nameptr_rva();
+    void set_nameptr_rva(Rose::BinaryAnalysis::RelativeVirtualAddress const&);
+    /** @} */
+
+public:
+    /** Property: Ordinals RVA.
+     *
+     *  See PE specification. 
+     *  
+     *  @{ */
+    Rose::BinaryAnalysis::RelativeVirtualAddress const& get_ordinals_rva() const;
+    Rose::BinaryAnalysis::RelativeVirtualAddress& get_ordinals_rva();
+    void set_ordinals_rva(Rose::BinaryAnalysis::RelativeVirtualAddress const&);
+    /** @} */
+
+public:
+    /** Property: Name.
+     *
+     *  See PE specification. 
+     *  
+     *  @{ */
+    SgAsmGenericString* const& get_name() const;
+    void set_name(SgAsmGenericString* const&);
+    /** @} */
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    // Functions
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+public:
+    explicit SgAsmPEExportDirectory(SgAsmPEExportSection*);
+    void dump(FILE *f, const char *prefix, ssize_t idx) const;
+public:
+    /** Destructor. */
+    virtual ~SgAsmPEExportDirectory();
+
+public:
+    /** Default constructor. */
+    SgAsmPEExportDirectory();
+
+protected:
+    /** Initialize all properties that have explicit initial values.
+     *
+     *  This function is mostly for use in user-defined constructors where the user desires to initialize
+     *  all the properties but does not know the names of the data members that store the property values.
+     *  This function initializes the properties that have explicit initializations within this class, but
+     *  does not recursively initialize base classes. */
+    void initializeProperties();
+
+
+// End of memberFunctionString
+// Start of memberFunctionString
+/* #line 1 "/workspace/generated/src/ROSETTA/Grammar/Common.code" */
+
+// *** COMMON CODE SECTION BEGINS HERE ***
+
+    public:
+
+       // DQ (3/25/3006): I put this back in because it had the logic for where the copy function required 
+       // and not required which is required to match the other aspects of the copy mechanism code generation.
+       // Specifically it is a problem to declare the copy function everywhere because it is not implemented 
+       // for the SgSymbol IR nodes. I'm not clear why it is not implemented for these IR nodes.
+       /* \brief Copies AST (whole subtree, depending on the SgCopyHelp class */
+       // virtual SgNode* copy ( const SgCopyHelp & help) const;
+
+      /*! \brief returns a string representing the class name */
+          virtual std::string class_name() const override;
+
+      /*! \brief returns new style SageIII enum values */
+          virtual VariantT variantT() const override; // MS: new variant used in tree traversal
+
+      /*! \brief static variant value */
+       // King84 (2010.08.16): Moved this to an enum to save space, since it's only used at compiler-time anyway.
+       // static const VariantT static_variant = V_SgAsmPEExportDirectory;
+          enum { static_variant = V_SgAsmPEExportDirectory };
+
+       /* the generated cast function */
+      /*! \brief Casts pointer from base class to derived class */
+          ROSE_DLL_API friend       SgAsmPEExportDirectory* isSgAsmPEExportDirectory(       SgNode * s );
+
+      /*! \brief Casts pointer from base class to derived class (for const pointers) */
+          ROSE_DLL_API friend const SgAsmPEExportDirectory* isSgAsmPEExportDirectory( const SgNode * s );
+
+     // ******************************************
+     // * Memory Pool / New / Delete
+     // ******************************************
+
+     public:
+          /// \private
+          static const unsigned pool_size; // 
+          /// \private
+          static std::vector<unsigned char *> pools; // 
+          /// \private
+          static SgAsmPEExportDirectory * next_node; // 
+
+          /// \private
+          static unsigned long initializeStorageClassArray(SgAsmPEExportDirectoryStorageClass *); // 
+
+          /// \private
+          static void clearMemoryPool(); // 
+          static void deleteMemoryPool(); // 
+
+          /// \private
+          static void extendMemoryPoolForFileIO(); // 
+
+          /// \private
+          static SgAsmPEExportDirectory * getPointerFromGlobalIndex(unsigned long); // 
+          /// \private
+          static SgAsmPEExportDirectory * getPointerFromGlobalIndex(AstSpecificDataManagingClass *, unsigned long); // 
+
+          /// \private
+          static unsigned long getNumberOfValidNodesAndSetGlobalIndexInFreepointer(unsigned long); // 
+          /// \private
+          static void resetValidFreepointers(); // 
+          /// \private
+          static unsigned long getNumberOfLastValidPointer(); // 
+
+
+#if defined(INLINE_FUNCTIONS)
+      /*! \brief returns pointer to newly allocated IR node */
+          inline void *operator new (size_t size);
+#else
+      /*! \brief returns pointer to newly allocated IR node */
+          void *operator new (size_t size);
+#endif
+      /*! \brief deallocated memory for IR node (returns memory to memory pool for reuse) */
+          void operator delete (void* pointer, size_t size);
+
+       // DQ (4/5/2007): This is not the correct operator that we want, but appears to be required to compile ROSE with ROSE.
+          void operator delete (void* pointer)
+             {
+            // This is the generated delete operator...
+               SgAsmPEExportDirectory::operator delete (pointer,sizeof(SgAsmPEExportDirectory));
+             }
+
+      /*! \brief Returns the total number of IR nodes of this type */
+          static size_t numberOfNodes();
+
+      /*! \brief Returns the size in bytes of the total memory allocated for all IR nodes of this type */
+          static size_t memoryUsage();
+
+      // End of scope which started in IR nodes specific code 
+      /* */
+
+      /* name Internal Functions
+          \brief Internal functions ... incomplete-documentation
+
+          These functions have been made public as part of the design, but they are suggested for internal use 
+          or by particularly knowledgeable users for specialized tools or applications.
+
+          \internal We could not make these private because they are required by user for special purposes. And 
+              it would be unwieldy to have many of the internal classes in ROSE be explicitly defined as friends.
+         
+       */
+
+       // MS: 02/12/02 container of pointers to AST successor nodes used in the traversal
+       // overridden in every class by *generated* implementation
+      /*! \brief container of pointers to AST successor nodes used in the traversal overridden in every class by *generated* implementation */
+          virtual std::vector<SgNode*> get_traversalSuccessorContainer() const override;
+       // MS: 06/28/02 container of names of variables or container indices 
+       // used used in the traversal to access AST successor nodes
+       // overridden in every class by *generated* implementation
+      /*! \brief container of names of variables or container indices used used in the traversal
+          to access AST successor nodes overridden in every class by *generated* implementation */
+          virtual std::vector<std::string> get_traversalSuccessorNamesContainer() const override;
+
+       // GB (09/25/2007): Functions for index-based access to traversal successors; these are hopefully a lot faster
+       // than all the vector copies. The implementation for these functions is generated for each class.
+      /*! \brief return number of children in the traversal successor list */
+          virtual size_t get_numberOfTraversalSuccessors() const override;
+      /*! \brief index-based access to traversal successors by index number */
+          virtual SgNode *get_traversalSuccessorByIndex(size_t idx) const override;
+      /*! \brief index-based access to traversal successors by child node */
+          virtual size_t get_childIndex(SgNode *child) const override;
+
+#ifndef ROSE_USE_INTERNAL_FRONTEND_DEVELOPMENT
+       // MS: 08/16/2002 method for generating RTI information
+      /*! \brief return C++ Runtime-Time-Information */
+          virtual RTIReturnType roseRTI() override;
+#endif
+      /* */
+
+
+
+      /* name Deprecated Functions
+          \brief Deprecated functions ... incomplete-documentation
+
+          These functions have been deprecated from use.
+       */
+      /* */
+
+      /*! returns a C style string (char*) representing the class name */
+          virtual const char* sage_class_name() const  override ROSE_DEPRECATED_FUNCTION;
+
+      // JJW (10/16/2008): Changed to a single function in Node.code, and put
+      // getVariant() in #if 0 block to prevent confusing Doxygen
+#if 0
+      /*! returns old style Sage II enum values */
+          virtual int variant() const ROSE_DEPRECATED_FUNCTION;
+      /*! returns old style Sage II enum values */
+       // virtual int getVariant() const ROSE_DEPRECATED_FUNCTION;
+#endif
+      /* */
+
+
+
+
+     public:
+      /* name Traversal Support Functions
+          \brief Traversal support functions ... incomplete-documentation
+
+          These functions have been made public as part of the design, but they are suggested for internal use 
+          or by particularly knowledgable users for specialized tools or applications.
+       */
+      /* */
+
+       // DQ (11/26/2005): Support for visitor pattern mechanims
+       // (inferior to ROSE traversal mechanism, experimental).
+      /*! \brief \b FOR \b INTERNAL \b USE Support for visitor pattern.
+       */
+          void executeVisitorMemberFunction (ROSE_VisitorPattern & visitor);
+
+      /* DXN (08/09/2010): support for the classic visitor pattern done in GoF */
+      /*! \brief support for the classic visitor pattern done in GoF */
+          virtual void accept (ROSE_VisitorPattern & visitor) override;
+
+       // DQ (12/26/2005): Support for traversal based on the memory pool
+      /*! \brief \b FOR \b INTERNAL \b USE Support for visitor pattern over all IR nodes by type of IR node.
+       */
+          static void traverseMemoryPoolNodes(ROSE_VisitTraversal & visit);
+
+      /*! \brief \b FOR \b INTERNAL \b USE Support for visitor pattern.
+       */
+          static void traverseMemoryPoolVisitorPattern(ROSE_VisitorPattern & visitor);
+
+       // DQ (2/9/2006): Added to support traversal over single representative of each IR node
+       // This traversal helps support internal tools that call static member functions.
+       // note: this function operates on the memory pools.
+      /*! \brief \b FOR \b INTERNAL \b USE Support for type-based traversal.
+       */
+          static void visitRepresentativeNode (ROSE_VisitTraversal & visit);
+      /* */
+
+     public: 
+	/* NodeId support functions */
+      /*! \brief Find a node by its variant type, pool index, and item index */
+ 	static SgNode* getNodeByNodeId(VariantT variantT, size_t poolIdx, size_t itemIdx);
+      /*! \brief \b FOR \b INTERNAL \b USE Find an SgNode from its memory pool and location therin.
+       */
+ 	static SgAsmPEExportDirectory* getNodeByNodeIdInternal(size_t poolIdx, size_t itemIdx);
+      /*! \brief compute the NodeId for a particular SgNode*.
+       */
+ 	static std::string getNodeIdString(SgAsmPEExportDirectory* sgnode);
+ 	static std::string getNodeIdStringInternal(SgAsmPEExportDirectory* sgnode);
+
+     public:
+      /* name Memory Allocation Functions
+          \brief Memory allocations functions ... incomplete-documentation
+
+          These functions have been made public as part of the design, but they are suggested for internal use 
+          or by particularly knowledgable users for specialized tools or applications.
+       */
+      /* */
+
+      /*! \brief \b FOR \b INTERNAL \b USE This is used in internal tests to verify that all IR nodes are allocated from the heap.
+
+          The AST File I/O depends upon the allocation of IR nodes being from the heap, stack based or global IR nodes should
+          not appear in the AST if it will be written out to a file and read back in.  To enforce this concept, this function
+          implements a test to verify that the IR node can be found on the heap and is part of a larger test of the whole AST.
+          This test must pass before the AST can be written out to a file.  This is part of a compromise in the design of the 
+          AST File I/O to support binary streaming of data to files; for performance.  It is also rather difficult, but possible, 
+          to build a useful AST with IR nodes allocated on the stack or frm global scope, this test filters out such cased from
+          being used with the AST File I/O mechanism.
+       */
+          virtual bool isInMemoryPool() override;
+
+      /*! \brief \b FOR \b INTERNAL \b USE This is used in internal tests to verify that all IR nodes are allocated from the heap.
+
+          The AST File I/O depends upon the allocation of IR nodes being from the heap, stack based or global IR nodes should
+          not appear in the AST if it will be written out to a file and read back in.  To enforce this concept, this function
+          implements a test to verify that the IR node can be found on the heap and is part of a larger test of the whole AST.
+          This test must pass before the AST can be written out to a file.  This is part of a compromise in the design of the 
+          AST File I/O to support binary streaming of data to files; for performance.  It is also rather difficult, but possible, 
+          to build a useful AST with IR nodes allocated on the stack or frm global scope, this test filters out such cased from
+          being used with the AST File I/O mechanism.
+       */
+          virtual void checkDataMemberPointersIfInMemoryPool() override;
+
+      // DQ (4/30/2006): Modified to be a const function.
+      /*! \brief \b FOR \b INTERNAL \b USE Returns STL vector of pairs of SgNode* and strings for use in AST tools
+
+          This functions is part of general support for many possible tools to operate 
+          on the AST.  The forms a list of ALL IR node pointers used by each IR node,
+          and is a supperset of the get_traversalSuccessorContainer().  It is (I think)
+          less than the set of pointers used by the AST file I/O. This is part of
+          work implemented by Andreas, and support tools such as the AST graph generation.
+
+          \warning This function can return unexpected data members and thus the 
+                   order and the number of elements is unpredicable and subject 
+                   to change.
+
+          \returns STL vector of pairs of SgNode* and strings
+       */
+          virtual std::vector<std::pair<SgNode*,std::string> > returnDataMemberPointers() const override;
+
+      /*! \brief \b FOR \b INTERNAL \b USE Processes pairs of references to SgNode* and strings for use in AST tools
+
+          This functions similar to returnDataMemberPointers() except that it passes references to a handler object.
+          As a result there is FAR more damage that can be done by using this function, but it is type-safe.
+          This is provided for support of internal tools that operate on the AST, e.g the AST Merge mechanism.
+
+          \warning This function can return unexpected data members and thus the order and the number of elements is unpredicable 
+                   and subject to change.
+       */
+          virtual void processDataMemberReferenceToPointers(ReferenceToPointerHandler*) override;
+
+      /*! \brief \b FOR \b INTERNAL \b USE Returns a unique index value for the childNode in the list of children at this IR node.
+
+          This function returns a unique value for the input \b childNode in set of children at this IR node. Note
+          that a negative value indicates that the input node is not a child.  This is the basis for the implementation
+          of the isChild(SgNode*) member function.  Data members that are NULL in the IR node are counted internally
+          (so that this function returns value that could be statically defined, and so are not dynamically determined).
+
+          \warning The mapping on children to integer values could change from release to release of ROSE.
+
+          \returns long
+       */
+          virtual long getChildIndex( SgNode* childNode ) const override;
+
+      // DQ (9/2/2015): Since this function is generated by ROSETTA, we can't define the 
+      // comment here (changed to be a C style comment and not be a doxygen comment).
+      /* \brief Constructor for use by AST File I/O Mechanism
+
+          This constructor permits the IR node to be rebuilt from the contiguously arranged data in memory 
+          which obtained via fast binary file I/O from disk.
+       */
+       // SgAsmPEExportDirectory( SgAsmPEExportDirectoryStorageClass& source );
+
+
+
+
+
+ // JH (10/24/2005): methods added to support the ast file IO
+    private:
+
+      /* name AST Memory Allocation Support Functions
+          \brief Memory allocations support....
+
+          These functions handle the low leve support of the memory allocation scheme which permits IR nodes to be allocated 
+          in large contiguous blocks to reduce memory fragmentation, improve performance, support specialized access (AST traversals),
+          and support the AST File I/O Mechanism.
+       */
+      /* */
+
+       /* JH (10/24/2005): Two typedefs. The TestType notes the type every pointer is cast to before
+          we compare them. Since I had several problems with this, I decided to make a typdef to ensure
+          that I use the same type everywhere, if any changes are made. THe second one declares the type
+          (actually unsigned long) where teh pointer address gets converted to. On 64 bit platforms this
+          might got changed, but unfortunatly, the return types are still unsigned longs. There exists
+          a correspinding one in the AST_FILE_IO class!
+       */
+      // DQ (9/2/2015): This typedef is no longer used, we can't define the 
+      // comment here (changed to be a C style comment and not be a doxygen comment).
+      /* \brief Typedef used for low level memory access.
+       */
+       // typedef unsigned char* TestType;
+
+      // DQ (9/2/2015): This typedef is no longer used, we can't define the 
+      // comment here (changed to be a C style comment and not be a doxygen comment).
+      /* \brief Typedef used to hold memory addresses as values.
+       */
+       // typedef unsigned long  AddressType;
+
+
+
+       // necessary, to have direct access to the p_freepointer and the private methods !
+      /*! \brief friend class declaration to support AST File I/O */
+          friend class AST_FILE_IO;
+
+      /*! \brief friend class declaration to support AST File I/O */
+          friend class SgAsmPEExportDirectoryStorageClass;
+
+      /*! \brief friend class declaration to support AST File I/O */
+          friend class AstSpecificDataManagingClass;
+
+      /*! \brief friend class declaration to support AST File I/O */
+          friend class AstSpecificDataManagingClassStorageClass;
+    public:
+      /*! \brief IR node constructor to support AST File I/O */
+          SgAsmPEExportDirectory( const SgAsmPEExportDirectoryStorageClass& source );
+
+ // private: // JJW hack
+       /*
+          name AST Memory Allocation Support Variables
+          Memory allocations support variables 
+
+          These variables handle the low level support of the memory allocation scheme which permits IR nodes to be allocated 
+          in large contiguous blocks to reduce memory fragmentation, improve performance, support specialized access (AST traversals),
+          and support the AST File I/O Mechanism.
+       */
+      /* */
+
+    public:
+
+      // DQ (11/21/2009): Added function to add new Regular Expression attributes and return pointer 
+      // to current node (so that it will work cleanly with build functions to specify patterns).
+      // virtual SgNode* addRegExpAttribute();
+      /*! \brief Support for AST matching using regular expression.
+
+          This support is incomplete and the subject of current research to define 
+          RegEx trees to support inexact matching.
+       */
+          SgAsmPEExportDirectory* addRegExpAttribute(std::string s, AstRegExAttribute* a);
+
+#ifndef _MSC_VER
+// Rasmussen (04/17/2019): Support for ATerms has been deprecated as it is no longer needed
+// and likely never fully implemented nor tested.  Files remain in the src tree but are no
+// longer built.
+#define BUILD_ATERM_SUPPORT 0
+   #if BUILD_ATERM_SUPPORT
+   #ifdef ROSE_USE_ROSE_ATERM_SUPPORT
+      // DQ (10/4/2014): Adding ATerm support to ROSE.
+      /*! \brief Support for generation of ATerms.
+
+          This support implements the generation of ATerms (consistant with the ROSE AST).
+          ROSE IR nodes that are traversed are translated as ATerms, and all other IR node 
+          date are attached as ATerm annotations.  This is a bulk translation of ROSE subtrees
+          to ATerms, can be called on any ROSE subtree.  An ATerm interface to ROSE IR nodes
+          is also implemented, but it only works with tools obaying the ATerm API (note that
+          unfortunately SDF tools and Stratego both fail to obay the ATerm API).
+       */
+       // Rasmussen (1/7/2019): Added override to kill warning messages of overridden virtual function
+          virtual ATerm generate_ATerm() override;
+
+      /*! \brief Support for generation of ATerms. */
+          virtual void generate_ATerm_Annotation(ATerm & term) override;
+   #endif
+   #endif // BUILD_ATERM_SUPPORT
+#endif
+       // These can't be virtual functions since we don't yet know what IR node to build (until we have read the aterm).
+       // virtual generate_AST(ATerm & term);
+       // virtual void read_ATerm_Annotation(ATerm & term);
+
+// *** COMMON CODE SECTION ENDS HERE ***
+
+
+// End of memberFunctionString
+// Start of memberFunctionString
+/* #line 670 "/workspace/generated/src/ROSETTA/Grammar/Node.code" */
+
+     // the generated cast function
+     // friend ROSE_DLL_API SgAsmPEExportDirectory* isSgAsmPEExportDirectory ( SgNode* s );
+
+          typedef SgAsmExecutableFileFormat base_node_type;
+
+
+// End of memberFunctionString
+
+
+
+
+
+
+
+
+
+
+
+
+
+    protected:
+// Start of memberFunctionString
+unsigned p_res1;
+          
+// End of memberFunctionString
+// Start of memberFunctionString
+time_t p_timestamp;
+          
+// End of memberFunctionString
+// Start of memberFunctionString
+unsigned p_vmajor;
+          
+// End of memberFunctionString
+// Start of memberFunctionString
+unsigned p_vminor;
+          
+// End of memberFunctionString
+// Start of memberFunctionString
+Rose::BinaryAnalysis::RelativeVirtualAddress p_name_rva;
+          
+// End of memberFunctionString
+// Start of memberFunctionString
+unsigned p_ord_base;
+          
+// End of memberFunctionString
+// Start of memberFunctionString
+size_t p_expaddr_n;
+          
+// End of memberFunctionString
+// Start of memberFunctionString
+size_t p_nameptr_n;
+          
+// End of memberFunctionString
+// Start of memberFunctionString
+Rose::BinaryAnalysis::RelativeVirtualAddress p_expaddr_rva;
+          
+// End of memberFunctionString
+// Start of memberFunctionString
+Rose::BinaryAnalysis::RelativeVirtualAddress p_nameptr_rva;
+          
+// End of memberFunctionString
+// Start of memberFunctionString
+Rose::BinaryAnalysis::RelativeVirtualAddress p_ordinals_rva;
+          
+// End of memberFunctionString
+// Start of memberFunctionString
+SgAsmGenericString* p_name;
+          
+// End of memberFunctionString
+
+    friend struct Rose::Traits::generated::describe_node_t<SgAsmPEExportDirectory>;
+    friend struct Rose::Traits::generated::describe_field_t<SgAsmPEExportDirectory, unsigned,&SgAsmPEExportDirectory::p_res1>;
+    friend struct Rose::Traits::generated::describe_field_t<SgAsmPEExportDirectory, time_t,&SgAsmPEExportDirectory::p_timestamp>;
+    friend struct Rose::Traits::generated::describe_field_t<SgAsmPEExportDirectory, unsigned,&SgAsmPEExportDirectory::p_vmajor>;
+    friend struct Rose::Traits::generated::describe_field_t<SgAsmPEExportDirectory, unsigned,&SgAsmPEExportDirectory::p_vminor>;
+    friend struct Rose::Traits::generated::describe_field_t<SgAsmPEExportDirectory, Rose::BinaryAnalysis::RelativeVirtualAddress,&SgAsmPEExportDirectory::p_name_rva>;
+    friend struct Rose::Traits::generated::describe_field_t<SgAsmPEExportDirectory, unsigned,&SgAsmPEExportDirectory::p_ord_base>;
+    friend struct Rose::Traits::generated::describe_field_t<SgAsmPEExportDirectory, size_t,&SgAsmPEExportDirectory::p_expaddr_n>;
+    friend struct Rose::Traits::generated::describe_field_t<SgAsmPEExportDirectory, size_t,&SgAsmPEExportDirectory::p_nameptr_n>;
+    friend struct Rose::Traits::generated::describe_field_t<SgAsmPEExportDirectory, Rose::BinaryAnalysis::RelativeVirtualAddress,&SgAsmPEExportDirectory::p_expaddr_rva>;
+    friend struct Rose::Traits::generated::describe_field_t<SgAsmPEExportDirectory, Rose::BinaryAnalysis::RelativeVirtualAddress,&SgAsmPEExportDirectory::p_nameptr_rva>;
+    friend struct Rose::Traits::generated::describe_field_t<SgAsmPEExportDirectory, Rose::BinaryAnalysis::RelativeVirtualAddress,&SgAsmPEExportDirectory::p_ordinals_rva>;
+    friend struct Rose::Traits::generated::describe_field_t<SgAsmPEExportDirectory, SgAsmGenericString*,&SgAsmPEExportDirectory::p_name>;
+
+/* #line 21 "/workspace/generated/src/ROSETTA/Grammar/grammarClassDeclarationMacros.macro" */
+
+
+   };
+#endif
+
+// postdeclarations for SgAsmPEExportDirectory
+
+/* #line 749 "/workspace/generated/src/frontend/SageIII//SgAsmPEExportDirectory.h" */
+
+/* #line 27 "/workspace/generated/src/ROSETTA/Grammar/grammarClassDeclarationMacros.macro after subst for $POSTDECLARATIONS" */
+
+/* #line 28 "/workspace/generated/src/ROSETTA/Grammar/grammarClassDeclarationMacros.macro" */
+
+
+/* #line 756 "/workspace/generated/src/frontend/SageIII//SgAsmPEExportDirectory.h" */
+
+#endif // ROSE_SgAsmPEExportDirectory_H
+
