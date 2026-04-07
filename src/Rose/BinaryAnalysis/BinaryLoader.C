@@ -552,7 +552,11 @@ BinaryLoader::remap(MemoryMap::Ptr &map, SgAsmGenericHeader *header) {
                       <<StringUtility::addrToString(va) <<" + " <<StringUtility::addrToString(mem_size) <<" = "
                       <<StringUtility::addrToString(va+mem_size) <<" "
                       <<(map_private?"private":"shared") <<"\n";
-                if (map_private) {
+                if (map_private || (mapperms & MemoryMap::WRITABLE)) {
+                    // Bug fix: StaticBuffer is backed by const file data (rdonly_=true), so any
+                    // write via writeQuick silently returns 0 ("short write") even when the segment
+                    // carries WRITABLE permission.  Use a private AllocatingBuffer copy whenever
+                    // the section should be writable so that relocation fixups can write to it.
                     map->insert(AddressInterval::baseSize(va, mem_size),
                                 MemoryMap::Segment::anonymousInstance(mem_size, mapperms|MemoryMap::PRIVATE,
                                                                       melmt_name));

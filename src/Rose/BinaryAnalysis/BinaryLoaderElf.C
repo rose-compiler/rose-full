@@ -962,12 +962,42 @@ BinaryLoaderElf::fixupInfoTargetVa(SgAsmElfRelocEntry *reloc, SgAsmGenericSectio
     Stream trace(mlog[TRACE]);
     SgAsmGenericHeader *header = AST::Traversal::findParentTyped<SgAsmGenericHeader>(reloc);
     SgAsmGenericSection *section = findSectionByPreferredVa(header, reloc->get_r_offset());
+
+    // Bug fix: for ET_DYN (PIE) binaries the user may have called set_baseVa() to a non-zero
+    // value before loadContainers().  After remap(), header->get_baseVa() equals that new base,
+    // so the preferred-VA lookup above subtracts new_base from r_offset and underflows, returning
+    // null.  Fall back to searching by raw RVA: for PIE with original base 0 the r_offset field
+    // already is the RVA.
+    if (!section) {
+        SgAsmElfFileHeader *elfHdr = isSgAsmElfFileHeader(header);
+        if (elfHdr && elfHdr->get_e_type() == SgAsmElfFileHeader::ET_DYN) {
+            SgAsmGenericSectionPtrList candidates = header->get_sectionsByRva(reloc->get_r_offset());
+            for (SgAsmGenericSection *s : candidates) {
+                SgAsmElfSection *es = isSgAsmElfSection(s);
+                if (!es || !es->get_sectionEntry())
+                    continue;
+                // Skip .tbss (same filter as findSectionByPreferredVa)
+                if ((es->get_sectionEntry()->get_sh_flags() & SgAsmElfSectionTableEntry::SHF_TLS) &&
+                    es->get_sectionEntry()->get_sh_type() == SgAsmElfSectionTableEntry::SHT_NOBITS)
+                    continue;
+                section = es;
+                break;
+            }
+        }
+    }
+
     if (!section) {
         trace <<"    target: no suitable section at preferred va " <<StringUtility::addrToString(reloc->get_r_offset()) <<"\n";
         throw Exception("reloc target " + StringUtility::addrToString(reloc->get_r_offset()) + " is not mapped");
     }
 
-    Address target_adj = section->get_mappedActualVa() - section->get_mappedPreferredVa();
+    // Bug fix: for ET_DYN the standard formula (actualVa - preferredVa) yields zero after user
+    // rebasing because preferredVa already includes the new base.  Use actualVa - preferredRva
+    // instead so the adjustment equals new_base for rebased PIE, and 0 for non-rebased PIE.
+    SgAsmElfFileHeader *elfHdr2 = isSgAsmElfFileHeader(header);
+    Address target_adj = (elfHdr2 && elfHdr2->get_e_type() == SgAsmElfFileHeader::ET_DYN)
+        ? section->get_mappedActualVa() - section->get_mappedPreferredRva()
+        : section->get_mappedActualVa() - section->get_mappedPreferredVa();
     Address target_va = reloc->get_r_offset() + target_adj;
 
     if (trace) {
@@ -1348,8 +1378,16 @@ BinaryLoaderElf::performRelocation(SgAsmElfRelocEntry* reloc, const SymverResolv
             };
             break;
 
-        case SgAsmGenericHeader::ISA_X8664_Family:
-            switch (reloc->get_type()) {
+        case SgAsmGenericHeader::ISA_X8664_Family: {
+            // Bug fix: the ELF file stores x86_64 relocation type values starting at 0
+            // (e.g., R_X86_64_RELATIVE = 8 on disk), but ROSE's RelocType enum places all
+            // x86_64 entries above R_X86_64_NONE.  Normalize raw values that haven't yet
+            // been offset by adding R_X86_64_NONE as the base.
+            SgAsmElfRelocEntry::RelocType type64 = reloc->get_type();
+            if (type64 < SgAsmElfRelocEntry::R_X86_64_NONE)
+                type64 = (SgAsmElfRelocEntry::RelocType)(
+                    (unsigned)type64 + (unsigned)SgAsmElfRelocEntry::R_X86_64_NONE);
+            switch (type64) {
                 case SgAsmElfRelocEntry::R_X86_64_JUMP_SLOT:
                 case SgAsmElfRelocEntry::R_X86_64_GLOB_DAT: {
                     Address value = fixupInfoExpr("S", reloc, resolver, memmap, &target_va);
@@ -1390,6 +1428,7 @@ BinaryLoaderElf::performRelocation(SgAsmElfRelocEntry* reloc, const SymverResolv
                     break;
             }
             break;
+        }
 
         default:
             trace <<"    not implemented\n";
