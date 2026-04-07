@@ -1448,7 +1448,16 @@ BinaryLoaderElf::performRelocations(SgAsmElfFileHeader* elfHeader, const MemoryM
         SgAsmElfRelocEntryPtrList &relocs = relocSection->get_entries()->get_entries();
         for (size_t r=0; r <  relocs.size(); ++r) {
             SgAsmElfRelocEntry* reloc = relocs[r];
-            performRelocation(reloc, resolver, memmap);
+            try {
+                performRelocation(reloc, resolver, memmap);
+            } catch (const Exception &e) {
+                // In an analysis context shared libraries are typically not loaded, so
+                // symbol-lookup failures are common and non-fatal.  Log and continue so
+                // that subsequent (self-relative) relocations still succeed.
+                mlog[WARN] <<"BinaryLoaderElf: skipping relocation at "
+                           <<StringUtility::addrToString(reloc->get_r_offset())
+                           <<": " <<e.what() <<"\n";
+            }
         }
     }
 }
