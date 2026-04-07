@@ -1108,7 +1108,8 @@ BinaryLoaderElf::fixupInfoExpr(const std::string &expression, SgAsmElfRelocEntry
     std::vector<Address> stack;
     SgAsmElfSymbol *symbol = NULL;                      /* Defining symbol for relocation */
     size_t nbytes = 0;                                  /* Size of addend */
-    Address target_va = fixupInfoTargetVa(reloc);
+    Address target_adj = 0;
+    Address target_va = fixupInfoTargetVa(reloc, NULL, &target_adj);
     if (target_va_p)
         *target_va_p = target_va;
 
@@ -1129,7 +1130,14 @@ BinaryLoaderElf::fixupInfoExpr(const std::string &expression, SgAsmElfRelocEntry
                 if (!symbol)
                     symbol = fixupInfoRelocSymbol(reloc, resolver);
                 Address symbol_adj;
-                fixupInfoSymbolVa(symbol, NULL, &symbol_adj);
+                if (symbol) {
+                    fixupInfoSymbolVa(symbol, NULL, &symbol_adj);
+                } else {
+                    // sym=0: no defining symbol. For R_*_RELATIVE, B is the load-base
+                    // adjustment (actual_load_va - original_link_va). Use the target
+                    // section's adjustment, which equals that delta for rebased PIE.
+                    symbol_adj = target_adj;
+                }
                 stack.push_back(symbol_adj);
                 break;
             }
