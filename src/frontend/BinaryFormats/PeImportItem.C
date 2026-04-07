@@ -84,7 +84,10 @@ SgAsmPEImportItem::get_iatEntryVa() const
     SgAsmPEFileHeader *fhdr = SageInterface::getEnclosingNode<SgAsmPEFileHeader>(idir);
     assert(fhdr!=NULL);
     Address entry_size = fhdr->get_wordSize();
-    return *idir->get_iat_rva().va() + idx * entry_size;
+    // Use va() if the IAT RVA is bound to a section; otherwise fall back to rva+baseVa so
+    // that we don't crash on PE files where the IAT section isn't matched by bindBestSection.
+    Address iatBase = idir->get_iat_rva().va().orElse(idir->get_iat_rva().rva() + fhdr->get_baseVa());
+    return iatBase + idx * entry_size;
 }
 
 void
