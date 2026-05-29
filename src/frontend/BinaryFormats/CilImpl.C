@@ -18,6 +18,7 @@
 #include <numeric>
 
 namespace sb = Rose::SageBuilderAsm;
+namespace rb = Rose::BinaryAnalysis;
 
 using namespace Sawyer::Message::Common;
 
@@ -3449,23 +3450,55 @@ void updateBodyState(SgAsmCilMethodDef::BodyState& state, SgAsmCilMethodDef::Bod
     state = err;
 }
 
+using LastInstructionValidator = std::function<void(const std::vector<SgAsmStatement*>&)>;
+
+void noValidationOfLastInstruction(const std::vector<SgAsmStatement*>&) {}
+
+void validationLastCilInstruction(const std::vector<SgAsmStatement*>& lst)
+{
+  SgAsmInstruction* instr = isSgAsmInstruction(lst.back());
+  ASSERT_not_null(instr);
+  
+  // Just checking for when last instruction is not return from function (or similar terminating instruction)
+  switch (instr->get_anyKind())
+  {
+    case 0:
+    case rb::CilInstructionKind::Cil_ret:
+    case rb::CilInstructionKind::Cil_throw:
+    case rb::CilInstructionKind::Cil_br:
+    case rb::CilInstructionKind::Cil_br_s:
+    case rb::CilInstructionKind::Cil_endfinally:
+      break;
+    default:
+      SAWYER_MESG(mlog[INFO]) 
+            << "last instruction in block is not Cil_ret (or like), is 0x" 
+            << std::hex << int(instr->get_anyKind()) << std::dec 
+            << std::endl;
+  }
+}
+
 std::tuple<SgAsmBlock*, SgAsmCilMethodDef::BodyState>
-disassemble( Rose::BinaryAnalysis::Address base_va, 
+disassemble( rb::Address base_va, 
              SgAsmCilMethodDef::BodyState bdyState, 
              std::vector<std::uint8_t>& buf,
-             const Rose::BinaryAnalysis::Disassembler::Base::Ptr& disasm
+             rb::Architecture::BasePtr arch,
+             LastInstructionValidator validateLastInstr = noValidationOfLastInstruction
            )
 {
-  Rose::BinaryAnalysis::Address addr = 0;
-  const std::size_t  sz = buf.size();
-  std::vector<SgAsmInstruction*> lst;
-
   using Rose::BinaryAnalysis::MemoryMap;
 
+  Rose::BinaryAnalysis::Address addr = 0;
+  const std::size_t             sz = buf.size();
+  SgAsmBlock* const             blk = sb::buildBasicBlock(std::vector<SgAsmInstruction*>{});
+  ASSERT_not_null(blk);
+  
+  SgAsmStatementPtrList&        lst = blk->get_statementList();
+  auto                          disasm = arch->newInstructionDecoder();
+
   MemoryMap::Ptr map = MemoryMap::instance();
-  map->insert(Rose::BinaryAnalysis::AddressInterval::baseSize(base_va, sz),
+  map->insert(rb::AddressInterval::baseSize(base_va, sz),
               MemoryMap::Segment::staticInstance(buf.data(), sz,
-                                                 MemoryMap::READABLE|MemoryMap::EXECUTABLE, "CIL code segment"));
+                                                 MemoryMap::READABLE|MemoryMap::EXECUTABLE, "Code segment"));
 
   while (addr < sz) 
   {
@@ -3505,32 +3538,12 @@ disassemble( Rose::BinaryAnalysis::Address base_va,
     
     updateBodyState(bdyState, SgAsmCilMethodDef::BDY_INVALID_INSTRUCTION_LENGTH);    
   }
-  else if (lst.size())
+  else 
   {
-    SgAsmInstruction* instr = lst.back();
-    ASSERT_not_null(instr);
-    
-    // Just checking for when last instruction is not return from function (or similar terminating instruction)
-    switch (instr->get_anyKind())
-    {
-      namespace rb = Rose::BinaryAnalysis;
-
-      case 0:
-      case rb::CilInstructionKind::Cil_ret:
-      case rb::CilInstructionKind::Cil_throw:
-      case rb::CilInstructionKind::Cil_br:
-      case rb::CilInstructionKind::Cil_br_s:
-      case rb::CilInstructionKind::Cil_endfinally:
-        break;
-      default:
-        SAWYER_MESG(mlog[INFO]) 
-              << "last instruction in block is not Cil_ret (or like), is 0x" 
-              << std::hex << int(instr->get_anyKind()) << std::dec 
-              << std::endl;
-    }
+    validateLastInstr(lst);
   }
 
-  return { sb::buildBasicBlock(lst), bdyState };
+  return { blk, bdyState };
 }
 
 // II.23.1.11 Flags for methods [MethodImplAttributes]
@@ -3617,9 +3630,13 @@ methodData( std::uint64_t kind,
   res->set_kind(kind);
   res->set_dataSize(dataSize);
   res->get_Clauses().swap(clauses);
+  
+  // set parent pointers
+  for (SgAsmCilExceptionData* clause : clauses) 
+    clause->set_parent(res);
 
   return res;
-};
+}
 
 std::tuple<SgAsmCilExceptionData*, SgAsmCilMethodDef::BodyState>
 parseFatEHClause(SgAsmPEFileHeader& fhdr, Rose::BinaryAnalysis::Address sectionRva)
@@ -3871,7 +3888,7 @@ void decodeMetadata(Rose::BinaryAnalysis::Address base_va, SgAsmCilMetadataHeap*
     ASSERT_require(m->get_bodyState() == SgAsmCilMethodDef::BDY_NOT_PROCESSED);
 
     ++methodctr;
-    Rose::BinaryAnalysis::Address rva = static_cast<std::uint32_t>(m->get_RVA());
+    rb::Address rva = static_cast<std::uint32_t>(m->get_RVA());
     
     if (rva == 0) 
     {
@@ -3879,6 +3896,11 @@ void decodeMetadata(Rose::BinaryAnalysis::Address base_va, SgAsmCilMetadataHeap*
       continue;
     }
 
+    // TODO: The header shall only be parsed for CIL methods
+    //       Native methods do not have CIL like header information,
+    //         so just disassmble from the rva, once we have
+    //         mapped out the CIL code sections.
+    
     // parse header
     std::uint8_t   mh0;
     std::size_t    nread = fhdr->get_loaderMap()->readQuick(&mh0, base_va + rva, 1);
@@ -3886,7 +3908,7 @@ void decodeMetadata(Rose::BinaryAnalysis::Address base_va, SgAsmCilMetadataHeap*
     if (nread != 1)
     {
       mlog[ERROR] 
-            << "unable to parse method " << methodctr 
+            << "unable to parse method #" << methodctr << " " << m->get_Name_string()
             << "\n  unable to read header byte."
             << std::endl; 
 
@@ -3901,7 +3923,7 @@ void decodeMetadata(Rose::BinaryAnalysis::Address base_va, SgAsmCilMetadataHeap*
     if ((isTiny | isFat) == 0)
     {
       mlog[ERROR] 
-              << "unable to parse method " << methodctr 
+              << "unable to parse method #" << methodctr << " " << m->get_Name_string() 
               << "\n  inconsistent tiny/fat header flags; @rva " << reinterpret_cast<void*>(rva)
               << "\n  formatflag = " << reinterpret_cast<void*>((mh0 & MethodHeader::FORMAT)) << " != "  
                 << reinterpret_cast<void*>(MethodHeader::TINY) << "[tiny] or " 
@@ -3941,7 +3963,7 @@ void decodeMetadata(Rose::BinaryAnalysis::Address base_va, SgAsmCilMetadataHeap*
     if (!readCorrectly)
     {
       mlog[ERROR] 
-              << "unable to read body of method " << methodctr
+              << "unable to read body of method #" << methodctr 
               << "\n  expected to read " << codeLen << " bytes"
               << "\n  read " << nreadCode << " bytes"
               << std::endl;
@@ -3961,23 +3983,21 @@ void decodeMetadata(Rose::BinaryAnalysis::Address base_va, SgAsmCilMetadataHeap*
 
     switch (m->get_ImplFlags() & CodeTypeMask::mask)
     {
-      namespace rb = Rose::BinaryAnalysis;
-
       case CodeTypeMask::cil: {
-        auto arch = rb::Architecture::findByName("cil").orThrow();
-        std::tie(blk,bodyState) = disassemble(base_va + codeRVA, bodyState, code, rb::Disassembler::Cil::instance(arch));
+        auto arch   = rb::Architecture::findByName("cil").orThrow();
+        std::tie(blk,bodyState) = disassemble(base_va + codeRVA, bodyState, code, arch, validationLastCilInstruction);
         break;
       }
 
       case CodeTypeMask::native: {
-        auto arch = rb::Architecture::findByName("intel-pentium4").orThrow();
-        std::tie(blk,bodyState) = disassemble(base_va + codeRVA, bodyState, code, rb::Disassembler::X86::instance(arch));
+        auto arch = rb::Architecture::findByHeader(fhdr).orThrow();
+        std::tie(blk,bodyState) = disassemble(base_va + codeRVA, bodyState, code, arch);
         break;
       }
 
       case CodeTypeMask::runtime :
         mlog[ERROR] << "Code is runtime provided. Please share specimen with ROSE developers." << code.size()
-                                << std::endl;
+                    << std::endl;
         bodyState = SgAsmCilMethodDef::BDY_RUNTIME_SUPPORTED;
         // looking for sample code
         break;
@@ -3987,9 +4007,13 @@ void decodeMetadata(Rose::BinaryAnalysis::Address base_va, SgAsmCilMetadataHeap*
     }
 
     m->set_body(blk);
+    if (blk) blk->set_parent(m);
     
     if (bodyState != SgAsmCilMethodDef::BDY_NOT_PROCESSED)
     {
+      mlog[ERROR] << "Body processing incomplete: " << m->get_Name_string() 
+                  << std::endl;
+
       m->set_bodyState(bodyState);
       root->set_ErrorFree(false);
       continue;    
@@ -4020,11 +4044,15 @@ void decodeMetadata(Rose::BinaryAnalysis::Address base_va, SgAsmCilMetadataHeap*
       std::tie(section, sectionRva, bodyState) = parseSection(*fhdr, alignedSectionRva);
       
       if (bodyState != SgAsmCilMethodDef::BDY_NOT_PROCESSED)
+      {
+        delete section;
         break;
+      }
       
       ASSERT_not_null(section);
-      hasMoreSections = section->hasMoreSections();
+      section->set_parent(m);
       m->get_methodData().push_back(section);
+      hasMoreSections = section->hasMoreSections();
     }
     
     updateBodyState(bodyState, SgAsmCilMethodDef::BDY_FULLY_DECODED);

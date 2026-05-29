@@ -302,6 +302,7 @@ SgAsmPEFileHeader::parse()
         set_isa(ISA_Hitachi_SH);
         break;
       case 0x01c0:
+      case 0x01c4: // ARM Thumb-2 little endian
         set_isa(ISA_ARM_Family);
         break;
       case 0x01d3:
