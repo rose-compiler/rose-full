@@ -4,6 +4,7 @@
 #include <sage3basic.h>
 #include <tuple>
 #include <Sawyer/Graph.h>
+#include <Rose/FlowAnalysisInterface.h>
 
 #include "ClassHierarchyAnalysis.h"
 
@@ -94,5 +95,25 @@ namespace CodeThorn
 
   // CallGraph generateCallGraphFromNormalizedAST(SgProject* proj);
 } // end of namespace CodeThorn
+
+template <>
+class Rose::FlowGraphInterface::CallGraphAnalysis
+      <CodeThorn::CGVertex, CodeThorn::CGEdge, CodeThorn::FunctionCallDataSequence,
+Rose::FlowGraphInterface::AnalysisSupportOption::CodeThorn> {
+  typedef FlowGraphAccessInterface<CodeThorn::CGVertex, CodeThorn::CGEdge> GraphAccess;
+
+// QY: This will be working only after making Sawyer::container::Graph inherits FlowGraphAccessInterface.
+// GraphAccess& getResultGraph() { return result_graph_; } 
+ CodeThorn::FunctionCallDataSequence&  getSavedCallData() { return call_data_; }
+ 
+ bool performAnalysis(SgProject* ast) {
+   std::tie(result_graph_, call_data_) = CodeThorn::generateCallGraphFromAST(ast);
+   return true;
+ }
+ private:
+   CodeThorn::CallGraph result_graph_;
+   CodeThorn::FunctionCallDataSequence call_data_;
+};
+
 
 #endif /* CALL_GRAPH_ANALYSIS_H */

@@ -7,6 +7,7 @@
 class SgNode;
 class SgFunctionDeclaration;
 class SgExpression;
+class SgProject;
 
 namespace Rose{
 namespace FlowGraphInterface {
@@ -14,14 +15,18 @@ namespace FlowGraphInterface {
 // Internally automatically select the desired analysis based on the options.
 enum class AnalysisSupportOption { CodeThorn, AstSideEffect };
 
-template <class NodeIterator, class EdgeIterator, AnalysisSupportOption Option>
+template <class NodeIterator, class EdgeIterator, class CallData, AnalysisSupportOption>
 class CallGraphAnalysis {
  public:
   // Call Graph Analysis Interface below.
   typedef SgFunctionDeclaration* NodeInfo;
   typedef SgExpression* EdgeInfo;
-  typedef FlowGraphCreateInterface<NodeInfo,EdgeInfo, NodeIterator,EdgeIterator> GraphCreate;
-  bool performAnalysis(const SgNode* ast, GraphCreate &graph);
+  typedef FlowGraphAccessInterface<NodeIterator,EdgeIterator> GraphAccess;
+
+  GraphAccess& getResultGraph();
+  CallData& getSavedCallData();
+
+  bool performAnalysis(SgProject* ast);
 };
 
 }; // namespace FlowGraphInterface

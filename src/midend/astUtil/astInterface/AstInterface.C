@@ -3082,6 +3082,12 @@ bool AstInterface:: AstIdentical(const AstNodePtr& _first, const AstNodePtr& _se
          DebugDiff([v1,v2](){ return "function attribute no_throw: " + std::string(v1?"true":"false") + " vs " + std::string(v2?"true":"false"); });
          return false; 
       }
+      v1 = decl1->get_functionModifier().isExplicit();
+      v2 = decl2->get_functionModifier().isExplicit(); 
+      if (v1 != v2)  { 
+         DebugDiff([v1,v2](){ return "function attribute explicit: " + std::string(v1?"true":"false") + " vs " + std::string(v2?"true":"false"); });
+         return false; 
+      }
       break;
      }
    case V_SgTypedefDeclaration:
@@ -3195,6 +3201,13 @@ IsFunctionCall( SgNode* s, SgNode** func, AstNodeList* args, AstTypeList* paramt
   case V_SgAssignInitializer:
     exp = isSgAssignInitializer(exp)->get_operand();
     return IsFunctionCall(exp, func, args, paramtypes, returntype);
+  case V_SgConstructorInitializer: {
+    auto* init = isSgConstructorInitializer(exp); 
+    f = init->get_declaration();
+    if (f == 0) return false;
+    argexp = init->get_args();
+    break;
+  }
   case V_SgFunctionCallExp:
     {
       SgFunctionCallExp *fs = isSgFunctionCallExp(exp);
@@ -3316,9 +3329,6 @@ IsFunctionCall( const AstNodePtr& _s, AstNodePtr* fname, AstNodeList* args,
   // Store arguments of reference types into outargs
   if (outargs != 0) {
         assert(paramtypes != 0 && args != 0);
-        if (paramtypes->size() != args->size()) {
-          outargs->push_back(AST_UNKNOWN);
-        } else {
           AstNodeList::const_iterator p1 = args->begin();
           for (AstTypeList::const_iterator p = paramtypes->begin(); 
              p != paramtypes->end() && p1 != args->end(); ++p,++p1) {
@@ -3332,7 +3342,6 @@ IsFunctionCall( const AstNodePtr& _s, AstNodePtr* fname, AstNodeList* args,
                    outargs->push_back(ref); 
                 }
              }
-          }
         }
   } 
   return true;
@@ -4831,6 +4840,8 @@ std::string AstInterface:: GetVariableSignature(const AstNodePtr& _variable) {
           return OperatorDeclaration::operator_signature(variable);
      case V_SgClassDefinition:
           return GetVariableSignature(isSgClassDefinition(variable)->get_declaration());
+     case V_SgConstructorInitializer:
+          return GetVariableSignature(isSgConstructorInitializer(variable)->get_declaration());
      case V_SgClassDeclaration:
      case V_SgTemplateClassDeclaration:
           return "class_" + std::string(isSgClassDeclaration(variable)->get_name().str()); 

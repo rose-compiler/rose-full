@@ -78,7 +78,7 @@ class WholeProgramDependenceAnalysis : public CollectDependences {
 // Internally automatically select the desired analysis based on 
 template <class NodeIterator, class EdgeIterator> 
 class Rose::FlowGraphInterface::CallGraphAnalysis
-      <NodeIterator, EdgeIterator, Rose::FlowGraphInterface::AnalysisSupportOption::AstSideEffect> { 
+      <NodeIterator, EdgeIterator, std::string, Rose::FlowGraphInterface::AnalysisSupportOption::AstSideEffect> { 
  typedef FlowGraphCreateInterface<SgNode*,SgNode*, NodeIterator,EdgeIterator> GraphCreate;
  bool performAnalysis(const SgNode* ast, GraphCreate& graph) { 
       AstUtilInterface::WholeProgramDependenceAnalysis<NodeIterator,EdgeIterator> op(&graph,0, ast); 

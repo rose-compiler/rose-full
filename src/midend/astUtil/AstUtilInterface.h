@@ -50,7 +50,7 @@ namespace AstUtilInterface{
        std::vector<std::string> result;
        switch (enum_) {
         case EnumVariant::Kill: result.push_back("modify"); result.push_back("kill"); break;
-        case EnumVariant::Decl: result.push_back("modify"); result.push_back("decl"); break;
+        case EnumVariant::Decl: result.push_back("decl"); break;
         case EnumVariant::Alias: result.push_back("modify"); result.push_back("alias"); break;
         case EnumVariant::Allocate: result.push_back("modify"); result.push_back("allocate"); break;
         case EnumVariant::Free: result.push_back("modify"); result.push_back("free"); break;

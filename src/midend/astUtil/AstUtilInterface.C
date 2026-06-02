@@ -169,7 +169,7 @@ void AstUtilInterface::ComputeAstSideEffects(SgNode* ast,
       if (collect != 0)  (*collect)(first, second, OperatorSideEffect::EnumVariant::Call);
       return true;
     };
-    std::function<bool(AstNodePtr, AstNodePtr)> save_decl = [&collect,&ast] (AstNodePtr var, AstNodePtr init) {
+    std::function<bool(AstNodePtr, AstNodePtr)> save_decl = [&collect,&ast,&save_call] (AstNodePtr var, AstNodePtr init) {
       DebugAstUtil([&var](){ return "save new decl:" + AstInterface::AstToString(var); });
       if (collect != 0) (*collect)(var, init, OperatorSideEffect(OperatorSideEffect::EnumVariant::Decl, init.get_ptr()));
       return true;
