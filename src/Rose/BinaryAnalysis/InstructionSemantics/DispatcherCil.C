@@ -192,6 +192,19 @@ namespace CilSemantics {
         ASSERT_not_null(ops);
         // TODO: carry prefix state into interpretation of the following instruction.
     }
+
+ // DQ (6/2/2026): Helper function for ldelem
+    void arrayLoadResult(Ops ops, size_t nbits) {
+        ASSERT_not_null(ops);
+        discard(ops, 2);       // array reference, index
+        ops->pushOperand(ops->undefined_(nbits));
+    }
+
+ // DQ (6/2/2026): Helper function for stelem
+    void arrayStoreEffect(Ops ops) {
+        ASSERT_not_null(ops);
+        discard(ops, 3);       // array reference, index, value
+    }
 }
 
 // nop (0 (0x00))
@@ -230,10 +243,55 @@ struct IP_break: P {
         // Run-time Exceptions:
         //   CIL/CLI exceptions are not modeled precisely by this initial dispatcher skeleton.
 struct IP_ldarg_0: P {
+#if 0
     void p(D /*dispatcher*/, Ops ops, I insn, Args args) override {
+
+     // printf ("Inside of IP_ldarg_0 support \n");
+        fprintf(stderr, "Inside of IP_ldarg_0 support\n");
+        fflush(stderr);
+
         assert_args(insn, args, 0);
+
+        printf ("Inside of IP_ldarg_0 support: calling pushOperand() \n");
+
         ops->pushOperand(ops->readLocal(0));
+
+        printf ("Leaving IP_ldarg_0 support: done calling pushOperand() \n");
     }
+#else
+    void p(D /*dispatcher*/, Ops ops, I insn, Args args) override {
+        fprintf(stderr, "IP_ldarg_0: entered\n");
+        fflush(stderr);
+
+        assert_args(insn, args, 0);
+
+        fprintf(stderr, "IP_ldarg_0: after assert_args\n");
+        fflush(stderr);
+
+        fprintf(stderr, "IP_ldarg_0: before readLocal(0)\n");
+        fflush(stderr);
+
+     // auto value = ops->readLocal(0);
+        SValuePtr value = ops->readLocal(0);
+
+     // DQ (6/2/2026): To avoid processing a NULL return value, trap this case and build a undefined value.
+     // But it might be that there is some setup for this instruction that we are missing.
+        if (!value) {
+            fprintf(stderr, "IP_ldarg_0: local/arg slot 0 is uninitialized; using undefined value\n");
+            fflush(stderr);
+
+            value = ops->undefined_(32);
+        }
+
+        fprintf(stderr, "IP_ldarg_0: after readLocal(0)\n");
+        fflush(stderr);
+
+        ops->pushOperand(value);
+
+        fprintf(stderr, "IP_ldarg_0: after pushOperand\n");
+        fflush(stderr);
+    }
+#endif
 };
 
 // ldarg_1 (3 (0x03))
@@ -1155,12 +1213,26 @@ struct IP_blt_un: P {
         //   Generated in the same per-instruction-processor style as DispatcherJvm.C. Some effects are conservative until metadata/type-aware CIL helpers are connected.
         // Run-time Exceptions:
         //   CIL/CLI exceptions are not modeled precisely by this initial dispatcher skeleton.
+#if 0
 struct IP_switch: P {
     void p(D dispatcher, Ops ops, I insn, Args args) override {
         assert_args(insn, args, 1);
         CilSemantics::branchEffect(dispatcher, ops, insn, args);
     }
 };
+#else
+struct IP_switch: P {
+    void p(D dispatcher, Ops ops, I insn, Args args) override {
+        // CIL switch has a variable-sized inline operand table. Different
+        // decoder versions may expose this table as zero, one, or multiple
+        // AST operands, so do not require an exact operand-list size here.
+        // The semantic stack effect is fixed: switch consumes the selector.
+        CilSemantics::discard(ops, 1);
+
+        CilSemantics::branchEffect(dispatcher, ops, insn, args);
+    }
+};
+#endif
 
 // ldind_i1 (70 (0x46))
         // Description:
@@ -2163,12 +2235,22 @@ struct IP_ldlen: P {
         //   Generated in the same per-instruction-processor style as DispatcherJvm.C. Some effects are conservative until metadata/type-aware CIL helpers are connected.
         // Run-time Exceptions:
         //   CIL/CLI exceptions are not modeled precisely by this initial dispatcher skeleton.
+#if 0
 struct IP_ldelema: P {
     void p(D /*dispatcher*/, Ops ops, I insn, Args args) override {
         assert_args(insn, args, 0);
         CilSemantics::binaryResult(ops);
     }
 };
+#else
+// DQ (6/2/2026): Better fix.
+struct IP_ldelema: P {
+    void p(D /*dispatcher*/, Ops ops, I insn, Args args) override {
+        assert_args(insn, args, 1);                // InlineType token
+        CilSemantics::binaryResult(ops);           // array reference, index -> managed address
+    }
+};
+#endif
 
 // ldelem_i1 (144 (0x90))
         // Description:
@@ -2443,12 +2525,21 @@ struct IP_stelem_ref: P {
         //   Generated in the same per-instruction-processor style as DispatcherJvm.C. Some effects are conservative until metadata/type-aware CIL helpers are connected.
         // Run-time Exceptions:
         //   CIL/CLI exceptions are not modeled precisely by this initial dispatcher skeleton.
+#if 0
 struct IP_ldelem: P {
     void p(D /*dispatcher*/, Ops ops, I insn, Args args) override {
         assert_args(insn, args, 0);
         CilSemantics::loadResult(ops, 32);
     }
 };
+#else
+struct IP_ldelem: P {
+    void p(D /*dispatcher*/, Ops ops, I insn, Args args) override {
+        assert_args(insn, args, 1);          // InlineType token
+        CilSemantics::arrayLoadResult(ops, 32);
+    }
+};
+#endif
 
 // stelem (164 (0xa4))
         // Description:
@@ -2457,12 +2548,21 @@ struct IP_ldelem: P {
         //   Generated in the same per-instruction-processor style as DispatcherJvm.C. Some effects are conservative until metadata/type-aware CIL helpers are connected.
         // Run-time Exceptions:
         //   CIL/CLI exceptions are not modeled precisely by this initial dispatcher skeleton.
+#if 0
 struct IP_stelem: P {
     void p(D /*dispatcher*/, Ops ops, I insn, Args args) override {
         assert_args(insn, args, 0);
         CilSemantics::storeEffect(ops);
     }
 };
+#else
+struct IP_stelem: P {
+    void p(D /*dispatcher*/, Ops ops, I insn, Args args) override {
+        assert_args(insn, args, 1);          // InlineType token
+        CilSemantics::arrayStoreEffect(ops);
+    }
+};
+#endif
 
 // unbox_any (165 (0xa5))
         // Description:
@@ -2625,12 +2725,26 @@ struct IP_ckfinite: P {
         //   Generated in the same per-instruction-processor style as DispatcherJvm.C. Some effects are conservative until metadata/type-aware CIL helpers are connected.
         // Run-time Exceptions:
         //   CIL/CLI exceptions are not modeled precisely by this initial dispatcher skeleton.
+#if 0
 struct IP_mkrefany: P {
     void p(D /*dispatcher*/, Ops ops, I insn, Args args) override {
         assert_args(insn, args, 1);
         CilSemantics::unaryResult(ops);
     }
 };
+#else
+struct IP_mkrefany: P {
+    void p(D /*dispatcher*/, Ops ops, I insn, Args args) override {
+        // mkrefany has an InlineType token, but the current conservative
+        // semantics does not inspect the token. Accept either the decoded
+        // token form or a decoder that does not expose it in the operand list.
+        if (args.size() > 1)
+            throw BaseSemantics::Exception("CIL instruction must have zero or one operand", insn);
+
+        CilSemantics::unaryResult(ops);
+    }
+};
+#endif
 
 // ldtoken (208 (0xd0))
         // Description:
@@ -3520,12 +3634,42 @@ DispatcherCil::iprocKey(SgAsmInstruction *insn_) const {
     return static_cast<int>(insn->get_kind());
 }
 
+#if 0
+#if 0
 InsnProcessor*
 DispatcherCil::iprocLookup(SgAsmInstruction* insn) {
     int key = (int) insn->get_rawBytes()[0];
     ASSERT_require(key >= 0);
     return iprocGet(key);
 }
+#else
+// DQ (6/2/2026): This allows us to pick up the full instruction code required fro fexx opt-code instructions.
+InsnProcessor*
+DispatcherCil::iprocLookup(SgAsmInstruction* insn) {
+    return iprocGet(iprocKey(insn));
+}
+#endif
+#else
+InsnProcessor*
+DispatcherCil::iprocLookup(SgAsmInstruction* insn) {
+    const SgUnsignedCharList &bytes = insn->get_rawBytes();
+    ASSERT_require(!bytes.empty());
+
+    // The dispatch table is keyed by actual CIL opcode bytes, not necessarily
+    // by SgAsmCilInstructionKind enum values. Most CIL opcodes are one byte,
+    // so the key is rawBytes[0]. Extended CIL opcodes have prefix 0xfe plus a
+    // second opcode byte and are registered as 0xfe00 | second_byte.
+    int key = static_cast<unsigned>(bytes[0]);
+
+    if (key == 0xfe) {
+        ASSERT_require(bytes.size() >= 2);
+        key = 0xfe00 | static_cast<unsigned>(bytes[1]);
+    }
+
+    ASSERT_require(key >= 0);
+    return iprocGet(key);
+}
+#endif
 
 void
 DispatcherCil::initializeMemoryState() {
@@ -3592,7 +3736,7 @@ DispatcherCil::adjustFpConditionCodes(const SValuePtr&, SgAsmFloatType*) {}
 } // namespace Rose
 
 #ifdef ROSE_HAVE_BOOST_SERIALIZATION_LIB
-BOOST_CLASS_EXPORT_IMPLEMENT(Rose::BinaryAnalysis::InstructionSemantics::DispatcherCil);
+// BOOST_CLASS_EXPORT_IMPLEMENT(Rose::BinaryAnalysis::InstructionSemantics::DispatcherCil);
 #endif
 
 #endif
