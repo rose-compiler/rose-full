@@ -20,6 +20,9 @@
 #include <SgAsmOperandList.h>
 #include <SgAsmValueExpression.h>
 
+// DQ (6/4/2026): Adding support for getEnclosingNode<SgAsmPEFileHeader>(cilInsn).
+#include <sageInterface.h>
+
 #include <Cxx_GrammarDowncast.h>
 
 #include <algorithm>
@@ -77,6 +80,41 @@ namespace CilSemantics {
     using Ops = RiscOperators*;
     using I = SgAsmCilInstruction*;
     using Args = const SgAsmExpressionPtrList&;
+  
+// Synthetic starting address for CIL localloc allocations.
+//
+// CIL localloc allocates memory from a method-local dynamic memory area,
+// similar in spirit to alloca. The CLI instruction produces a native address,
+// but the initial CIL dispatcher does not yet have a real stack-frame or
+// method-local allocation model.
+//
+// This constant is therefore only a modeling base address used by the optional
+// precise localloc approximation:
+//
+//   oldPtr = localAllocPointer
+//   newPtr = oldPtr + align(size)
+//   localAllocPointer = newPtr
+//   push oldPtr
+//
+// It is not a real CLI-mandated address. Once DispatcherCil has a proper
+// method-frame/local-memory model, this synthetic base should be replaced by
+// that model.
+    static const uint64_t CIL_LOCAL_ALLOC_BASE = 0x70000000ull;
+
+// Alignment used for synthetic localloc allocations.
+//
+// Real runtimes align localloc results according to platform/runtime rules.
+// Since this dispatcher does not yet model those rules, use a conservative
+// power-of-two alignment so that successive symbolic allocations are separated
+// in a plausible native-address space.
+//
+// The value must remain a power of two because alignUpPowerOfTwo() implements:
+//
+//   aligned = (size + (alignment - 1)) & ~(alignment - 1)
+//
+// If the runtime/architecture alignment becomes available later, replace this
+// constant with that value.
+    static const uint64_t CIL_LOCAL_ALLOC_ALIGNMENT = 8;
 
     uint64_t asUnsigned(const SgAsmExpression *expr, uint64_t dflt = 0) {
         if (const SgAsmIntegerValueExpression *ival = isSgAsmIntegerValueExpression(expr))
@@ -120,19 +158,1224 @@ namespace CilSemantics {
         ops->pushOperand(v);
     }
 
-    void unaryResult(Ops ops, size_t nbits = 32) {
-        ASSERT_not_null(ops);
-        SValue::Ptr v = ops->popOperand();
-        ops->pushOperand(ops->undefined_(std::max(nbits, v ? v->nBits() : nbits)));
-    }
+static SValue::Ptr
+alignUpPowerOfTwo(Ops ops, const SValue::Ptr &size, uint64_t alignment)
+{
+// Aligns a symbolic allocation size upward to the next multiple of a
+// power-of-two alignment using only ROSE RISC bitvector operations.
+//
+// This is used by the precise localloc model so that the allocation pointer is
+// advanced by an aligned size even when the requested size is symbolic. The
+// expression:
+//
+//   aligned = (size + (alignment - 1)) & ~(alignment - 1)
+//
+// is valid for power-of-two alignments and can be represented with ROSE RISC
+// operators as add() followed by and_(). This avoids requiring the size operand
+// to be concrete.
+    ASSERT_not_null(ops);
+    ASSERT_not_null(size);
+    ASSERT_require(alignment != 0);
+    ASSERT_require((alignment & (alignment - 1)) == 0); // power of two
 
-    void binaryResult(Ops ops, size_t nbits = 32) {
+    const size_t nbits = size->nBits();
+
+    SValue::Ptr bias = ops->number_(nbits, alignment - 1);
+    SValue::Ptr mask = ops->number_(nbits, ~(alignment - 1));
+
+    SValue::Ptr biased = ops->add(size, bias);
+    return ops->and_(biased, mask);
+}
+  
+static RegisterDescriptor
+cilLocalAllocPointerRegister()
+{
+// Returns the semantic storage location for the current method's localloc
+// allocation pointer.
+//
+// A complete localloc model needs persistent per-state storage so that multiple
+// localloc instructions in the same method activation produce distinct
+// addresses. The natural ROSE RISC representation for such persistent state is
+// a pseudo-register read and write:
+//
+//   oldPtr = readRegister(cil.localAllocPointer)
+//   writeRegister(cil.localAllocPointer, newPtr)
+//
+// This placeholder should eventually return a valid CIL pseudo-register from
+// the DispatcherCil register dictionary. Until such a register exists, do not
+// use an invalid RegisterDescriptor with readRegister/writeRegister; use the
+// conservative localloc model that returns ops->undefined_(ptrBits).
+// TODO: Replace this placeholder with a real CIL pseudo-register descriptor
+// once DispatcherCil has a register dictionary entry for the local allocation
+// pointer.
+    return RegisterDescriptor();
+}
+
+static SValue::Ptr
+readLocalAllocPointer(Ops ops, size_t ptrBits)
+{
+    ASSERT_not_null(ops);
+
+    RegisterDescriptor reg = cilLocalAllocPointerRegister();
+
+    // Default initial allocation base if the register has not been initialized.
+    SValue::Ptr dflt = ops->number_(ptrBits, CIL_LOCAL_ALLOC_BASE);
+
+    return ops->readRegister(reg, dflt);
+}
+
+static void
+writeLocalAllocPointer(Ops ops, const SValue::Ptr &value)
+{
+    ASSERT_not_null(ops);
+    ASSERT_not_null(value);
+
+    RegisterDescriptor reg = cilLocalAllocPointerRegister();
+
+    ops->writeRegister(reg, value);
+}
+
+
+   // DQ (6/7/2026): Added to support different kinds of unary operators.
+      enum Unary_Op_Kind_Type
+         {
+           negate,
+           not_op,
+           castclass,
+           isinst,
+           unbox,
+           box,
+           unbox_any,
+           newarr,
+           ldlen,
+           refanyval,
+           ckfinite,
+           mkrefany,
+        // ldvirtftn,
+           localloc,
+           refanytype,
+         };
+
+std::string unary_op_kind_toString(Unary_Op_Kind_Type op_kind)
+{
+    switch (op_kind) {
+        case negate:     return "negate";
+        case not_op:     return "not_op";
+        case castclass:  return "castclass";
+        case isinst:     return "isinst";
+        case unbox:      return "unbox";
+        case box:        return "box";
+        case unbox_any:  return "unbox_any";
+        case newarr:     return "newarr";
+        case ldlen:      return "ldlen";
+        case refanyval:  return "refanyval";
+        case ckfinite:   return "ckfinite";
+        case mkrefany:   return "mkrefany";
+     // case ldvirtftn:  return "ldvirtftn";
+        case localloc:   return "localloc";
+        case refanytype: return "refanytype";
+        default:
+            ROSE_ASSERT(false);
+    }
+}
+
+#if 1
+  // SValuePtr nullReference(DispatcherCil dispatcher, Ops ops, size_t nbits)
+SValuePtr nullReference(D dispatcher, Ops ops, size_t nbits)
+{
+ // ASSERT_not_null(dispatcher);
+ // ASSERT_not_null(ops);
+
+    SValuePtr retval = ops->number_(nbits, 0);
+    dispatcher->typeAnalysis().setNullness(retval, DispatcherCil::CilTypeAnalysis::DefinitelyNull);
+
+    return retval;
+}
+#endif
+
+void unaryResult(D dispatcher, Ops ops, Unary_Op_Kind_Type op_kind, const DispatcherCil::CilTypeAnalysis::TypeDescriptor *targetType = nullptr, size_t nbits = 32)
+   {
+     ASSERT_not_null(ops);
+
+     fprintf(stderr, "TOP of unaryResult \n");
+     fflush(stderr);
+             
+  // CIL unary opcodes represented here all consume one stack value.
+     SValue::Ptr v = ops->popOperand();
+     ASSERT_not_null(v);
+
+     const size_t valueBits = v->nBits();
+     const size_t ptrBits = nbits;       // TODO: replace with architecture/CIL native pointer width.
+
+     SValue::Ptr result;
+     bool preserveInputKind = false;
+
+     fprintf(stderr, "TOP of unaryResult: op_kind = %s input = %s \n",
+            unary_op_kind_toString(op_kind).c_str(),
+             v->toString().c_str());
+     fflush(stderr);
+
+     switch (op_kind)
+        {
+          case negate:
+             {
+            // CIL instruction: neg
+            //
+            // Stack transition:
+            //   ..., value -> ..., -value
+            //
+            // Purpose:
+            //   Computes the arithmetic negation of the value on top of the CIL
+            //   evaluation stack. This is numeric negation, not bitwise inversion.
+            //
+            // ROSE semantics:
+            //   Use ops->negate(v), which models arithmetic two's-complement negation
+            //   in the selected semantic domain.
+            //
+            // Notes:
+            //   The result has the same bit width and the same CIL stack category as
+            //   the input value. This instruction may have language-level overflow
+            //   implications for some source languages, but the plain CIL neg opcode
+            //   itself is modeled here as the corresponding low-level arithmetic
+            //   operation.
+            // CIL neg: arithmetic negation.
+               result = ops->negate(v);
+               preserveInputKind = true;
+               break;
+             }
+
+          case not_op:
+             {
+            // CIL instruction: not
+            //
+            // Stack transition:
+            //   ..., value -> ..., ~value
+            //
+            // Purpose:
+            //   Computes the bitwise complement of the value on top of the CIL
+            //   evaluation stack. Each bit of the input is inverted.
+            //
+            // ROSE semantics:
+            //   Use ops->invert(v). Do not use ops->negate(v): negate is arithmetic
+            //   negation, while CIL not is bitwise inversion.
+            //
+            // Notes:
+            //   The result has the same bit width and CIL stack category as the input.
+            // CIL not: bitwise complement, not arithmetic negation.
+               result = ops->invert(v);
+               preserveInputKind = true;
+               break;
+             }
+
+          case castclass:
+             {
+            // CIL instruction: castclass <typeTok>
+            //
+            // Stack transition:
+            //   ..., objref -> ..., objref
+            //
+            // Purpose:
+            //   Checks whether the object reference on top of the stack is assignment-
+            //   compatible with the metadata target type. If the input is null, the
+            //   result is null. If the input is non-null and compatible, the result is
+            //   the original object reference. If the input is non-null and not
+            //   compatible, the real CLI semantics throw System.InvalidCastException.
+            //
+            // Required information:
+            //   Faithful semantics require the metadata token from the instruction,
+            //   possible runtime type information for the object, nullness information,
+            //   and an assignment-compatibility query over the CLI type hierarchy.
+            //
+            // Current conservative model:
+            //   If the type-analysis side table can prove nullness or compatibility,
+            //   preserve the original reference. Otherwise, use an unknown objref of
+            //   the same width to keep the evaluation stack well-formed. Exception
+            //   control-flow is not yet modeled here.
+            //
+            // Notes:
+            //   This is not a numeric unary operator. It is a metadata/type-system
+            //   operation that happens to consume one stack value.
+               ASSERT_not_null(dispatcher);
+               ASSERT_not_null(targetType);
+
+               DispatcherCil::CilTypeAnalysis &ta = dispatcher->typeAnalysis();
+
+               DispatcherCil::CilTypeAnalysis::TypeSet possibleTypes = ta.possibleDynamicTypes(v);
+
+            // const uint32_t targetToken = targetType->metadataToken;
+
+               if (ta.isDefinitelyNull(v)) {
+                    result = v;
+                    ta.copyFacts(result, v);
+
+            // } else if (ta.allAssignableTo(possibleTypes, targetToken)) {
+               } else if (ta.allAssignableTo(possibleTypes, targetType)) {
+                   result = v;
+                   ta.copyFacts(result, v);
+               } else {
+                // Unknown, mixed, or definitely invalid cast.
+                // Precise CIL semantics:
+                //   invalid non-null cast -> InvalidCastException.
+                // Current approximation:
+                //   keep stack well-formed with unknown target-compatible objref.
+                   result = ops->undefined_(v->nBits());
+                   result->kind(v->kind());
+
+                // ta.setPossibleType(result, targetToken);
+                // ta.setPossibleTypes(result, targetType);
+                   ta.setPossibleTypes(result, possibleTypes);
+                   ta.setNullness(result, DispatcherCil::CilTypeAnalysis::MaybeNull);
+               }
+
+               preserveInputKind = true;
+               break;
+             }
+
+          case isinst:
+             {
+            // CIL instruction: isinst <typeTok>
+            //
+            // Stack transition:
+            //   ..., objref -> ..., objref-or-null
+            //
+            // Purpose:
+            //   Tests whether the object reference on top of the stack is assignment-
+            //   compatible with the metadata target type. Unlike castclass, failure
+            //   does not throw. Instead, failure produces null.
+            //
+            // Real CLI behavior:
+            //   If objref is null:
+            //       result is null.
+            //   Else if runtime type of objref is assignment-compatible with typeTok:
+            //       result is the original objref.
+            //   Else:
+            //       result is null.
+            //
+            // Current conservative model:
+            //   Without precise runtime type and nullness facts, produce an unknown
+            //   reference-width value. If type analysis is available, record that any
+            //   non-null result is compatible with the target type.
+            //
+            // Notes:
+            //   isinst is roughly a safe dynamic cast. It is not equivalent to
+            //   castclass because an incompatible non-null input returns null instead
+            //   of throwing InvalidCastException.
+               ASSERT_not_null(dispatcher);
+               ASSERT_not_null(targetType);
+
+               DispatcherCil::CilTypeAnalysis &ta = dispatcher->typeAnalysis();
+               DispatcherCil::CilTypeAnalysis::TypeSet possibleTypes = ta.possibleDynamicTypes(v);
+
+            // const uint32_t targetToken = targetType->metadataToken;
+
+               if (ta.isDefinitelyNull(v))
+                  {
+                    result = v;
+                  } else if (ta.allAssignableTo(possibleTypes, targetType)) {
+                    result = v;
+                  } else if (ta.noneAssignableTo(possibleTypes, targetType)) {
+                    result = nullReference(dispatcher, ops, v->nBits());
+                  } else {
+                 // Unknown/mixed: result may be original objref or null.
+                    result = ops->undefined_(v->nBits());
+                    result->kind(v->kind());
+                 // ta.setPossibleTypes(result, targetType);
+                    ta.setPossibleTypes(result, possibleTypes);
+                    ta.setNullness(result, DispatcherCil::CilTypeAnalysis::MaybeNull);
+                  }
+
+               preserveInputKind = true;
+               break;
+             }
+
+          case unbox:
+             {
+            // CIL instruction: unbox <typeTok>
+            //
+            // Stack transition:
+            //   ..., objref -> ..., managed-pointer
+            //
+            // Purpose:
+            //   Converts a boxed value-type object reference into a managed pointer to the
+            //   value stored inside the boxed object. This instruction does not copy the
+            //   value onto the stack; it returns the address of the boxed payload.
+            //
+            // Real CLI behavior:
+            //   If objref is null, the runtime throws NullReferenceException.
+            //   If objref is not a boxed value compatible with the metadata target type,
+            //   the runtime throws InvalidCastException.
+            //
+            // ROSE/RISC modeling:
+            //   ROSE RISC semantics do not know the CLI boxed-object layout by default.
+            //   Therefore, unless this dispatcher defines a heap/object layout, model the
+            //   result as an unknown pointer-sized value. If a boxed-object layout is later
+            //   added, this can be refined to objref + boxedPayloadOffset.
+            //
+            // Type-analysis note:
+            //   The result is a managed pointer, not an object reference. Therefore do not
+            //   record it with possibleDynamicTypes() unless that table is generalized to
+            //   include pointer-target types. A separate pointer-target-type side fact would
+            //   be more accurate.
+
+            // Exact target type comes from metadata token, not available here.
+            // result = ops->undefined_(ptrBits);
+            // Do NOT blindly preserve input kind if objref and managed ptr differ.
+            // break;
+               ASSERT_not_null(dispatcher);
+               ASSERT_not_null(targetType);
+
+               result = ops->undefined_(ptrBits);
+
+               dispatcher->typeAnalysis().setNullness(result,DispatcherCil::CilTypeAnalysis::DefinitelyNonNull);
+
+               preserveInputKind = false;
+               break;
+             }
+#if 0
+        case box:
+    // CIL instruction: box <typeTok>
+    //
+    // Stack transition:
+    //   ..., value -> ..., objref
+    //
+    // Purpose:
+    //   Allocates a new object that contains a copy of the value on top of the
+    //   stack. The result is an object reference to the boxed value.
+    //
+    // Real CLI behavior:
+    //   For value types, this creates a boxed object. For nullable and certain
+    //   special cases, the runtime has additional rules. Allocation failure
+    //   can throw.
+    //
+    // Current conservative model:
+    //   Object allocation and heap object identity are not modeled here, so
+    //   produce an unknown pointer-sized object reference. If type analysis is
+    //   available, the result can be marked definitely non-null and associated
+    //   with the metadata target type.
+    //
+    // Notes:
+    //   Do not preserve the input ValueKind. The input is a value; the output
+    //   is an object reference.
+            // Stack: value -> object reference.
+            // Allocation/object identity is not modeled here.
+            result = ops->undefined_(ptrBits);
+            break;
+#endif
+
+          case box:
+             {
+            // CIL instruction: box <typeTok>
+            //
+            // Stack transition:
+            //   ..., value -> ..., objref
+            //
+            // Purpose:
+            //   Converts a value into an object reference. For ordinary value types,
+            //   this allocates a boxed object on the managed heap and copies the value
+            //   into the payload of that object.
+            //
+            // Real CLI behavior:
+            //   For value types, the result is a newly allocated object reference.
+            //   For reference types, the input reference can be returned unchanged.
+            //   For Nullable<T>, null is produced when HasValue is false; otherwise
+            //   the contained T value is boxed. Allocation failure can throw.
+            //
+            // ROSE/RISC modeling:
+            //   ROSE RISC semantics do not know the CLI managed heap object layout by
+            //   default. Unless this dispatcher models allocation and boxed-object
+            //   memory layout, represent the result as an unknown pointer-sized object
+            //   reference.
+            //
+            // Type-analysis note:
+            //   Unlike unbox, the result is an object reference. Therefore it is
+            //   reasonable to record the result's possible dynamic type as the metadata
+            //   target type. For ordinary value-type boxing, the successful allocation
+            //   result is definitely non-null.
+
+               ASSERT_not_null(dispatcher);
+               ASSERT_not_null(targetType);
+
+               DispatcherCil::CilTypeAnalysis &ta = dispatcher->typeAnalysis();
+            // const uint32_t targetToken = targetType->metadataToken;
+               DispatcherCil::CilTypeAnalysis::TypeSet possibleTypes = ta.possibleDynamicTypes(v);
+
+               result = ops->undefined_(ptrBits);
+
+            // ta.setPossibleType(result, targetToken);
+               ta.setPossibleTypes(result, possibleTypes);
+               ta.setNullness(result, DispatcherCil::CilTypeAnalysis::DefinitelyNonNull);
+
+               preserveInputKind = false;
+               break;
+            }
+#if 0
+        case unbox_any:
+    // CIL instruction: unbox.any <typeTok>
+    //
+    // Stack transition:
+    //   ..., objref -> ..., value-or-objref
+    //
+    // Purpose:
+    //   Extracts a value from a boxed object, or performs a type-compatible
+    //   reference conversion depending on the target type.
+    //
+    // Real CLI behavior:
+    //   If the target type is a value type, the boxed value is copied out and
+    //   pushed as a value. If the target type is a reference type, the operation
+    //   behaves more like a checked reference conversion. Null and incompatible
+    //   inputs have type-dependent behavior.
+    //
+    // Current conservative model:
+    //   The exact result width depends on the metadata target type, which is
+    //   not fully resolved here. Use an unknown value with a conservative width.
+    //
+    // Notes:
+    //   This instruction is metadata-sensitive. A more precise implementation
+    //   should use the target TypeDescriptor to choose the result width and
+    //   stack category.
+            // Stack: objref -> value or objref, depending on metadata type.
+            // Without token/type width, use conservative unknown.
+            // If later you pass the type width in nbits, this becomes useful.
+            result = ops->undefined_(std::max(nbits, valueBits));
+            break;
+#endif
+
+          case unbox_any:
+             {
+            // CIL instruction: unbox.any <typeTok>
+            //
+            // Stack transition:
+            //   ..., objref -> ..., value-or-objref
+            //
+            // Purpose:
+            //   Extracts a value from a boxed object, or performs a type-compatible
+            //   reference conversion depending on the target type.
+            //
+            // Real CLI behavior:
+            //   If the target type is a value type, the boxed value is copied out and
+            //   pushed as a value. If the target type is a reference type, the operation
+            //   behaves more like a checked reference conversion. Null and incompatible
+            //   inputs have type-dependent behavior.
+            //
+            // Current conservative model:
+            //   The exact result width depends on the metadata target type, which is
+            //   not fully resolved here. Use an unknown value with a conservative width.
+            //
+            // Notes:
+            //   This instruction is metadata-sensitive. A more precise implementation
+            //   should use the target TypeDescriptor to choose the result width and
+            //   stack category.
+            // Stack: objref -> value or objref, depending on metadata type.
+            // Without token/type width, use conservative unknown.
+            // If later you pass the type width in nbits, this becomes useful.
+
+            // unbox.any <typeTok> converts an object reference to a value of the target
+            // type. For value-type targets, it checks that the object is a compatible boxed
+            // value and pushes a copy of the boxed payload. For reference-type targets, it
+            // behaves like a checked reference conversion: null remains null, compatible
+            // objects are returned, and incompatible objects throw. Since this dispatcher
+            // does not yet model boxed-object layout or exception edges, value-type results
+            // are modeled as unknown values of the target width, while reference-type
+            // results are modeled like conservative castclass results.
+
+               ASSERT_not_null(dispatcher);
+               ASSERT_not_null(targetType);
+
+               DispatcherCil::CilTypeAnalysis &ta = dispatcher->typeAnalysis();
+            // const uint32_t targetToken = targetType->metadataToken;
+               DispatcherCil::CilTypeAnalysis::TypeSet possibleTypes = ta.possibleDynamicTypes(v);
+
+               if (targetType->isReferenceType)
+                  {
+                    DispatcherCil::CilTypeAnalysis::TypeSet possibleTypes = ta.possibleDynamicTypes(v);
+
+                    if (ta.isDefinitelyNull(v))
+                       {
+                         result = v;
+                         ta.copyFacts(result, v);
+
+                    // } else if (ta.allAssignableTo(possibleTypes, targetToken))
+                       } else if (ta.allAssignableTo(possibleTypes, targetType))
+                       {
+                         result = v;
+                         ta.copyFacts(result, v);
+                       }
+                      else
+                       {
+                         result = ops->undefined_(v->nBits());
+                         result->kind(v->kind());
+
+                      // ta.setPossibleType(result, targetToken);
+                         ta.setPossibleTypes(result, possibleTypes);
+                         ta.setNullness(result, DispatcherCil::CilTypeAnalysis::MaybeNull);
+                       }
+
+                    preserveInputKind = true;
+
+                  }
+                 else
+                  {
+                    const size_t resultBits = targetType->valueBitWidth != 0 ? targetType->valueBitWidth : nbits;
+
+                    result = ops->undefined_(resultBits);
+                    preserveInputKind = false;
+                  }
+
+               break;
+             }
+
+
+          case newarr:
+             {
+            // CIL instruction: newarr <etype>
+            //
+            // Stack transition:
+            //   ..., length -> ..., array-objref
+            //
+            // Purpose:
+            //   Allocates a one-dimensional, zero-based array whose element type is
+            //   specified by the metadata operand. The stack input is the requested
+            //   array length.
+            //
+            // Real CLI behavior:
+            //   Negative lengths and allocation failures can throw. The result is a
+            //   new array object reference.
+            //
+            // Current conservative model:
+            //   Heap allocation and array layout are not modeled here, so produce an
+            //   unknown pointer-sized object reference. If type analysis is available,
+            //   this result can be marked definitely non-null and associated with an
+            //   array type derived from the element-type token.
+            //
+            // Notes:
+            //   Do not preserve the input ValueKind. The input is an integer length;
+            //   the output is an array object reference.
+            // Stack: length/native int -> array object reference.
+
+            // newarr <etype> allocates a one-dimensional, zero-based managed array.
+            // The input stack value is the requested length; the result is an object
+            // reference to the new array. Since this dispatcher does not yet model the
+            // managed heap, allocation, array headers, or element storage, represent the
+            // result as an unknown pointer-sized object reference. Record type-analysis
+            // facts saying that the result is a non-null array object whose element type
+            // is the metadata target type. Do not preserve the input kind because the
+            // input is an integer length and the output is an array reference.
+
+               ASSERT_not_null(dispatcher);
+               ASSERT_not_null(targetType);
+
+               DispatcherCil::CilTypeAnalysis &ta = dispatcher->typeAnalysis();
+               DispatcherCil::CilTypeAnalysis::TypeSet possibleTypes = ta.possibleDynamicTypes(v);
+
+            // const uint32_t elementTypeToken = targetType->metadataToken;
+            // const uint32_t arrayTypeToken = elementTypeToken; // TODO: synthesize real array type token.
+
+               result = ops->undefined_(ptrBits);
+
+               ta.setPossibleTypes(result, possibleTypes);
+               ta.setNullness(result, DispatcherCil::CilTypeAnalysis::DefinitelyNonNull);
+
+               preserveInputKind = false;
+               break;
+           }
+#if 0
+        case ldlen:
+    // CIL instruction: ldlen
+    //
+    // Stack transition:
+    //   ..., array-objref -> ..., native-unsigned-int
+    //
+    // Purpose:
+    //   Loads the length of a one-dimensional array and pushes it as a native
+    //   unsigned integer.
+    //
+    // Real CLI behavior:
+    //   Null array references throw NullReferenceException.
+    //
+    // Current conservative model:
+    //   Array object layout and length fields are not modeled here, so produce
+    //   an unknown native-sized integer. Use ptrBits as the current native-int
+    //   approximation.
+    //
+    // Notes:
+    //   Do not preserve the input ValueKind. The input is an array reference;
+    //   the result is an integer length.
+            // Stack: array ref -> native unsigned int length.
+            // CIL returns native unsigned int; use ptrBits until native width is known.
+            result = ops->undefined_(ptrBits);
+            break;
+#endif
+
+          case ldlen:
+             {
+            // CIL instruction: ldlen
+            //
+            // Stack transition:
+            //   ..., array-objref -> ..., native-unsigned-int
+            //
+            // Purpose:
+            //   Loads the length of a one-dimensional array and pushes it as a native
+            //   unsigned integer.
+            //
+            // Real CLI behavior:
+            //   Null array references throw NullReferenceException.
+            //
+            // Current conservative model:
+            //   Array object layout and length fields are not modeled here, so produce
+            //   an unknown native-sized integer. Use ptrBits as the current native-int
+            //   approximation.
+            //
+            // Notes:
+            //   Do not preserve the input ValueKind. The input is an array reference;
+            //   the result is an integer length.
+            // Stack: array ref -> native unsigned int length.
+            // CIL returns native unsigned int; use ptrBits until native width is known.
+               ASSERT_not_null(dispatcher);
+
+               DispatcherCil::CilTypeAnalysis &ta = dispatcher->typeAnalysis();
+
+               if (ta.isDefinitelyNull(v))
+                  {
+                 // Precise semantics would throw NullReferenceException.
+                 // Exception edges are not modeled here, so keep the stack well-formed
+                 // with an unknown native unsigned integer.
+                    result = ops->undefined_(ptrBits);
+                  }
+                 else
+                  {
+                    result = ops->undefined_(ptrBits);
+                  }
+
+               preserveInputKind = false;
+               break;
+             }
+
+#if 0
+        case ckfinite:
+    // CIL instruction: ckfinite
+    //
+    // Stack transition:
+    //   ..., floating-value -> ..., floating-value
+    //
+    // Purpose:
+    //   Checks whether the floating-point value on top of the stack is finite.
+    //   If the value is finite, the same value is pushed. If it is NaN or an
+    //   infinity, the real CLI semantics throw ArithmeticException.
+    //
+    // Current conservative model:
+    //   Floating-point exceptional control-flow is not modeled here, so preserve
+    //   the input value as the normal-path result.
+    //
+    // Notes:
+    //   This instruction does not compute a new numeric value on the normal
+    //   path; it validates the input.
+            // Stack: float -> same float if finite, otherwise ArithmeticException.
+            // Since exceptions are not modeled, preserve the value.
+            result = v;
+            preserveInputKind = true;
+            break;
+#endif
+
+          case ckfinite:
+             {
+            // CIL instruction: ckfinite
+            //
+            // Stack transition:
+            //   ..., floating-value -> ..., floating-value
+            //
+            // Purpose:
+            //   Checks that the floating-point value on top of the evaluation stack is
+            //   finite. If the value is finite, the same value is pushed back. If the
+            //   value is NaN, +infinity, or -infinity, the real CLI semantics throw
+            //   System.ArithmeticException.
+            //
+            // Real CLI behavior:
+            //   This instruction is used to enforce finite floating-point results. It
+            //   does not compute a new value on the successful path; it validates the
+            //   existing value.
+            //
+            // ROSE/RISC modeling:
+            //   The current ROSE RISC operators used by this dispatcher do not directly
+            //   expose an IEEE floating-point "is finite" predicate. Unless this
+            //   dispatcher adds floating-point classification and exception edges,
+            //   model only the normal path by returning the input value unchanged.
+            //
+            // Type-analysis note:
+            //   The result has the same stack category and width as the input. It is
+            //   not an object reference and should not be recorded in
+            //   possibleDynamicTypes().
+
+               result = v;
+               preserveInputKind = true;
+
+               if (dispatcher)
+                  {
+                    dispatcher->typeAnalysis().copyFacts(result, v);
+                  }
+
+               break;
+             }
+
+          case localloc:
+             {
+            // CIL instruction: localloc
+            //
+            // Stack transition:
+            //   ..., size -> ..., native-address
+            //
+            // Purpose:
+            //   Allocates a block of memory from the local dynamic memory pool for the
+            //   current method activation and pushes the native address of that block.
+            //
+            // Complete ROSE/RISC-level model:
+            //   1. Pop the requested allocation size.
+            //   2. Read the current local allocation pointer.
+            //   3. Align the requested size.
+            //   4. Add the aligned size to the local allocation pointer.
+            //   5. Write the updated pointer back to semantic state.
+            //   6. Push the old pointer as the result address.
+            //
+            // Notes:
+            //   This models allocation, but it does not initialize the allocated memory.
+            //   It also does not model stack overflow or security restrictions.
+
+               ASSERT_not_null(dispatcher);
+
+               DispatcherCil::CilTypeAnalysis &ta = dispatcher->typeAnalysis();
+
+               SValue::Ptr size = v;
+               ASSERT_not_null(size);
+
+               // Normalize allocation size to native pointer width.
+               if (size->nBits() < ptrBits)
+                  {
+                    size = ops->unsignedExtend(size, ptrBits);
+                  } else if (size->nBits() > ptrBits)
+                  {
+                    size = ops->extract(size, 0, ptrBits);
+                  }
+#if 0
+               SValue::Ptr oldPtr = readLocalAllocPointer(ops, ptrBits);
+
+               SValue::Ptr alignedSize = alignUpPowerOfTwo(ops, size, CIL_LOCAL_ALLOC_ALIGNMENT);
+
+               SValue::Ptr newPtr = ops->add(oldPtr, alignedSize);
+
+               writeLocalAllocPointer(ops, newPtr);
+
+               result = oldPtr;
+#else
+            // DQ (6/10/2026): Until we have a concept of heap that we can support, we can skip some parts of the semantics.
+               fprintf(stderr, "unaryResult: case localloc: allocation of heap memory bypassed \n");
+               fflush(stderr);
+
+            // This is not correct, but should allow for the rest of the function to be tested.
+               result = v;
+#endif
+               // Result is a native address, not an object reference.
+               ta.setNullness(result, DispatcherCil::CilTypeAnalysis::DefinitelyNonNull);
+
+               preserveInputKind = false;
+               break;
+           }
+#if 0
+          case mkrefany:
+             {
+               ASSERT_not_null(dispatcher);
+               ASSERT_not_null(targetType);
+
+               SValue::Ptr typeHandle = ops->number_(ptrBits, targetType->metadataToken);
+               SValue::Ptr addr = v;
+
+               if (addr->nBits() < ptrBits)
+                  {
+                    addr = ops->unsignedExtend(addr, ptrBits);
+                  }
+                 else if (addr->nBits() > ptrBits)
+                  {
+                    addr = ops->extract(addr, 0, ptrBits);
+                  }
+
+               result = ops->concat(typeHandle, addr);
+
+               preserveInputKind = false;
+               break;
+             }
+#endif
+
+          case mkrefany:
+             {
+            // CIL instruction: mkrefany <typeTok>
+            //
+            // Stack transition:
+            //   ..., managed-pointer -> ..., typedref
+            //
+            // Purpose:
+            //   Builds a typed reference from a managed pointer and a metadata type
+            //   token. A typed reference conceptually contains both the address and the
+            //   runtime type information for the referenced value.
+            //
+            // Current conservative model:
+            //   The semantic domain does not currently have a concrete typedref layout.
+            //   Model the result as an unknown value. Using 2 * ptrBits is a useful
+            //   approximation because a typedref conceptually contains both a type
+            //   handle and an address.
+            //
+            // Notes:
+            //   Do not preserve the input ValueKind. The input is a managed pointer;
+            //   the output is a typed reference.
+
+            // Stack: address -> typedref.
+            // A typedref is conceptually {type, address}. Without a typedref
+            // layout in the semantic domain, use an unknown value. 2*ptrBits is
+            // a better conservative model than ptrBits if you want to remember
+            // that typedref carries both type and address.
+
+            // This implementation can handle when the targetType is not available (because args to unaryResult were size zero).
+               ASSERT_not_null(dispatcher);
+
+               SValue::Ptr addr = v;
+
+               if (addr->nBits() < ptrBits)
+                  {
+                    addr = ops->unsignedExtend(addr, ptrBits);
+                  }
+                 else
+                  {
+                    if (addr->nBits() > ptrBits)
+                       {
+                         addr = ops->extract(addr, 0, ptrBits);
+                       }
+                  }
+
+               if (targetType != nullptr)
+                  {
+                    SValue::Ptr typeHandle = ops->number_(ptrBits, targetType->metadataToken);
+
+                    result = ops->concat(typeHandle, addr);
+                  }
+                 else
+                  {
+                 // mkrefany requires an InlineType token, but the current decoder/test
+                 // path consumed the operand bytes without exposing the token in the
+                 // SgAsmOperandList. Keep semantics alive with an unknown typedref.
+                    result = ops->undefined_(2 * ptrBits);
+                  }
+
+               preserveInputKind = false;
+               break;
+             }
+
+#if 1
+        // DQ (6/9/2026): We might want this one later, but we currently need one that will match mkrefany.
+          case refanyval:
+             {
+            // CIL instruction: refanyval <typeTok>
+            //
+            // Stack transition:
+            //   ..., typedref -> ..., managed-pointer
+            //
+            // Purpose:
+            //   Extracts the address stored in a typed reference if the typed reference
+            //   has the requested target type.
+            //
+            // Real CLI behavior:
+            //   The typed reference carries both a type descriptor and an address. If
+            //   the embedded type is not compatible with the metadata target type, the
+            //   runtime can throw.
+            //
+            // Current conservative model:
+            //   Typed-reference layout is not modeled, so produce an unknown pointer-
+            //   sized managed pointer.
+            //
+            // Notes:
+            //   This is metadata-sensitive and should eventually consult the typedref's
+            //   stored type and the target type token.
+            // Stack: typedref -> managed pointer to value if type matches.
+
+               ASSERT_not_null(dispatcher);
+               ASSERT_not_null(targetType);
+
+               static const uint64_t typedRefAddressOffset = 0; // TODO: define layout.
+
+               SValue::Ptr offset = ops->number_(v->nBits(), typedRefAddressOffset);
+               SValue::Ptr addressFieldAddr = ops->add(v, offset);
+
+               SValue::Ptr dflt = ops->undefined_(ptrBits);
+               SValue::Ptr cond = ops->boolean_(true);
+
+               result = ops->readMemory(RegisterDescriptor(), addressFieldAddr, dflt, cond);
+
+               preserveInputKind = false;
+               break;
+             }
+#endif
+       // case refanyval:
+          case refanytype:
+             {
+            // CIL instruction: refanytype
+            //
+            // Stack transition:
+            //   ..., typedref -> ..., RuntimeTypeHandle
+            //
+            // Purpose:
+            //   Extracts the runtime type handle stored in a typed reference.
+            //
+            // Current conservative model:
+            //   Typed-reference layout and runtime type handles are not modeled here,
+            //   so produce an unknown pointer-sized type-handle value.
+            //
+            // Notes:
+            //   Do not preserve the input ValueKind. The input is a typed reference;
+            //   the output is a type-handle-like value.
+            // Stack: typedref -> RuntimeTypeHandle / type token-like value.
+               if (v->nBits() >= 2 * ptrBits)
+                  {
+                    result = ops->extract(v, 0, ptrBits);
+                  }
+                 else
+                  {
+                    result = ops->undefined_(ptrBits);
+                  }
+
+               preserveInputKind = false;
+               break;
+             }
+
+          default:
+             {
+               fprintf(stderr, "unaryResult: default reached: op_kind = %d\n", op_kind);
+               fflush(stderr);
+               ROSE_ASSERT(false);
+             }
+        }
+
+     ASSERT_not_null(result);
+
+  // Preserve the CIL stack category only for instructions whose result is the
+  // same kind of value as the input. This is correct for operations like neg,
+  // not, castclass on the normal path, and ckfinite. It is not correct for
+  // operations that change categories, such as box, unbox, ldlen, localloc,
+  // mkrefany, refanytype, or ldvirtftn.
+  // Only preserve ValueKind for operations whose result is the same category
+  // as the input. Do not do this unconditionally: ldlen, localloc, box, etc.
+  // change the stack type category.
+     if (preserveInputKind)
+          result->kind(v->kind());
+
+     fprintf(stderr, "unaryResult: op_kind = %s input = %s result = %s\n",
+            unary_op_kind_toString(op_kind).c_str(),
+            v->toString().c_str(),
+            result->toString().c_str());
+     fflush(stderr);
+
+     ops->pushOperand(result);
+   }
+
+   // DQ (6/4/2026): Added to support different kinds of binary operators.
+      enum Binary_Op_Kind_Type
+         {
+           add,
+           add_with_overflow_check,
+           add_unsigned_with_overflow_check,
+           subtract,
+           subtract_with_overflow_check,
+           subtract_unsigned_with_overflow_check,
+           multiply,
+           multiply_with_overflow_check,
+           multiply_unsigned_with_overflow_check,
+           divide,
+           divide_unsigned,
+           and_op,
+           or_op,
+           xor_op,
+           remainder,
+           remainder_unsigned,
+           shiftleft_op,
+           shiftright_op,
+           shiftleft_unsigned,
+           shiftright_unsigned,
+         };
+
+      std::string op_kind_toString (Binary_Op_Kind_Type op_kind)
+         {
+           std::string s;
+           switch (op_kind)
+              {
+                case add:                                   s = "add"; break;
+                case add_with_overflow_check:               s = "add_with_overflow_check"; break;
+                case add_unsigned_with_overflow_check:      s = "add_unsigned_with_overflow_check"; break;
+                case subtract:                              s = "subtract"; break;
+                case subtract_with_overflow_check:          s = "subtract_with_overflow_check"; break;
+                case subtract_unsigned_with_overflow_check: s = "subtract_unsigned_with_overflow_check"; break;
+                case multiply:                              s = "multiply"; break;
+                case multiply_with_overflow_check:          s = "multiply_with_overflow_check"; break;
+                case multiply_unsigned_with_overflow_check: s = "multiply_unsigned_with_overflow_check"; break;
+                case divide:                                s = "divide"; break;
+                case divide_unsigned:                       s = "divide_unsigned"; break;
+                case and_op:                                s = "and_op"; break;
+                case or_op:                                 s = "or_op"; break;
+                case xor_op:                                s = "xor_op"; break;
+                case remainder:                             s = "remainder"; break;
+                case remainder_unsigned:                    s = "remainder_unsigned"; break;
+                case shiftleft_op:                          s = "shiftleft_op"; break;
+                case shiftright_op:                         s = "shiftright_op"; break;
+                case shiftleft_unsigned:                    s = "shiftleft_unsigned"; break;
+                case shiftright_unsigned:                   s = "shiftright_unsigned"; break;
+                default:
+                   {
+                     fprintf (stderr,"op_kind_toString: default reached: rhs = %d \n",op_kind);
+                     fflush(stderr);
+                     ROSE_ASSERT(false);
+                   }
+              }
+
+           return s;
+         }
+
+      void binaryResult(Ops ops, Binary_Op_Kind_Type op_kind, size_t nbits = 32) {
         ASSERT_not_null(ops);
         SValue::Ptr rhs = ops->popOperand();
         SValue::Ptr lhs = ops->popOperand();
+
+     // Verify types are the same
+        ASSERT_require2(rhs->kind() == lhs->kind(), "type mismatch");
+
+        std::string rhs_str = rhs->toString();
+        std::string lhs_str = lhs->toString();
+
+        fprintf (stderr,"binaryResult: op_kind_toString = %s lhs = %s rhs = %s \n",op_kind_toString(op_kind).c_str(),lhs_str.c_str(),rhs_str.c_str());
+        fflush(stderr);
+
         const size_t lhsBits = lhs ? lhs->nBits() : nbits;
         const size_t rhsBits = rhs ? rhs->nBits() : nbits;
-        ops->pushOperand(ops->undefined_(std::max(nbits, std::max(lhsBits, rhsBits))));
+     // ops->pushOperand(ops->undefined_(std::max(nbits, std::max(lhsBits, rhsBits))));
+     // ops->pushOperand(ops->add(rhs,lhs));
+     // ops->pushOperand(lhs);
+     // SValue::Ptr result = ops->add(rhs,lhs);
+        SValue::Ptr result;
+        switch (op_kind)
+           {
+             case add:
+                {
+                  result = ops->add(rhs,lhs);
+                  break;
+                }
+             case add_with_overflow_check:
+                {
+                  result = ops->add(rhs,lhs);
+                  break;
+                }
+             case add_unsigned_with_overflow_check:
+                {
+                  result = ops->add(rhs,lhs);
+                  break;
+                }
+             case subtract:
+                {
+                  result = ops->subtract(rhs,lhs);
+                  break;
+                }
+             case subtract_with_overflow_check:
+                {
+                  result = ops->subtract(rhs,lhs);
+                  break;
+                }
+             case subtract_unsigned_with_overflow_check:
+                {
+                  result = ops->subtract(rhs,lhs);
+                  break;
+                }
+             case multiply:
+                {
+                  result = ops->signedMultiply(rhs,lhs);
+                  break;
+                }
+             case multiply_with_overflow_check:
+                {
+                  result = ops->signedMultiply(rhs,lhs);
+                  break;
+                }
+             case multiply_unsigned_with_overflow_check:
+                {
+                  result = ops->unsignedMultiply(rhs,lhs);
+                  break;
+                }
+             case divide:
+                {
+                  result = ops->signedDivide(rhs,lhs);
+                  break;
+                }
+             case divide_unsigned:
+                {
+                  result = ops->unsignedDivide(rhs,lhs);
+                  break;
+                }
+             case and_op:
+                {
+                  result = ops->and_(rhs,lhs);
+                  break;
+                }
+             case or_op:
+                {
+                  result = ops->or_(rhs,lhs);
+                  break;
+                }
+             case xor_op:
+                {
+                  result = ops->xor_(rhs,lhs);
+                  break;
+                }
+             case remainder:
+                {
+               // The lhs is the dividend, and the rhs is the divisor (I think).
+                  result = ops->signedModulo(rhs, lhs);
+                  break;
+                }
+             case remainder_unsigned:
+                {
+               // The lhs is the dividend, and the rhs is the divisor (I think).
+                  result = ops->unsignedModulo(rhs, lhs);
+                  break;
+                }
+             case shiftleft_op:
+                {
+                  result = ops->shiftLeft(rhs,lhs);
+                  break;
+                }
+             case shiftleft_unsigned:
+                {
+                  result = ops->shiftLeft(rhs,lhs);
+                  break;
+                }
+             case shiftright_op:
+                {
+                  result = ops->shiftRightArithmetic(rhs,lhs);
+                  break;
+                }
+             case shiftright_unsigned:
+                {
+                  result = ops->shiftRight(rhs,lhs);
+                  break;
+                }
+
+             default:
+                {
+                  fprintf (stderr,"binaryResult: default reached: op_kind = %d \n",op_kind);
+                  fflush(stderr);
+                  ROSE_ASSERT(false);
+                  break;
+                }
+           }
+
+     // Set ValueKind on result since RiscOperators don't grok ValueKind
+        result->kind(rhs->kind());
+        
+        std::string result_str = result->toString();
+        fprintf (stderr,"binaryResult: result = %s \n",result_str.c_str());
+        fflush(stderr);
+        
+        ops->pushOperand(result);
     }
 
     void compareResult(Ops ops) {
@@ -205,6 +1448,73 @@ namespace CilSemantics {
         ASSERT_not_null(ops);
         discard(ops, 3);       // array reference, index, value
     }
+
+    uint32_t computeElementSize(SgAsmCilMetadata* metadata) {
+#if 0
+      // Debug this later...
+        if (auto typeDef = isSgAsmCilTypeDef(metadata)) {  
+            // Handle class types - typically reference size (4 or 8 bytes)  
+            return sizeof(void*); // or use target architecture pointer size  
+        }  
+        else if (auto typeRef = isSgAsmCilTypeRef(metadata)) {  
+            // Handle type references  
+            return computeTypeRefSize(typeRef);  
+        }   
+        else if (auto typeSpec = isSgAsmCilTypeSpec(metadata)) {  
+            // Handle type specifications (may contain signatures)  
+            return computeTypeSpecSize(typeSpec);  
+        }  
+      
+        // Primitive types (encoded in the token)  
+        uint32_t index = token & 0x00FFFFFF;  
+        switch (index) {  
+            case ELEMENT_TYPE_I1:  return 1;  
+            case ELEMENT_TYPE_U1:  return 1;  
+            case ELEMENT_TYPE_I2:  return 2;  
+            case ELEMENT_TYPE_U2:  return 2;  
+            case ELEMENT_TYPE_I4:  return 4;  
+            case ELEMENT_TYPE_U4:  return 4;  
+            case ELEMENT_TYPE_I8:  return 8;  
+            case ELEMENT_TYPE_U8:  return 8;  
+            case ELEMENT_TYPE_R4:  return 4;  
+            case ELEMENT_TYPE_R8:  return 8;  
+            case ELEMENT_TYPE_BOOLEAN: return 1;  
+            case ELEMENT_TYPE_CHAR:    return 2;  
+            // Add more primitive types as needed  
+            default: return sizeof(void*); // Default to reference size  
+        }
+#else
+        return 0;
+#endif
+    }
+
+     void
+     ldvirtftnResult(D dispatcher, Ops ops, const DispatcherCil::CilTypeAnalysis::MethodDescriptor *targetMethod, size_t ptrBits = 32)
+        {
+          ASSERT_not_null(dispatcher);
+          ASSERT_not_null(ops);
+          ASSERT_not_null(targetMethod);
+
+          SValue::Ptr objref = ops->popOperand();
+          ASSERT_not_null(objref);
+
+       // ldvirtftn <methodTok>
+       //
+       // Stack transition:
+       //   ..., objref -> ..., native-function-pointer
+       //
+       // A precise implementation would check objref for null, use objref's
+       // dynamic runtime type, resolve the virtual method token to the selected
+       // implementation, and push that function address.
+       //
+       // The current dispatcher does not yet model CLI method tables or virtual
+       // dispatch, so represent the result as an unknown pointer-sized function
+       // pointer.
+          SValue::Ptr result = ops->undefined_(ptrBits);
+
+          ops->pushOperand(result);
+        }
+
 }
 
 // nop (0 (0x00))
@@ -1496,7 +2806,7 @@ struct IP_stind_r8: P {
 struct IP_add: P {
     void p(D /*dispatcher*/, Ops ops, I insn, Args args) override {
         assert_args(insn, args, 0);
-        CilSemantics::binaryResult(ops);
+        CilSemantics::binaryResult(ops,CilSemantics::add);
     }
 };
 
@@ -1510,7 +2820,7 @@ struct IP_add: P {
 struct IP_sub: P {
     void p(D /*dispatcher*/, Ops ops, I insn, Args args) override {
         assert_args(insn, args, 0);
-        CilSemantics::binaryResult(ops);
+        CilSemantics::binaryResult(ops,CilSemantics::subtract);
     }
 };
 
@@ -1524,7 +2834,7 @@ struct IP_sub: P {
 struct IP_mul: P {
     void p(D /*dispatcher*/, Ops ops, I insn, Args args) override {
         assert_args(insn, args, 0);
-        CilSemantics::binaryResult(ops);
+        CilSemantics::binaryResult(ops,CilSemantics::multiply);
     }
 };
 
@@ -1538,7 +2848,7 @@ struct IP_mul: P {
 struct IP_div: P {
     void p(D /*dispatcher*/, Ops ops, I insn, Args args) override {
         assert_args(insn, args, 0);
-        CilSemantics::binaryResult(ops);
+        CilSemantics::binaryResult(ops,CilSemantics::divide);
     }
 };
 
@@ -1552,7 +2862,7 @@ struct IP_div: P {
 struct IP_div_un: P {
     void p(D /*dispatcher*/, Ops ops, I insn, Args args) override {
         assert_args(insn, args, 0);
-        CilSemantics::binaryResult(ops);
+        CilSemantics::binaryResult(ops,CilSemantics::divide_unsigned);
     }
 };
 
@@ -1566,7 +2876,7 @@ struct IP_div_un: P {
 struct IP_rem: P {
     void p(D /*dispatcher*/, Ops ops, I insn, Args args) override {
         assert_args(insn, args, 0);
-        CilSemantics::binaryResult(ops);
+        CilSemantics::binaryResult(ops,CilSemantics::remainder);
     }
 };
 
@@ -1580,7 +2890,7 @@ struct IP_rem: P {
 struct IP_rem_un: P {
     void p(D /*dispatcher*/, Ops ops, I insn, Args args) override {
         assert_args(insn, args, 0);
-        CilSemantics::binaryResult(ops);
+        CilSemantics::binaryResult(ops,CilSemantics::remainder_unsigned);
     }
 };
 
@@ -1594,7 +2904,7 @@ struct IP_rem_un: P {
 struct IP_and: P {
     void p(D /*dispatcher*/, Ops ops, I insn, Args args) override {
         assert_args(insn, args, 0);
-        CilSemantics::binaryResult(ops);
+        CilSemantics::binaryResult(ops,CilSemantics::and_op);
     }
 };
 
@@ -1608,7 +2918,7 @@ struct IP_and: P {
 struct IP_or: P {
     void p(D /*dispatcher*/, Ops ops, I insn, Args args) override {
         assert_args(insn, args, 0);
-        CilSemantics::binaryResult(ops);
+        CilSemantics::binaryResult(ops,CilSemantics::or_op);
     }
 };
 
@@ -1622,7 +2932,7 @@ struct IP_or: P {
 struct IP_xor: P {
     void p(D /*dispatcher*/, Ops ops, I insn, Args args) override {
         assert_args(insn, args, 0);
-        CilSemantics::binaryResult(ops);
+        CilSemantics::binaryResult(ops,CilSemantics::xor_op);
     }
 };
 
@@ -1636,7 +2946,7 @@ struct IP_xor: P {
 struct IP_shl: P {
     void p(D /*dispatcher*/, Ops ops, I insn, Args args) override {
         assert_args(insn, args, 0);
-        CilSemantics::binaryResult(ops);
+        CilSemantics::binaryResult(ops,CilSemantics::shiftleft_op);
     }
 };
 
@@ -1650,7 +2960,7 @@ struct IP_shl: P {
 struct IP_shr: P {
     void p(D /*dispatcher*/, Ops ops, I insn, Args args) override {
         assert_args(insn, args, 0);
-        CilSemantics::binaryResult(ops);
+        CilSemantics::binaryResult(ops,CilSemantics::shiftright_op);
     }
 };
 
@@ -1664,7 +2974,7 @@ struct IP_shr: P {
 struct IP_shr_un: P {
     void p(D /*dispatcher*/, Ops ops, I insn, Args args) override {
         assert_args(insn, args, 0);
-        CilSemantics::binaryResult(ops);
+        CilSemantics::binaryResult(ops,CilSemantics::shiftright_unsigned);
     }
 };
 
@@ -1676,9 +2986,14 @@ struct IP_shr_un: P {
         // Run-time Exceptions:
         //   CIL/CLI exceptions are not modeled precisely by this initial dispatcher skeleton.
 struct IP_neg: P {
-    void p(D /*dispatcher*/, Ops ops, I insn, Args args) override {
+    void p(D dispatcher, Ops ops, I insn, Args args) override {
         assert_args(insn, args, 0);
-        CilSemantics::unaryResult(ops);
+
+     // DQ (6/9/2026): Need to pass 4th parameter to unaryResult(), except where the args are not present.
+     // CilSemantics::unaryResult(dispatcher,ops,CilSemantics::negate);
+     // DispatcherCil::CilTypeAnalysis::TypeDescriptor targetType(CilSemantics::asIndex(args[0]));
+     // CilSemantics::unaryResult(dispatcher,ops,CilSemantics::negate,&targetType);
+        CilSemantics::unaryResult(dispatcher,ops,CilSemantics::negate);
     }
 };
 
@@ -1690,9 +3005,14 @@ struct IP_neg: P {
         // Run-time Exceptions:
         //   CIL/CLI exceptions are not modeled precisely by this initial dispatcher skeleton.
 struct IP_not: P {
-    void p(D /*dispatcher*/, Ops ops, I insn, Args args) override {
+    void p(D dispatcher, Ops ops, I insn, Args args) override {
         assert_args(insn, args, 0);
-        CilSemantics::unaryResult(ops);
+
+     // DQ (6/9/2026): Need to pass 4th parameter to unaryResult(), except where the args are not present.
+     // CilSemantics::unaryResult(dispatcher,ops,CilSemantics::not_op);
+     // DispatcherCil::CilTypeAnalysis::TypeDescriptor targetType(CilSemantics::asIndex(args[0]));
+     // CilSemantics::unaryResult(dispatcher,ops,CilSemantics::not_op,&targetType);
+        CilSemantics::unaryResult(dispatcher,ops,CilSemantics::not_op);
     }
 };
 
@@ -1886,9 +3206,13 @@ struct IP_newobj: P {
         // Run-time Exceptions:
         //   CIL/CLI exceptions are not modeled precisely by this initial dispatcher skeleton.
 struct IP_castclass: P {
-    void p(D /*dispatcher*/, Ops ops, I insn, Args args) override {
+    void p(D dispatcher, Ops ops, I insn, Args args) override {
         assert_args(insn, args, 1);
-        CilSemantics::unaryResult(ops);
+
+     // DQ (6/9/2026): Need to pass 4th parameter to unaryResult().
+     // CilSemantics::unaryResult(dispatcher,ops,CilSemantics::castclass);
+        DispatcherCil::CilTypeAnalysis::TypeDescriptor targetType(CilSemantics::asIndex(args[0]));
+        CilSemantics::unaryResult(dispatcher,ops,CilSemantics::castclass,&targetType);
     }
 };
 
@@ -1900,9 +3224,13 @@ struct IP_castclass: P {
         // Run-time Exceptions:
         //   CIL/CLI exceptions are not modeled precisely by this initial dispatcher skeleton.
 struct IP_isinst: P {
-    void p(D /*dispatcher*/, Ops ops, I insn, Args args) override {
+    void p(D dispatcher, Ops ops, I insn, Args args) override {
         assert_args(insn, args, 1);
-        CilSemantics::unaryResult(ops);
+
+     // DQ (6/9/2026): Need to pass 4th parameter to unaryResult().
+     // CilSemantics::unaryResult(dispatcher,ops,CilSemantics::isinst);
+        DispatcherCil::CilTypeAnalysis::TypeDescriptor targetType(CilSemantics::asIndex(args[0]));
+        CilSemantics::unaryResult(dispatcher,ops,CilSemantics::isinst,&targetType);
     }
 };
 
@@ -1928,9 +3256,13 @@ struct IP_conv_r_un: P {
         // Run-time Exceptions:
         //   CIL/CLI exceptions are not modeled precisely by this initial dispatcher skeleton.
 struct IP_unbox: P {
-    void p(D /*dispatcher*/, Ops ops, I insn, Args args) override {
+    void p(D dispatcher, Ops ops, I insn, Args args) override {
         assert_args(insn, args, 1);
-        CilSemantics::unaryResult(ops);
+
+     // DQ (6/9/2026): Need to pass 4th parameter to unaryResult().
+     // CilSemantics::unaryResult(dispatcher,ops,CilSemantics::unbox);
+        DispatcherCil::CilTypeAnalysis::TypeDescriptor targetType(CilSemantics::asIndex(args[0]));
+        CilSemantics::unaryResult(dispatcher,ops,CilSemantics::unbox,&targetType);
     }
 };
 
@@ -2194,9 +3526,13 @@ struct IP_conv_ovf_u_un: P {
         // Run-time Exceptions:
         //   CIL/CLI exceptions are not modeled precisely by this initial dispatcher skeleton.
 struct IP_box: P {
-    void p(D /*dispatcher*/, Ops ops, I insn, Args args) override {
+    void p(D dispatcher, Ops ops, I insn, Args args) override {
         assert_args(insn, args, 1);
-        CilSemantics::unaryResult(ops);
+
+     // DQ (6/9/2026): Need to pass 4th parameter to unaryResult().
+     // CilSemantics::unaryResult(dispatcher,ops,CilSemantics::box);
+        DispatcherCil::CilTypeAnalysis::TypeDescriptor targetType(CilSemantics::asIndex(args[0]));
+        CilSemantics::unaryResult(dispatcher,ops,CilSemantics::box,&targetType);       
     }
 };
 
@@ -2208,9 +3544,13 @@ struct IP_box: P {
         // Run-time Exceptions:
         //   CIL/CLI exceptions are not modeled precisely by this initial dispatcher skeleton.
 struct IP_newarr: P {
-    void p(D /*dispatcher*/, Ops ops, I insn, Args args) override {
+    void p(D dispatcher, Ops ops, I insn, Args args) override {
         assert_args(insn, args, 1);
-        CilSemantics::unaryResult(ops);
+
+     // DQ (6/9/2026): Need to pass 4th parameter to unaryResult().
+     // CilSemantics::unaryResult(dispatcher,ops,CilSemantics::newarr);
+        DispatcherCil::CilTypeAnalysis::TypeDescriptor targetType(CilSemantics::asIndex(args[0]));
+        CilSemantics::unaryResult(dispatcher,ops,CilSemantics::newarr,&targetType);
     }
 };
 
@@ -2222,9 +3562,14 @@ struct IP_newarr: P {
         // Run-time Exceptions:
         //   CIL/CLI exceptions are not modeled precisely by this initial dispatcher skeleton.
 struct IP_ldlen: P {
-    void p(D /*dispatcher*/, Ops ops, I insn, Args args) override {
+    void p(D dispatcher, Ops ops, I insn, Args args) override {
         assert_args(insn, args, 0);
-        CilSemantics::unaryResult(ops);
+
+     // DQ (6/9/2026): Need to pass 4th parameter to unaryResult().
+     // CilSemantics::unaryResult(dispatcher,ops,CilSemantics::ldlen);
+     // DispatcherCil::CilTypeAnalysis::TypeDescriptor targetType(CilSemantics::asIndex(args[0]));
+     // CilSemantics::unaryResult(dispatcher,ops,CilSemantics::ldlen,&targetType);
+        CilSemantics::unaryResult(dispatcher,ops,CilSemantics::ldlen);
     }
 };
 
@@ -2235,6 +3580,7 @@ struct IP_ldlen: P {
         //   Generated in the same per-instruction-processor style as DispatcherJvm.C. Some effects are conservative until metadata/type-aware CIL helpers are connected.
         // Run-time Exceptions:
         //   CIL/CLI exceptions are not modeled precisely by this initial dispatcher skeleton.
+#if 0
 #if 0
 struct IP_ldelema: P {
     void p(D /*dispatcher*/, Ops ops, I insn, Args args) override {
@@ -2247,9 +3593,124 @@ struct IP_ldelema: P {
 struct IP_ldelema: P {
     void p(D /*dispatcher*/, Ops ops, I insn, Args args) override {
         assert_args(insn, args, 1);                // InlineType token
-        CilSemantics::binaryResult(ops);           // array reference, index -> managed address
+     // array reference, index -> managed address
+
+     // 1. Pop array reference and index from stack  
+        ASSERT_not_null(ops);
+        SValue::Ptr index    = ops->popOperand();
+        SValue::Ptr arrayref = ops->popOperand();
+
+     // Verify types are the different
+        ASSERT_require2(rhs->kind() != lhs->kind(), "type should not match");
+
+
+     // 2. Compute element address: base + (index * element_size)  
+     // For managed arrays, element size depends on the type token  
+     // The token is available from the instruction operand  
+
+     // 3. Push the computed address onto the stack  
+        return ops->add(arrayref, ops->multiply(index, ops->number_(32, elementSize)));  
     }
 };
+#endif
+#else
+// DQ (6/2/2026): Better fix.
+struct IP_ldelema: P
+   {
+     void p(D /*dispatcher*/, Ops ops, I insn, Args args) override
+        {  
+          assert_args(insn, args, 1);                // InlineType token  
+
+          fprintf (stderr,"ldelema: top of semantics support \n");
+          fflush(stderr);
+  
+          ASSERT_not_null(ops);  
+          SValue::Ptr index    = ops->popOperand();  
+          SValue::Ptr arrayref = ops->popOperand();  
+  
+       // 1. Extract the type token from the instruction operand  
+          auto expr = isSgAsmIntegerValueExpression(args[0]);  
+          ASSERT_not_null(expr);  
+          uint32_t token = static_cast<uint32_t>(expr->get_value());
+        
+          auto cilInsn = isSgAsmCilInstruction(insn);  
+          ROSE_ASSERT(cilInsn != NULL);
+
+       // SgAsmCilFileHeader* fileHeader = isSgAsmCilFileHeader(cilInsn->get_header());  
+       // SgAsmPEFileHeader* fileHeader = isSgAsmPEFileHeader(cilInsn->get_header());
+          SgAsmPEFileHeader* fileHeader = SageInterface::getEnclosingNode<SgAsmPEFileHeader>(cilInsn);
+       // ROSE_ASSERT(fileHeader != NULL);
+
+       // DQ (6/7/2026): Allow this to be null, since our testing support does not support enough context at present.
+          if (fileHeader != NULL)
+             {
+               SgAsmCilMetadataHeap* heap = NULL;
+            // Search for the CLI header section  
+               auto sections = fileHeader->get_sectionsByName("CLR Runtime Header");  
+               SgAsmCliHeader* cliHeader = nullptr;
+               for (SgAsmGenericSection* section : sections)
+                  {  
+                    cliHeader = isSgAsmCliHeader(section);  
+                    if (cliHeader) break;  
+                  }
+
+               ROSE_ASSERT(cliHeader != NULL);
+      
+               if (cliHeader)
+                  {  
+                    SgAsmCilMetadataRoot* metadataRoot = cliHeader->get_metadataRoot();  
+                    if (metadataRoot)
+                       {  
+                         SgAsmCilMetadataHeap* heap = metadataRoot->get_MetadataHeap();  
+                       }  
+                  }
+
+               ROSE_ASSERT(heap != NULL);
+        
+            // 2. Resolve the token to get type information  
+            // You need access to the CIL metadata heap from your dispatcher/context  
+            // SgAsmCilMetadataHeap* heap = /* get from your dispatcher/context */;  
+               SgAsmCilMetadata* metadata = heap->get_MetadataNode( token & 0x00FFFFFF, static_cast<SgAsmCilMetadataHeap::TableKind>((token & 0xFF000000) >> 24) );
+        
+               ROSE_ASSERT(metadata != NULL);
+  
+            // 3. Compute element size based on the type  
+               uint32_t elementSize = CilSemantics::computeElementSize(metadata);
+
+               fprintf (stderr,"ldelema: elementSize = %d \n",elementSize);
+               fflush(stderr);
+  
+            // 4. Compute and push the element address  
+            // SValue::Ptr offset = ops->multiply(index, ops->number_(32, elementSize));
+               SValue::Ptr offset = ops->unsignedMultiply(index, ops->number_(32, elementSize));
+        
+               fprintf (stderr,"ldelema: offset computed = %s \n",offset->toString().c_str());
+               fflush(stderr);
+
+               ops->pushOperand(ops->add(arrayref, offset));
+
+               fprintf (stderr,"ldelema: leaving \n");
+               fflush(stderr);
+             }
+            else
+             {
+            // DQ (6/7/2026): If we can't find the type information then assume it is 32-bits.
+               uint32_t elementSize = 1;
+               SValue::Ptr offset = ops->unsignedMultiply(index, ops->number_(32, elementSize));
+
+               fprintf (stderr,"ldelema: type information not available: offset computed = %s \n",offset->toString().c_str());
+               fflush(stderr);
+
+            // DQ (6/7/2026): We need to push something reasonable.
+            // ops->pushOperand(ops->add(arrayref, offset));
+            // ops->pushOperand(arrayref);
+               ops->pushOperand(index);
+
+               fprintf (stderr,"ldelema: type infor not available: leaving \n");
+               fflush(stderr);
+             }
+        }
+   };
 #endif
 
 // ldelem_i1 (144 (0x90))
@@ -2572,9 +4033,13 @@ struct IP_stelem: P {
         // Run-time Exceptions:
         //   CIL/CLI exceptions are not modeled precisely by this initial dispatcher skeleton.
 struct IP_unbox_any: P {
-    void p(D /*dispatcher*/, Ops ops, I insn, Args args) override {
+    void p(D dispatcher, Ops ops, I insn, Args args) override {
         assert_args(insn, args, 1);
-        CilSemantics::unaryResult(ops);
+
+     // DQ (6/9/2026): Need to pass 4th parameter to unaryResult().
+     // CilSemantics::unaryResult(dispatcher,ops,CilSemantics::unbox_any);
+        DispatcherCil::CilTypeAnalysis::TypeDescriptor targetType(CilSemantics::asIndex(args[0]));
+        CilSemantics::unaryResult(dispatcher,ops,CilSemantics::unbox_any,&targetType);
     }
 };
 
@@ -2698,9 +4163,13 @@ struct IP_conv_ovf_u8: P {
         // Run-time Exceptions:
         //   CIL/CLI exceptions are not modeled precisely by this initial dispatcher skeleton.
 struct IP_refanyval: P {
-    void p(D /*dispatcher*/, Ops ops, I insn, Args args) override {
+    void p(D dispatcher, Ops ops, I insn, Args args) override {
         assert_args(insn, args, 1);
-        CilSemantics::unaryResult(ops);
+
+     // DQ (6/9/2026): Need to pass 4th parameter to unaryResult().
+     // CilSemantics::unaryResult(dispatcher,ops,CilSemantics::refanyval);
+        DispatcherCil::CilTypeAnalysis::TypeDescriptor targetType(CilSemantics::asIndex(args[0]));
+        CilSemantics::unaryResult(dispatcher,ops,CilSemantics::refanyval,&targetType);
     }
 };
 
@@ -2712,9 +4181,14 @@ struct IP_refanyval: P {
         // Run-time Exceptions:
         //   CIL/CLI exceptions are not modeled precisely by this initial dispatcher skeleton.
 struct IP_ckfinite: P {
-    void p(D /*dispatcher*/, Ops ops, I insn, Args args) override {
+    void p(D dispatcher, Ops ops, I insn, Args args) override {
         assert_args(insn, args, 0);
-        CilSemantics::unaryResult(ops);
+
+     // DQ (6/9/2026): Need to pass 4th parameter to unaryResult().
+     // CilSemantics::unaryResult(dispatcher,ops,CilSemantics::ckfinite);
+     // DispatcherCil::CilTypeAnalysis::TypeDescriptor targetType(CilSemantics::asIndex(args[0]));
+     // CilSemantics::unaryResult(dispatcher,ops,CilSemantics::ckfinite,&targetType);
+        CilSemantics::unaryResult(dispatcher,ops,CilSemantics::ckfinite);
     }
 };
 
@@ -2734,14 +4208,27 @@ struct IP_mkrefany: P {
 };
 #else
 struct IP_mkrefany: P {
-    void p(D /*dispatcher*/, Ops ops, I insn, Args args) override {
+    void p(D dispatcher, Ops ops, I insn, Args args) override {
         // mkrefany has an InlineType token, but the current conservative
         // semantics does not inspect the token. Accept either the decoded
         // token form or a decoder that does not expose it in the operand list.
         if (args.size() > 1)
             throw BaseSemantics::Exception("CIL instruction must have zero or one operand", insn);
 
-        CilSemantics::unaryResult(ops);
+        fprintf(stderr, "TOP of IP_mkrefany::p(): args.size() = %d \n",args.size());
+        fflush(stderr);
+             
+     // DQ (6/9/2026): Need to pass 4th parameter to unaryResult().
+     // CilSemantics::unaryResult(dispatcher,ops,CilSemantics::mkrefany);
+        if (args.size() > 0)
+           {
+             DispatcherCil::CilTypeAnalysis::TypeDescriptor targetType(CilSemantics::asIndex(args[0]));
+             CilSemantics::unaryResult(dispatcher,ops,CilSemantics::mkrefany,&targetType);
+           }
+          else
+           {
+             CilSemantics::unaryResult(dispatcher,ops,CilSemantics::mkrefany);
+           }
     }
 };
 #endif
@@ -2840,7 +4327,7 @@ struct IP_conv_ovf_u: P {
 struct IP_add_ovf: P {
     void p(D /*dispatcher*/, Ops ops, I insn, Args args) override {
         assert_args(insn, args, 0);
-        CilSemantics::binaryResult(ops);
+        CilSemantics::binaryResult(ops,CilSemantics::add_with_overflow_check);
     }
 };
 
@@ -2854,7 +4341,7 @@ struct IP_add_ovf: P {
 struct IP_add_ovf_un: P {
     void p(D /*dispatcher*/, Ops ops, I insn, Args args) override {
         assert_args(insn, args, 0);
-        CilSemantics::binaryResult(ops);
+        CilSemantics::binaryResult(ops,CilSemantics::add_unsigned_with_overflow_check);
     }
 };
 
@@ -2868,7 +4355,7 @@ struct IP_add_ovf_un: P {
 struct IP_mul_ovf: P {
     void p(D /*dispatcher*/, Ops ops, I insn, Args args) override {
         assert_args(insn, args, 0);
-        CilSemantics::binaryResult(ops);
+        CilSemantics::binaryResult(ops,CilSemantics::multiply_with_overflow_check);
     }
 };
 
@@ -2882,7 +4369,7 @@ struct IP_mul_ovf: P {
 struct IP_mul_ovf_un: P {
     void p(D /*dispatcher*/, Ops ops, I insn, Args args) override {
         assert_args(insn, args, 0);
-        CilSemantics::binaryResult(ops);
+        CilSemantics::binaryResult(ops,CilSemantics::multiply_unsigned_with_overflow_check);
     }
 };
 
@@ -2896,7 +4383,7 @@ struct IP_mul_ovf_un: P {
 struct IP_sub_ovf: P {
     void p(D /*dispatcher*/, Ops ops, I insn, Args args) override {
         assert_args(insn, args, 0);
-        CilSemantics::binaryResult(ops);
+        CilSemantics::binaryResult(ops,CilSemantics::subtract_with_overflow_check);
     }
 };
 
@@ -2910,7 +4397,7 @@ struct IP_sub_ovf: P {
 struct IP_sub_ovf_un: P {
     void p(D /*dispatcher*/, Ops ops, I insn, Args args) override {
         assert_args(insn, args, 0);
-        CilSemantics::binaryResult(ops);
+        CilSemantics::binaryResult(ops,CilSemantics::subtract_unsigned_with_overflow_check);
     }
 };
 
@@ -3082,6 +4569,7 @@ struct IP_ldftn: P {
     }
 };
 
+#if 0
 // ldvirtftn (65031 (0xfe07))
         // Description:
         //   Execute the CIL instruction ldvirtftn.
@@ -3090,9 +4578,43 @@ struct IP_ldftn: P {
         // Run-time Exceptions:
         //   CIL/CLI exceptions are not modeled precisely by this initial dispatcher skeleton.
 struct IP_ldvirtftn: P {
-    void p(D /*dispatcher*/, Ops ops, I insn, Args args) override {
+    void p(D dispatcher, Ops ops, I insn, Args args) override {
         assert_args(insn, args, 1);
-        CilSemantics::unaryResult(ops);
+
+     // DQ (6/9/2026): Need to pass 4th parameter to unaryResult().
+     // CilSemantics::unaryResult(dispatcher,ops,CilSemantics::ldvirtftn);
+        DispatcherCil::CilTypeAnalysis::TypeDescriptor targetType(CilSemantics::asIndex(args[0]));
+        CilSemantics::unaryResult(dispatcher,ops,CilSemantics::ldvirtftn,&targetType);
+    }
+};
+#endif
+
+// DQ (6/9/2026): Newer version.
+
+// ldvirtftn (254 7 (0xfe07))
+// Description:
+//   Resolves a virtual method on the object reference at the top of the stack
+//   and pushes a native function pointer for the selected implementation.
+// Stack:
+//   ..., objref -> ..., native-function-pointer
+// Notes:
+//   The metadata operand is a method token, not a type token. Precise modeling
+//   requires null checking, runtime type information, CLI virtual method
+//   resolution, and a mapping from resolved methods to code addresses. Since
+//   this dispatcher does not yet model method tables or virtual dispatch,
+//   represent the result as an unknown pointer-sized function pointer. Do not
+//   preserve the input kind.
+// Run-time Exceptions:
+//   NullReferenceException may be thrown if the object reference is null.
+//   CIL/CLI exceptions are not modeled precisely by this initial dispatcher
+//   skeleton.
+struct IP_ldvirtftn: P {
+    void p(D dispatcher, Ops ops, I insn, Args args) override {
+        assert_args(insn, args, 1);
+
+        DispatcherCil::CilTypeAnalysis::MethodDescriptor targetMethod(CilSemantics::asIndex(args[0]));
+
+        CilSemantics::ldvirtftnResult(dispatcher, ops, &targetMethod);
     }
 };
 
@@ -3188,9 +4710,14 @@ struct IP_stloc: P {
         // Run-time Exceptions:
         //   CIL/CLI exceptions are not modeled precisely by this initial dispatcher skeleton.
 struct IP_localloc: P {
-    void p(D /*dispatcher*/, Ops ops, I insn, Args args) override {
+    void p(D dispatcher, Ops ops, I insn, Args args) override {
         assert_args(insn, args, 0);
-        CilSemantics::unaryResult(ops);
+
+     // DQ (6/9/2026): Need to pass 4th parameter to unaryResult().
+     // CilSemantics::unaryResult(dispatcher,ops,CilSemantics::localloc);
+     // DispatcherCil::CilTypeAnalysis::TypeDescriptor targetType(CilSemantics::asIndex(args[0]));
+     // CilSemantics::unaryResult(dispatcher,ops,CilSemantics::localloc,&targetType);
+        CilSemantics::unaryResult(dispatcher,ops,CilSemantics::localloc);
     }
 };
 
@@ -3342,9 +4869,14 @@ struct IP_sizeof: P {
         // Run-time Exceptions:
         //   CIL/CLI exceptions are not modeled precisely by this initial dispatcher skeleton.
 struct IP_refanytype: P {
-    void p(D /*dispatcher*/, Ops ops, I insn, Args args) override {
+    void p(D dispatcher, Ops ops, I insn, Args args) override {
         assert_args(insn, args, 0);
-        CilSemantics::unaryResult(ops);
+
+     // DQ (6/9/2026): Need to pass 4th parameter to unaryResult().
+     // CilSemantics::unaryResult(dispatcher,ops,CilSemantics::refanytype);
+     // DispatcherCil::CilTypeAnalysis::TypeDescriptor targetType(CilSemantics::asIndex(args[0]));
+     // CilSemantics::unaryResult(dispatcher,ops,CilSemantics::refanytype,&targetType);
+        CilSemantics::unaryResult(dispatcher,ops,CilSemantics::refanytype);
     }
 };
 

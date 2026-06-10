@@ -160,7 +160,266 @@ public:
 
     /** Set floating point condition codes according to result. */
     void adjustFpConditionCodes(const BaseSemantics::SValuePtr &result, SgAsmFloatType*);
-};
+
+  // DQ (6/7/2026): Adding support for type analysis...
+     class CilTypeAnalysis
+        {
+          public:
+               using SValuePtr = Rose::BinaryAnalysis::InstructionSemantics::BaseSemantics::SValue::Ptr;
+               using TypeToken = uint32_t;
+               using TypeSet = std::set<TypeToken>;
+
+          private:
+               std::map<const void*, TypeSet> possibleTypes_;
+
+          
+          public:
+               void setPossibleTypes(const SValuePtr &v, const TypeSet &types)
+                  {
+                    ASSERT_not_null(v);
+                 // possibleTypes_[v.get()] = types;
+                    possibleTypes_[v.operator->()] = types;
+                  }
+
+               void addPossibleType(const SValuePtr &v, TypeToken type)
+                  {
+                    ASSERT_not_null(v);
+                 // possibleTypes_[v.get()].insert(type);
+                    possibleTypes_[v.operator->()].insert(type);
+                  }
+
+               TypeSet possibleDynamicTypes(const SValuePtr &v) const
+                  {
+                    ASSERT_not_null(v);
+
+                 // auto found = possibleTypes_.find(v.get());
+                    auto found = possibleTypes_.find(v.operator->());
+                    if (found != possibleTypes_.end())
+                         return found->second;
+
+                 // Unknown object type.
+                    return TypeSet{};
+                  }
+
+               bool hasTypeInfo(const SValuePtr &v) const
+                  {
+                    ASSERT_not_null(v);
+                 // return possibleTypes_.find(v.get()) != possibleTypes_.end();
+                    return possibleTypes_.find(v.operator->()) != possibleTypes_.end();
+                  }
+
+               enum Nullness
+                  {
+                    NullnessUnknown,
+                    DefinitelyNull,
+                    DefinitelyNonNull,
+                    MaybeNull
+                  };
+
+              static const void* key(const SValuePtr &v)
+                 {
+                   ASSERT_not_null(v);
+
+                // SValuePtr is Sawyer::SharedPointer, not std::shared_ptr,
+                // so it does not have v.get().
+                   return static_cast<const void*>(v.operator->());
+                 }
+
+          private:
+               std::map<const void*, Nullness> nullness_;
+
+          public:
+
+               void setNullness(const SValuePtr &v, Nullness n)
+                  {
+                    ASSERT_not_null(v);
+                    nullness_[key(v)] = n;
+                  }
+
+               Nullness nullness(const SValuePtr &v) const
+                  {
+                    ASSERT_not_null(v);
+
+                    auto found = nullness_.find(key(v));
+                    if (found != nullness_.end())
+                         return found->second;
+
+                    return NullnessUnknown;
+                  }
+
+               bool isDefinitelyNull(const SValuePtr &v) const
+                  {
+                    return nullness(v) == DefinitelyNull;
+                  }
+
+               bool isDefinitelyNonNull(const SValuePtr &v) const
+                  {
+                    return nullness(v) == DefinitelyNonNull;
+                  }
+  
+     struct TypeDescriptor
+        {
+          uint32_t metadataToken = 0;          // CIL metadata token for TypeDef/TypeRef/TypeSpec
+          std::string name;                    // Optional friendly/debug name
+          bool isValueType = false;
+          bool isReferenceType = true;
+          bool isInterface = false;
+          bool isArray = false;
+          size_t valueBitWidth = 0;            // Useful for unbox.any, conv, etc.; 0 if unknown
+
+          TypeDescriptor() = default;
+
+          explicit TypeDescriptor(uint32_t token) : metadataToken(token) {}
+
+          TypeDescriptor(uint32_t token, const std::string &name) : metadataToken(token), name(name) {}
+
+          bool isValid() const
+             {
+               return metadataToken != 0;
+             }
+        };
+
+     struct MetadataDescriptor
+        {
+          enum Kind
+             {
+               UnknownMetadata,
+               TypeMetadata,
+               MethodMetadata,
+               FieldMetadata
+             };
+
+          uint32_t metadataToken = 0;
+          Kind kind = UnknownMetadata;
+          std::string name;
+
+          MetadataDescriptor() = default;
+
+          MetadataDescriptor(uint32_t token, Kind kind)
+             : metadataToken(token), kind(kind) {}
+
+          bool isValid() const
+             {
+               return metadataToken != 0;
+             }
+        };
+
+     struct MethodDescriptor
+        {
+          uint32_t metadataToken = 0;
+          std::string name;
+
+          MethodDescriptor() = default;
+
+          explicit MethodDescriptor(uint32_t token) : metadataToken(token) {}
+
+          MethodDescriptor(uint32_t token, const std::string &name) : metadataToken(token), name(name) {}
+
+          bool isValid() const
+             {
+               return metadataToken != 0;
+             }
+        };
+
+bool
+isAssignableTo(uint32_t sourceType, const TypeDescriptor *targetType)
+{
+    ASSERT_not_null(targetType);
+
+    // First approximation:
+    // a type is assignable to itself.
+    if (sourceType == targetType->metadataToken)
+        return true;
+
+    // TODO:
+    // - System.Object
+    // - base classes
+    // - interfaces
+    // - arrays
+    // - generic TypeSpec rules
+
+    return false;
+}
+
+bool
+allAssignableTo(const DispatcherCil::CilTypeAnalysis::TypeSet &possibleTypes,
+                const TypeDescriptor *targetType)
+{
+    ASSERT_not_null(targetType);
+
+    if (possibleTypes.empty())
+        return false; // unknown, not definitely assignable
+
+    for (uint32_t sourceType: possibleTypes) {
+        if (!isAssignableTo(sourceType, targetType))
+            return false;
+    }
+
+    return true;
+}
+
+bool
+noneAssignableTo(const DispatcherCil::CilTypeAnalysis::TypeSet &possibleTypes,
+                 const TypeDescriptor *targetType)
+{
+    ASSERT_not_null(targetType);
+
+    if (possibleTypes.empty())
+        return false; // unknown, not definitely impossible
+
+    for (uint32_t sourceType: possibleTypes) {
+        if (isAssignableTo(sourceType, targetType))
+            return false;
+    }
+
+    return true;
+}
+
+void copyFacts(const SValuePtr &dst, const SValuePtr &src) {
+    ASSERT_not_null(dst);
+    ASSERT_not_null(src);
+
+    auto typeFound = possibleTypes_.find(key(src));
+    if (typeFound != possibleTypes_.end())
+        possibleTypes_[key(dst)] = typeFound->second;
+
+    auto nullFound = nullness_.find(key(src));
+    if (nullFound != nullness_.end())
+        nullness_[key(dst)] = nullFound->second;
+}
+
+#if 0
+SValuePtr
+nullReference(DispatcherCil dispatcher, Ops ops, size_t nbits)
+{
+ // ASSERT_not_null(dispatcher);
+ // ASSERT_not_null(ops);
+
+    SValuePtr retval = ops.number_(nbits, 0);
+    dispatcher.typeAnalysis().setNullness(retval, DispatcherCil::CilTypeAnalysis::DefinitelyNull);
+
+    return retval;
+}
+#endif
+
+        };
+  
+       // DQ (6/7/2026): Adding suport for type analysis.
+          private:
+               CilTypeAnalysis typeAnalysis_;
+
+          public:
+               CilTypeAnalysis& typeAnalysis()
+                  {
+                    return typeAnalysis_;
+                  }
+
+               const CilTypeAnalysis& typeAnalysis() const
+                  {
+                    return typeAnalysis_;
+                  }
+
+   };
 
 } // namespace
 } // namespace
