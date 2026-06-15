@@ -1569,9 +1569,18 @@ struct IP_dup_x2: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_dup2: P {
-    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
+    void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ASSERT_require2(false, "dup2 unimplemented");
+        SValue::Ptr v1 = ops->peekOperand();
+        if (v1->isJvmCategory2()) {
+            ops->pushOperand(v1->copy());
+        }
+        else {
+            SValue::Ptr v2 = ops->peekOperand(1);
+            ASSERT_require2(v2->isJvmCategory1(), "dup2 requires value2 category-1");
+            ops->pushOperand(v2->copy());
+            ops->pushOperand(v1->copy());
+        }
     }
 };
 
@@ -1583,9 +1592,32 @@ struct IP_dup2: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_dup2_x1: P {
-    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
+    void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ASSERT_require2(false, "dup2_x1 unimplemented");
+        SValuePtr v1 = ops->popOperand();
+        if (v1->isJvmCategory2()) {
+            // Form 2: before: ..., v2, v1; after: ..., v1, v2, v1
+            SValuePtr v2 = ops->popOperand();
+            ASSERT_require2(v2->isJvmCategory1(), "dup2_x1 form-2 requires value2 category-1");
+            ops->pushOperand(v1->copy());
+            ops->pushOperand(v2);
+            ops->pushOperand(v1);
+        } else {
+            // Form 1: before: ..., v3, v2, v1; after: ..., v2, v1, v3, v2, v1
+            ASSERT_require2(v1->isJvmCategory1(), "dup2_x1 form-1 requires value1 category-1");
+
+            SValuePtr v2 = ops->popOperand();
+            ASSERT_require2(v2->isJvmCategory1(), "dup2_x1 form-1 requires value2 category-1");
+
+            SValuePtr v3 = ops->popOperand();
+            ASSERT_require2(v3->isJvmCategory1(), "dup2_x1 form-1 requires value3 category-1");
+
+            ops->pushOperand(v2->copy());
+            ops->pushOperand(v1->copy());
+            ops->pushOperand(v3);
+            ops->pushOperand(v2);
+            ops->pushOperand(v1);
+        }
     }
 };
 
@@ -1597,9 +1629,48 @@ struct IP_dup2_x1: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_dup2_x2: P {
-    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
+    void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ASSERT_require2(false, "dup2_x2 unimplemented");
+        SValuePtr v1 = ops->popOperand();
+        SValuePtr v2 = ops->popOperand();
+        if (v1->isJvmCategory2()) {
+            if (v2->isJvmCategory2()) {
+                // Form 4: value1, value2 are category-2
+                ops->pushOperand(v1->copy());
+                ops->pushOperand(v2);
+                ops->pushOperand(v1);
+            } else {
+                // Form 3 value1 is category-2, value2, value3 are category-1
+                SValuePtr v3 = ops->popOperand();
+                ASSERT_require2(v3->isJvmCategory1(), "dup2_x2 form-3 requires value3 category-1");
+                ops->pushOperand(v1->copy());
+                ops->pushOperand(v3);
+                ops->pushOperand(v2);
+                ops->pushOperand(v1);
+            }
+        } else {
+            SValuePtr v3 = ops->popOperand();
+            if (v3->isJvmCategory2()) {
+                // Form 2: value1, value2 are category-1, value3 is category-2
+                ASSERT_require2(v2->isJvmCategory1(), "dup2_x2 form-2 requires value2 category-1");
+                ops->pushOperand(v2->copy());
+                ops->pushOperand(v1->copy());
+                ops->pushOperand(v3);
+                ops->pushOperand(v2);
+                ops->pushOperand(v1);
+            } else {
+                // Form 1: value1, value2, value3, value4 are category-1
+                SValuePtr v4 = ops->popOperand();
+                ASSERT_require2(v3->isJvmCategory1(), "dup2_x2 form-1 requires value3 category-1");
+                ASSERT_require2(v4->isJvmCategory1(), "dup2_x2 form-1 requires value4 category-1");
+                ops->pushOperand(v2->copy());
+                ops->pushOperand(v1->copy());
+                ops->pushOperand(v4);
+                ops->pushOperand(v3);
+                ops->pushOperand(v2);
+                ops->pushOperand(v1);
+            }
+        }
     }
 };
 
@@ -3677,7 +3748,11 @@ DispatcherJvm::initializeDispatchTable() {
     iprocSet(0x59,  new Jvm::IP_dup);
     iprocSet(0x5a,  new Jvm::IP_dup_x1);
     iprocSet(0x5b,  new Jvm::IP_dup_x2);
+    iprocSet(0x5c,  new Jvm::IP_dup2);
+    iprocSet(0x5d,  new Jvm::IP_dup2_x1);
+    iprocSet(0x5e,  new Jvm::IP_dup2_x2);
 
+    // Binary operators
     iprocSet(0x60,  new Jvm::IP_iadd);
 }
 
