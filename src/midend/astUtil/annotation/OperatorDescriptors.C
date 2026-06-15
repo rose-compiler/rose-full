@@ -108,7 +108,7 @@ OperatorDeclaration:: OperatorDeclaration(AstInterface& fa, AstNodePtr op_ast,
     AstInterface::AstNodeList::const_iterator p1 = argp->begin();
     AstInterface::AstTypeList::const_iterator p2 = params.begin(); 
     while (p2 != params.end() && p1 != argp->end()) {
-       DebugOperatorDescriptor([&fa, &p1](){ return "Adding operator parameter:" + AstInterface::AstToString(*p1); });
+       DebugOperatorDescriptor([&p1](){ return "Adding operator parameter:" + AstInterface::AstToString(*p1); });
        pars.add_param(fa.GetTypeName(*p2), AstInterface::GetVariableSignature(*p1));
        ++p1; ++p2;
     }
@@ -167,4 +167,3 @@ OperatorDeclaration& OperatorDeclaration:: read ( istream& in )
       TypeDescriptor::get_name() = signiture;
       return *this;
    }
-

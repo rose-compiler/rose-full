@@ -183,7 +183,7 @@ void WholeProgramDependenceAnalysis<NodeIterator,EdgeIterator>::ComputeDependenc
   if (AstInterface::IsFunctionDefinition(input, &function_name, &params, 0, &body, 0, 0,/*use_global_name*/true) && body != 0) {
     Log.push("Computing dependences for " + input->unparseToString());
     std::function<bool(const AstNodePtr&, const AstNodePtr&, const AstUtilInterface::OperatorSideEffect&)> save_dep = 
-        [this,input,body,&DebugSaveDep] (const AstNodePtr& first, const AstNodePtr&, const AstUtilInterface::OperatorSideEffect& relation) {
+        [this,input,body] (const AstNodePtr& first, const AstNodePtr&, const AstUtilInterface::OperatorSideEffect& relation) {
         assert(main_table != 0);
         main_table->addEdge(main_table->addNode(input), main_table->addNode(first.get_ptr()), relation);
         return true;

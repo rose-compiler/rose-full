@@ -169,18 +169,18 @@ void AstUtilInterface::ComputeAstSideEffects(SgNode* ast,
       if (collect != 0)  (*collect)(first, second, OperatorSideEffect::EnumVariant::Call);
       return true;
     };
-    std::function<bool(AstNodePtr, AstNodePtr)> save_decl = [&collect,&ast,&save_call] (AstNodePtr var, AstNodePtr init) {
+    std::function<bool(AstNodePtr, AstNodePtr)> save_decl = [&collect] (AstNodePtr var, AstNodePtr init) {
       DebugAstUtil([&var](){ return "save new decl:" + AstInterface::AstToString(var); });
       if (collect != 0) (*collect)(var, init, OperatorSideEffect(OperatorSideEffect::EnumVariant::Decl, init.get_ptr()));
       return true;
     };
-    std::function<bool(AstNodePtr, AstNodePtr)> save_allocate = [&collect, &save_call, &ast] (AstNodePtr op, AstNodePtr init) {
+    std::function<bool(AstNodePtr, AstNodePtr)> save_allocate = [&collect,&save_call] (AstNodePtr op, AstNodePtr init) {
       DebugAstUtil([&op,&init](){ return "save allocate:" + AstInterface::AstToString(op) + ":" + AstInterface::AstToString(init); });
       if (collect != 0) return (*collect)(op, init, OperatorSideEffect(OperatorSideEffect::EnumVariant::Allocate, init.get_ptr()));
       save_call(op, init);
       return true;
     };
-    std::function<bool(AstNodePtr, AstNodePtr)> save_free = [&collect,&save_mod,&ast,&save_call] (AstNodePtr var, AstNodePtr init) {
+    std::function<bool(AstNodePtr, AstNodePtr)> save_free = [&collect,&save_mod,&save_call] (AstNodePtr var, AstNodePtr init) {
       DebugAstUtil([&var](){ return "save free:" + AstInterface::AstToString(var); });
       if (collect != 0) { 
            (*collect)(var, init, OperatorSideEffect(OperatorSideEffect::EnumVariant::Free, init.get_ptr()));
@@ -251,7 +251,7 @@ void AstUtilInterface::AddOperatorSideEffectAnnotation(
               SgNode* op_ast, const AstNodePtr& var, 
               const AstUtilInterface::OperatorSideEffect& relation)
 {
-  DebugAstUtil([&relation, &var](){ return "Adding operator annotation: " + AstInterface::AstToString(var); });
+  DebugAstUtil([&var](){ return "Adding operator annotation: " + AstInterface::AstToString(var); });
   if (!AstInterface::IsFunctionDefinition(op_ast)) {
      DebugAstUtil([&op_ast](){ return "Expecting an operator but getting " + AstInterface::AstToString(op_ast);});
      return;
@@ -288,7 +288,7 @@ void AstUtilInterface::AddOperatorSideEffectAnnotation(
      std::string varname = GetVariableSignature(var);
      SymbolicValDescriptor val_desc(SymbolicValGenerator::GetSymbolicVal(fa, var), varname);
      desc->push_back(val_desc);
-     DebugAstUtil([&relation, desc](){ return "Done adding operator annotation: " + desc->ToString(); });
+     DebugAstUtil([desc](){ return "Done adding operator annotation: " + desc->ToString(); });
   }
 } 
 
