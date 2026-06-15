@@ -240,7 +240,6 @@ namespace JvmSemantics {
     void branch_lookupswitch(Ops ops, I insn, Args args);
     void branch_tableswitch(Ops ops, I insn, Args args);
     void execute_anewarray(Ops ops, I insn, Args args);
-    void execute_arraylength(Ops ops, I insn, Args args);
     void execute_athrow(Ops ops, I insn, Args args);
     void execute_checkcast(Ops ops, I insn, Args args);
     void execute_getfield(Ops ops, I insn, Args args);
@@ -494,13 +493,6 @@ namespace JvmSemantics {
         arrayRef->typeDescriptor("<unknown-type>"); // obtain from constant pool
 
         ops->pushOperand(arrayRef);
-    }
-
-    void execute_arraylength(Ops ops, I /*insn*/, Args args) {
-        ASSERT_require(args.empty());
-        SValue::Ptr arrayref = ops->popOperand();
-        throwIfNull(ops, "NullPointerException", arrayref);
-        ops->pushOperand(arrayLength(ops, arrayref));
     }
 
     void execute_athrow(Ops, I, Args) { jvmUnsupported("execute_athrow"); }
@@ -875,7 +867,6 @@ struct IP_aload_3: P {
         ops->pushOperand(ops->readLocal(3));
     }
 };
-
 
 // anewarray (189 (0xbd))
         // Description:
@@ -1502,9 +1493,13 @@ struct IP_dsub: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_dup: P {
-    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
+    void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ASSERT_require2(false, "dup unimplemented");
+
+        auto v1 = ops->peekOperand();
+        ASSERT_require2(v1->isJvmCategory1(), "dup requires top value to be category-1");
+
+        ops->pushOperand(v1->copy());
     }
 };
 
@@ -1516,9 +1511,18 @@ struct IP_dup: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_dup_x1: P {
-    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
+    void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ASSERT_require2(false, "dup_x1 unimplemented");
+
+        SValuePtr v1 = ops->popOperand();
+        SValuePtr v2 = ops->popOperand();
+
+        ASSERT_require(v1->isJvmCategory1());
+        ASSERT_require(v2->isJvmCategory1());
+
+        ops->pushOperand(v1->copy());
+        ops->pushOperand(v2);
+        ops->pushOperand(v1);
     }
 };
 
@@ -1530,9 +1534,30 @@ struct IP_dup_x1: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_dup_x2: P {
-    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
+    void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ASSERT_require2(false, "dup_x2 unimplemented");
+
+        auto v1 = ops->popOperand();   // top
+        ASSERT_require2(v1->isJvmCategory1(), "dup_x2 requires top value to be category-1");
+
+        auto v2 = ops->popOperand();
+        if (v2->isJvmCategory2()) {
+            // Form 2: before: ..., v2, v1; after: ..., v1, v2, v1
+            ops->pushOperand(v1->copy());
+            ops->pushOperand(v2);
+            ops->pushOperand(v1);
+        } else {
+            // Form 1: before: ..., v3, v2, v1; after: ..., v1, v3, v2, v1
+            ASSERT_require2(v2->isJvmCategory1(), "dup_x2 malformed stack");
+
+            SValuePtr v3 = ops->popOperand();
+            ASSERT_require2(v3->isJvmCategory1(), "dup_x2 form-1 requires category-1 value3");
+
+            ops->pushOperand(v1->copy());
+            ops->pushOperand(v3);
+            ops->pushOperand(v2);
+            ops->pushOperand(v1);
+        }
     }
 };
 
@@ -3648,6 +3673,10 @@ DispatcherJvm::initializeDispatchTable() {
     iprocSet(0x40,  new Jvm::IP_lstore_1);
     iprocSet(0x41,  new Jvm::IP_lstore_2);
     iprocSet(0x42,  new Jvm::IP_lstore_3);
+
+    iprocSet(0x59,  new Jvm::IP_dup);
+    iprocSet(0x5a,  new Jvm::IP_dup_x1);
+    iprocSet(0x5b,  new Jvm::IP_dup_x2);
 
     iprocSet(0x60,  new Jvm::IP_iadd);
 }

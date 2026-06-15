@@ -100,6 +100,7 @@ MemoryState::writeLocal(size_t index, const SValuePtr &value){
 
 SValue::Ptr
 MemoryState::peekOperand(size_t depth) {
+    (void) depth;
     ASSERT_require2(false, "No implementation for MemoryState::peekOperand\n");
     return {};
 }
