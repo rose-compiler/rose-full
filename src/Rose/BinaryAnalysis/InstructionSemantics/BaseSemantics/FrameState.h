@@ -66,9 +66,8 @@ public:
     using Ptr = FrameStatePtr;
 
 private:
-    std::vector<SValuePtr> stack_; // operand stack for the frame
-    std::map<size_t, SValuePtr> locals_; // local variables for the frame
-    std::set<size_t> invalidLocalSlots_; // invalid value in locals_ (used for longs and doubles as they take up two slots)
+    std::vector<SValuePtr> stack_;  // operand stack for the frame
+    std::vector<SValuePtr> locals_; // local variables for the frame
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     // Serialization
@@ -123,16 +122,26 @@ public:
     virtual SValuePtr peekMemory(const SValuePtr &address, const SValuePtr &dflt,
                                  RiscOperators *addrOps, RiscOperators *valOps) override;
 
-    SValuePtr readLocal(uint8_t index) const override;
-    void writeLocal(uint8_t index, const SValuePtr &value) override;
+    SValuePtr readLocal(size_t index) const override;
+    void writeLocal(size_t index, const SValuePtr &value) override;
 
-    SValuePtr peekOperand() override;
+    SValuePtr peekOperand(size_t depth = 0) override;
     SValuePtr popOperand() override;
     void pushOperand(const SValuePtr &value) override;
 
 public:
     virtual void hash(Combinatorics::Hasher&, RiscOperators *addrOps, RiscOperators *valOps) const override;
     virtual void print(std::ostream&, Formatter&) const override;
+
+private:
+    /** Invalidate a range of local-variable slots.
+     *
+     *  Any overlapping category-2 value (long/double) is completely removed,
+     *  including its head and tail slots, to preserve JVM slot semantics.
+     */
+    void clearLocalRange(size_t begin, size_t nSlots);
+
+    bool isCategory2Tail(const SValuePtr&);
 };
     
 } // namespace

@@ -319,13 +319,13 @@ public:
      *  See also @ref frameState, which returns a null pointer if the frame state is not present. */
     bool hasFrameState() const;
 
-    virtual SValuePtr readLocal(uint8_t index);
-    virtual void writeLocal(uint8_t index, const SValuePtr &value);
+    virtual SValuePtr readLocal(size_t index);
+    virtual void writeLocal(size_t index, const SValuePtr &value);
 
     /** Peek at an operand value.
      *
      *  Calls @ref peekOperand on the address space returned by @ref frameState, which must be non-null. */
-    virtual SValuePtr peekOperand();
+    virtual SValuePtr peekOperand(size_t depth = 0);
 
     /** Push an operand value.
      *

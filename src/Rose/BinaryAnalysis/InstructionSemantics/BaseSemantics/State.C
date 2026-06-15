@@ -321,22 +321,22 @@ State::hasFrameState() const {
 }
 
 SValuePtr
-State::readLocal(uint8_t index) {
+State::readLocal(size_t index) {
     ASSERT_not_null(frameState());
     return frameState()->readLocal(index);
 }
 
 void
-State::writeLocal(uint8_t index, const SValuePtr &value){
+State::writeLocal(size_t index, const SValuePtr &value) {
     ASSERT_not_null(value);
     ASSERT_not_null(frameState());
     return frameState()->writeLocal(index, value);
 }
 
 SValue::Ptr
-State::peekOperand() {
+State::peekOperand(size_t depth) {
     ASSERT_not_null(frameState());
-    return frameState()->peekOperand();
+    return frameState()->peekOperand(depth);
 }
 
 SValue::Ptr

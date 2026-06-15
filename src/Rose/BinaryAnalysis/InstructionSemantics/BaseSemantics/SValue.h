@@ -41,15 +41,21 @@ enum class ValueKind {
     Unknown,
     Integer32,       // JVM Integer
     Integer64,       // JVM Long
-    NativeInt,
+    NativeInt,       // CIL native integer
     Float32,         // JVM Float
     Float64,         // JVM Double
     ArrayReference,
     ObjectReference,
     ManagedPointer,
     UnmanagedPointer,
-    ReturnAddress
+    ReturnAddress,
+
+    Category2Tail,   // second slot of long/double
+    Invalid          // unusable/destroyed/corrupted slot
 };
+
+/** Prints a ValueKind to an output stream. */
+std::ostream& operator<<(std::ostream&, ValueKind);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -224,6 +230,19 @@ public:
     virtual void typeDescriptor(const std::string &s);
     virtual const std::string& typeDescriptor() const;
     virtual bool hasTypeDescriptor() const;
+
+    /** Determines whether a value is JVM category-1.
+     *
+     *  Returns true if this value represents a JVM category-1 object, with kind not ValueKind::Integer64 nor
+     *  ValueKind::Float64.  It has no meaning for other architectures. */
+    bool isJvmCategory1();
+
+    /** Determines whether a value is JVM category-2.
+     *
+     *  Returns true if this value represents a JVM category-2 object, with kind either ValueKind::Integer64 or
+     *  ValueKind::Float64.  If so the value will require two slots when stored.  It has no meaning for other
+     *  architectures. */
+    bool isJvmCategory2();
 
     /** Determines whether a value is a data-flow bottom.
      *

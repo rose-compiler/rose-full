@@ -1467,10 +1467,10 @@ RiscOperators::writeMemory(RegisterDescriptor a, const BaseSemantics::SValue::Pt
 }
 
 BaseSemantics::SValue::Ptr
-RiscOperators::peekOperand() {
+RiscOperators::peekOperand(size_t depth) {
     before("peekOperand");
     try {
-        return after(subdomain_->peekOperand());
+        return after(subdomain_->peekOperand(depth));
     } catch (const BaseSemantics::Exception &e) {
         after(e);
         throw;

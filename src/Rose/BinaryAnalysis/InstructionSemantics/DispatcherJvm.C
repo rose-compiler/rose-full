@@ -23,6 +23,8 @@
 #include <sageInterface.h>
 #include <Cxx_GrammarDowncast.h>
 
+#define MOVE_ON 1
+
 using namespace Rose::BinaryAnalysis::InstructionSemantics::BaseSemantics;
 using namespace Sawyer::Message::Common;
 
@@ -92,7 +94,6 @@ namespace JvmSemantics {
 
     namespace MyDomain {
 
-     // class SValue: public InstructionSemantics::SymbolicSemantics::SValue {
         class SValue: public BaseSemantics::SValue {
             SgType* type_ = nullptr;
             uint64_t arrayLength_ = 0;  // Track array length
@@ -121,7 +122,7 @@ namespace JvmSemantics {
             throw std::runtime_error("Array reference is not a MyDomain::SValue");
         }
 
-    class State: public  Rose::BinaryAnalysis::InstructionSemantics::SymbolicSemantics::State {
+    class State: public Rose::BinaryAnalysis::InstructionSemantics::SymbolicSemantics::State {
     public:
         using Super = InstructionSemantics::SymbolicSemantics::State;
         using Ptr = boost::shared_ptr<State>;
@@ -208,19 +209,11 @@ namespace JvmSemantics {
     SValue::Ptr div(Ops ops, SValue::Ptr a, SValue::Ptr b);
     SValue::Ptr rem(Ops ops, SValue::Ptr a, SValue::Ptr b);
     SValue::Ptr neg(Ops ops, SValue::Ptr a);
-    SValue::Ptr binary(Ops ops, const char *op, SValue::Ptr a, SValue::Ptr b);
     SValue::Ptr convert(Ops ops, const char *op, SValue::Ptr a);
-    SValue::Ptr compare(Ops ops, const char *op, SValue::Ptr a, SValue::Ptr b);
 
     void methodReturn(Ops ops, I insn);
     void methodReturn(Ops ops, I insn, SValue::Ptr value);
 
-    void stack_dup(Ops ops);
-    void stack_dup_x1(Ops ops);
-    void stack_dup_x2(Ops ops);
-    void stack_dup2(Ops ops);
-    void stack_dup2_x1(Ops ops);
-    void stack_dup2_x2(Ops ops);
     void stack_pop(Ops ops);
     void stack_pop2(Ops ops);
     void stack_swap(Ops ops);
@@ -426,68 +419,34 @@ namespace JvmSemantics {
         return ops->negate(a);
     }
 
-    SValue::Ptr binary(Ops ops, const char *op, SValue::Ptr a, SValue::Ptr b) {
-        if (0 == strcmp(op, "and"))  return ops->and_(a, b);
-        if (0 == strcmp(op, "or"))   return ops->or_(a, b);
-        if (0 == strcmp(op, "xor"))  return ops->xor_(a, b);
-        if (0 == strcmp(op, "shl"))  return ops->shiftLeft(a, b);
-        if (0 == strcmp(op, "shr"))  return ops->shiftRight(a, b);
-        if (0 == strcmp(op, "ushr")) return ops->shiftRight(a, b);
-        jvmUnsupported(op);
-    }
+    template<class BinaryFunc>
+    void
+    doBinaryOp(Ops ops, ValueKind kind, BinaryFunc func) {
+        auto rhs = ops->popOperand();
+        auto lhs = ops->popOperand();
 
-    SValue::Ptr convert(Ops ops, const char *op, SValue::Ptr a) {
-        if (0 == strcmp(op, "i2b")) return ops->signExtend(ops->extract(a, 0, 8), 32);
-        if (0 == strcmp(op, "i2c")) return ops->unsignedExtend(ops->extract(a, 0, 16), 32);
-        if (0 == strcmp(op, "i2s")) return ops->signExtend(ops->extract(a, 0, 16), 32);
-        if (0 == strcmp(op, "l2i")) return ops->extract(a, 0, 32);
-        if (0 == strcmp(op, "i2l")) return ops->signExtend(a, 64);
-        // Floating-point conversions require the JVM floating-point semantic domain.
-        jvmUnsupported(op);
-    }
-
-    SValue::Ptr compare(Ops ops, const char *op, SValue::Ptr a, SValue::Ptr b) {
-        // Default integer-valued compare result.  Full JVM fcmp/dcmp NaN handling
-        // requires the floating-point semantic domain and must be supplied by the framework.
-
-        if (0 == strcmp(op, "lcmp")) {
-        // Use the 'is' prefix for comparison operators
-            SValue::Ptr lt = ops->isSignedLessThan(a, b);
-            SValue::Ptr gt = ops->isSignedLessThan(b, a);
-
-            return ops->ite(lt, ops->number_(32, -1), ops->ite(gt, ops->number_(32, 1), ops->number_(32, 0)));
+        if (lhs->kind() != kind || rhs->kind() != kind) {
+            std::ostringstream msg;
+            msg << "lhs or rhs kinds differ from " << kind;
+            ASSERT_require2(false, msg.str());
         }
 
-        jvmUnsupported(op);
+        auto result = func(lhs, rhs);
+        ASSERT_not_null(result);
+
+        result->kind(kind);
+        ops->pushOperand(result);
+    }
+
+    bool
+    isReference(SValue::Ptr v) {
+        return v->kind() == ValueKind::ObjectReference ||
+               v->kind() == ValueKind::ArrayReference;
     }
 
     void methodReturn(Ops /*ops*/, I /*insn*/) { jvmUnsupported("methodReturn(void)"); }
     void methodReturn(Ops /*ops*/, I /*insn*/, SValue::Ptr /*value*/) { jvmUnsupported("methodReturn(value)"); }
 
-    void stack_dup(Ops ops) {
-        SValue::Ptr v1 = ops->popOperand();
-        ops->pushOperand(v1); ops->pushOperand(v1);
-    }
-    void stack_dup_x1(Ops ops) {
-        SValue::Ptr v1 = ops->popOperand(), v2 = ops->popOperand();
-        ops->pushOperand(v1); ops->pushOperand(v2); ops->pushOperand(v1);
-    }
-    void stack_dup_x2(Ops ops) {
-        SValue::Ptr v1 = ops->popOperand(), v2 = ops->popOperand(), v3 = ops->popOperand();
-        ops->pushOperand(v1); ops->pushOperand(v3); ops->pushOperand(v2); ops->pushOperand(v1);
-    }
-    void stack_dup2(Ops ops) {
-        SValue::Ptr v1 = ops->popOperand(), v2 = ops->popOperand();
-        ops->pushOperand(v2); ops->pushOperand(v1); ops->pushOperand(v2); ops->pushOperand(v1);
-    }
-    void stack_dup2_x1(Ops ops) {
-        SValue::Ptr v1 = ops->popOperand(), v2 = ops->popOperand(), v3 = ops->popOperand();
-        ops->pushOperand(v2); ops->pushOperand(v1); ops->pushOperand(v3); ops->pushOperand(v2); ops->pushOperand(v1);
-    }
-    void stack_dup2_x2(Ops ops) {
-        SValue::Ptr v1 = ops->popOperand(), v2 = ops->popOperand(), v3 = ops->popOperand(), v4 = ops->popOperand();
-        ops->pushOperand(v2); ops->pushOperand(v1); ops->pushOperand(v4); ops->pushOperand(v3); ops->pushOperand(v2); ops->pushOperand(v1);
-    }
     void stack_pop(Ops ops) { ops->popOperand(); }
     void stack_pop2(Ops ops) { ops->popOperand(); ops->popOperand(); }
     void stack_swap(Ops ops) {
@@ -525,13 +484,16 @@ namespace JvmSemantics {
         int64_t constantPoolIndex = (static_cast<uint16_t>(b1) << 8) | static_cast<uint16_t>(b2);
         (void) constantPoolIndex; // defeat clang warning
 
-        // Pop the count and set it to have ArrayReference properties
-        SValue::Ptr count = ops->popOperand();
-        count->kind(ValueKind::ArrayReference);
-        count->arrayLength(count);
-        count->typeDescriptor("<unknown-type>"); // obtain from constant pool
+        auto count = ops->popOperand();
+        ASSERT_require(count->kind() == ValueKind::Integer32);
 
-        ops->pushOperand(count);
+        // Create an ArrayReference and set properties
+        auto arrayRef = ops->protoval();
+        arrayRef->kind(ValueKind::ArrayReference);
+        arrayRef->arrayLength(count->copy());
+        arrayRef->typeDescriptor("<unknown-type>"); // obtain from constant pool
+
+        ops->pushOperand(arrayRef);
     }
 
     void execute_arraylength(Ops ops, I /*insn*/, Args args) {
@@ -777,6 +739,9 @@ bool isSubclassOf(SgClassType* derived, SgClassType* base) {
     }
 }
 
+using JvmSemantics::asU1;
+using JvmSemantics::doBinaryOp;
+using JvmSemantics::isReference;
 
 // aaload (50 (0x32))
         // Description:
@@ -945,9 +910,14 @@ struct IP_areturn: P {
 struct IP_arraylength: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr arrayref = ops->popOperand();
-        JvmSemantics::throwIfNull(ops, "NullPointerException", arrayref);
-        ops->pushOperand(JvmSemantics::arrayLength(ops, arrayref));
+        auto arrayRef = ops->popOperand();
+        ASSERT_require(arrayRef->kind() == ValueKind::ArrayReference);
+        ASSERT_require(arrayRef->hasArrayLength());
+
+        auto length = arrayRef->arrayLength();
+        ASSERT_require(length->kind() == ValueKind::Integer32);
+
+        ops->pushOperand(length);
     }
 };
 
@@ -959,10 +929,13 @@ struct IP_arraylength: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_astore: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
+    void p(D d, Ops ops, I insn, Args args) {
         assert_args(insn, args, 1);
-        const uint32_t index = JvmSemantics::u1(args[0]);
-        ops->writeLocal(index, ops->popOperand());
+
+        auto ref = ops->popOperand();
+        ASSERT_require2(JvmSemantics::isReference(ref), "astore requires top of stack to be a Reference");
+
+        ops->writeLocal(d->asU1(args[0]), ref);
     }
 };
 
@@ -976,7 +949,11 @@ struct IP_astore: P {
 struct IP_astore_0: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ops->writeLocal(0, ops->popOperand());
+
+        auto ref = ops->popOperand();
+        ASSERT_require2(isReference(ref), "astore_0 requires top of stack to be a Reference");
+
+        ops->writeLocal(0, ref);
     }
 };
 
@@ -990,7 +967,11 @@ struct IP_astore_0: P {
 struct IP_astore_1: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ops->writeLocal(1, ops->popOperand());
+
+        auto ref = ops->popOperand();
+        ASSERT_require2(isReference(ref), "astore_1 requires top of stack to be a Reference");
+
+        ops->writeLocal(1, ref);
     }
 };
 
@@ -1004,7 +985,11 @@ struct IP_astore_1: P {
 struct IP_astore_2: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ops->writeLocal(2, ops->popOperand());
+
+        auto ref = ops->popOperand();
+        ASSERT_require2(isReference(ref), "astore_2 requires top of stack to be a Reference");
+
+        ops->writeLocal(2, ref);
     }
 };
 
@@ -1018,7 +1003,11 @@ struct IP_astore_2: P {
 struct IP_astore_3: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ops->writeLocal(3, ops->popOperand());
+
+        auto ref = ops->popOperand();
+        ASSERT_require2(isReference(ref), "astore_3 requires top of stack to be a Reference");
+
+        ops->writeLocal(3, ref);
     }
 };
 
@@ -1148,10 +1137,9 @@ struct IP_checkcast: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_d2f: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
+    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr v = ops->popOperand();
-        ops->pushOperand(JvmSemantics::convert(ops, "d2f", v));
+        ASSERT_require2(false, "d2f unimplemented");
     }
 };
 
@@ -1163,10 +1151,9 @@ struct IP_d2f: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_d2i: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
+    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr v = ops->popOperand();
-        ops->pushOperand(JvmSemantics::convert(ops, "d2i", v));
+        ASSERT_require2(false, "d2i unimplemented");
     }
 };
 
@@ -1178,10 +1165,9 @@ struct IP_d2i: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_d2l: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
+    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr v = ops->popOperand();
-        ops->pushOperand(JvmSemantics::convert(ops, "d2l", v));
+        ASSERT_require2(false, "d2l unimplemented");
     }
 };
 
@@ -1191,11 +1177,9 @@ struct IP_d2l: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_dadd: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
+    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr v2 = ops->popOperand();
-        SValue::Ptr v1 = ops->popOperand();
-        ops->pushOperand(ops->add(v1, v2));
+        ASSERT_require2(false, "dadd unimplemented");
     }
 };
 
@@ -1246,11 +1230,9 @@ struct IP_dastore: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_dcmpl: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
+    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr v2 = ops->popOperand();
-        SValue::Ptr v1 = ops->popOperand();
-        ops->pushOperand(JvmSemantics::compare(ops, "dcmpl", v1, v2));
+        ASSERT_require2(false, "dcmpl unimplemented");
     }
 };
 
@@ -1262,11 +1244,9 @@ struct IP_dcmpl: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_dcmpg: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
+    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr v2 = ops->popOperand();
-        SValue::Ptr v1 = ops->popOperand();
-        ops->pushOperand(JvmSemantics::compare(ops, "dcmpg", v1, v2));
+        ASSERT_require2(false, "dcmpg unimplemented");
     }
 };
 
@@ -1320,8 +1300,7 @@ struct IP_ddiv: P {
 struct IP_dload: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 1);
-        const uint32_t index = JvmSemantics::u1(args[0]);
-        ops->pushOperand(ops->readLocal(index));
+        ops->pushOperand(ops->readLocal(asU1(args[0])));
     }
 };
 
@@ -1401,10 +1380,9 @@ struct IP_dmul: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_dneg: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
+    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr v = ops->popOperand();
-        ops->pushOperand(JvmSemantics::neg(ops, v));
+        ASSERT_require2(false, "dneg unimplemented");
     }
 };
 
@@ -1416,11 +1394,9 @@ struct IP_dneg: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_drem: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
+    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr v2 = ops->popOperand();
-        SValue::Ptr v1 = ops->popOperand();
-        ops->pushOperand(JvmSemantics::rem(ops, v1, v2));
+        ASSERT_require2(false, "drem unimplemented");
     }
 };
 
@@ -1430,10 +1406,9 @@ struct IP_drem: P {
         // Run-time Exceptions:
         //   IllegalMonitorStateException can be thrown for synchronized methods if structured locking ownership rules are violated.
 struct IP_dreturn: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
+    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr value = ops->popOperand();
-        JvmSemantics::methodReturn(ops, insn, value);
+        ASSERT_require2(false, "dreturn unimplemented");
     }
 };
 
@@ -1447,8 +1422,7 @@ struct IP_dreturn: P {
 struct IP_dstore: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 1);
-        const uint32_t index = JvmSemantics::u1(args[0]);
-        ops->writeLocal(index, ops->popOperand());
+        ops->writeLocal(asU1(args[0]), ops->popOperand());
     }
 };
 
@@ -1514,11 +1488,9 @@ struct IP_dstore_3: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_dsub: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
+    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr v2 = ops->popOperand();
-        SValue::Ptr v1 = ops->popOperand();
-        ops->pushOperand(JvmSemantics::sub(ops, v1, v2));
+        ASSERT_require2(false, "dsub unimplemented");
     }
 };
 
@@ -1530,9 +1502,9 @@ struct IP_dsub: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_dup: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
+    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
         assert_args(insn, args, 0);
-        JvmSemantics::stack_dup(ops);
+        ASSERT_require2(false, "dup unimplemented");
     }
 };
 
@@ -1544,9 +1516,9 @@ struct IP_dup: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_dup_x1: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
+    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
         assert_args(insn, args, 0);
-        JvmSemantics::stack_dup_x1(ops);
+        ASSERT_require2(false, "dup_x1 unimplemented");
     }
 };
 
@@ -1558,9 +1530,9 @@ struct IP_dup_x1: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_dup_x2: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
+    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
         assert_args(insn, args, 0);
-        JvmSemantics::stack_dup_x2(ops);
+        ASSERT_require2(false, "dup_x2 unimplemented");
     }
 };
 
@@ -1572,9 +1544,9 @@ struct IP_dup_x2: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_dup2: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
+    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
         assert_args(insn, args, 0);
-        JvmSemantics::stack_dup2(ops);
+        ASSERT_require2(false, "dup2 unimplemented");
     }
 };
 
@@ -1586,9 +1558,9 @@ struct IP_dup2: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_dup2_x1: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
+    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
         assert_args(insn, args, 0);
-        JvmSemantics::stack_dup2_x1(ops);
+        ASSERT_require2(false, "dup2_x1 unimplemented");
     }
 };
 
@@ -1600,9 +1572,9 @@ struct IP_dup2_x1: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_dup2_x2: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
+    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
         assert_args(insn, args, 0);
-        JvmSemantics::stack_dup2_x2(ops);
+        ASSERT_require2(false, "dup2_x2 unimplemented");
     }
 };
 
@@ -1614,10 +1586,9 @@ struct IP_dup2_x2: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_f2d: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
+    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr v = ops->popOperand();
-        ops->pushOperand(JvmSemantics::convert(ops, "f2d", v));
+        ASSERT_require2(false, "f2d unimplemented");
     }
 };
 
@@ -1629,10 +1600,9 @@ struct IP_f2d: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_f2i: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
+    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr v = ops->popOperand();
-        ops->pushOperand(JvmSemantics::convert(ops, "f2i", v));
+        ASSERT_require2(false, "f2i unimplemented");
     }
 };
 
@@ -1644,10 +1614,9 @@ struct IP_f2i: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_f2l: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
+    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr v = ops->popOperand();
-        ops->pushOperand(JvmSemantics::convert(ops, "f2l", v));
+        ASSERT_require2(false, "f2l unimplemented");
     }
 };
 
@@ -1657,11 +1626,9 @@ struct IP_f2l: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_fadd: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
+    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr v2 = ops->popOperand();
-        SValue::Ptr v1 = ops->popOperand();
-        ops->pushOperand(ops->add(v1, v2));
+        ASSERT_require2(false, "fadd unimplemented");
     }
 };
 
@@ -1672,15 +1639,9 @@ struct IP_fadd: P {
         //   NullPointerException if arrayref is null.
         //   ArrayIndexOutOfBoundsException if index is outside the array bounds.
 struct IP_faload: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
+    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr index = ops->popOperand();
-        SValue::Ptr arrayref = ops->popOperand();
-        JvmSemantics::throwIfNull(ops, "NullPointerException", arrayref);
-
-        JvmSemantics::throwIfArrayIndexOutOfBounds(ops, arrayref, index);
-
-        ops->pushOperand(JvmSemantics::arrayLoad(ops, "f", arrayref, index));
+        ASSERT_require2(false, "faload unimplemented");
     }
 };
 
@@ -1691,16 +1652,9 @@ struct IP_faload: P {
         //   NullPointerException if arrayref is null.
         //   ArrayIndexOutOfBoundsException if index is outside the array bounds.
 struct IP_fastore: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
+    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr value = ops->popOperand();
-        SValue::Ptr index = ops->popOperand();
-        SValue::Ptr arrayref = ops->popOperand();
-        JvmSemantics::throwIfNull(ops, "NullPointerException", arrayref);
-
-        JvmSemantics::throwIfArrayIndexOutOfBounds(ops, arrayref, index);
-
-        JvmSemantics::arrayStore(ops, "f", arrayref, index, value);
+        ASSERT_require2(false, "fastore unimplemented");
     }
 };
 
@@ -1712,11 +1666,9 @@ struct IP_fastore: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_fcmpl: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
+    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr v2 = ops->popOperand();
-        SValue::Ptr v1 = ops->popOperand();
-        ops->pushOperand(JvmSemantics::compare(ops, "fcmpl", v1, v2));
+        ASSERT_require2(false, "fcmpl unimplemented");
     }
 };
 
@@ -1728,11 +1680,9 @@ struct IP_fcmpl: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_fcmpg: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
+    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr v2 = ops->popOperand();
-        SValue::Ptr v1 = ops->popOperand();
-        ops->pushOperand(JvmSemantics::compare(ops, "fcmpg", v1, v2));
+        ASSERT_require2(false, "fcmpg unimplemented");
     }
 };
 
@@ -1798,8 +1748,7 @@ struct IP_fdiv: P {
 struct IP_fload: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 1);
-        const uint32_t index = JvmSemantics::u1(args[0]);
-        ops->pushOperand(ops->readLocal(index));
+        ops->pushOperand(ops->readLocal(asU1(args[0])));
     }
 };
 
@@ -1879,10 +1828,9 @@ struct IP_fmul: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_fneg: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
+    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr v = ops->popOperand();
-        ops->pushOperand(JvmSemantics::neg(ops, v));
+        ASSERT_require2(false, "fneg unimplemented");
     }
 };
 
@@ -1894,11 +1842,9 @@ struct IP_fneg: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_frem: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
+    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr v2 = ops->popOperand();
-        SValue::Ptr v1 = ops->popOperand();
-        ops->pushOperand(JvmSemantics::rem(ops, v1, v2));
+        ASSERT_require2(false, "frem unimplemented");
     }
 };
 
@@ -1908,10 +1854,9 @@ struct IP_frem: P {
         // Run-time Exceptions:
         //   IllegalMonitorStateException can be thrown for synchronized methods if structured locking ownership rules are violated.
 struct IP_freturn: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
+    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr value = ops->popOperand();
-        JvmSemantics::methodReturn(ops, insn, value);
+        ASSERT_require2(false, "freturn unimplemented");
     }
 };
 
@@ -1925,8 +1870,7 @@ struct IP_freturn: P {
 struct IP_fstore: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 1);
-        const uint32_t index = JvmSemantics::u1(args[0]);
-        ops->writeLocal(index, ops->popOperand());
+        ops->writeLocal(asU1(args[0]), ops->popOperand());
     }
 };
 
@@ -2042,9 +1986,9 @@ struct IP_goto: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_goto_w: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
+    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
         assert_args(insn, args, 4);
-        JvmSemantics::branch_goto_w(ops, insn, args);
+        ASSERT_require2(false, "goto_w unimplemented");
     }
 };
 
@@ -2056,10 +2000,9 @@ struct IP_goto_w: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_i2b: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
+    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr v = ops->popOperand();
-        ops->pushOperand(JvmSemantics::convert(ops, "i2b", v));
+        ASSERT_require2(false, "i2b unimplemented");
     }
 };
 
@@ -2071,10 +2014,9 @@ struct IP_i2b: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_i2c: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
+    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr v = ops->popOperand();
-        ops->pushOperand(JvmSemantics::convert(ops, "i2c", v));
+        ASSERT_require2(false, "i2c unimplemented");
     }
 };
 
@@ -2086,10 +2028,10 @@ struct IP_i2c: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_i2d: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
+    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr v = ops->popOperand();
-        ops->pushOperand(JvmSemantics::convert(ops, "i2d", v));
+        assert_args(insn, args, 0);
+        ASSERT_require2(false, "i2d unimplemented");
     }
 };
 
@@ -2101,10 +2043,9 @@ struct IP_i2d: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_i2f: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
+    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr v = ops->popOperand();
-        ops->pushOperand(JvmSemantics::convert(ops, "i2f", v));
+        ASSERT_require2(false, "i2f unimplemented");
     }
 };
 
@@ -2116,10 +2057,9 @@ struct IP_i2f: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_i2l: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
+    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr v = ops->popOperand();
-        ops->pushOperand(JvmSemantics::convert(ops, "i2l", v));
+        ASSERT_require2(false, "i2l unimplemented");
     }
 };
 
@@ -2131,10 +2071,9 @@ struct IP_i2l: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_i2s: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
+    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr v = ops->popOperand();
-        ops->pushOperand(JvmSemantics::convert(ops, "i2s", v));
+        ASSERT_require2(false, "i2s unimplemented");
     }
 };
 
@@ -2146,9 +2085,8 @@ struct IP_i2s: P {
 struct IP_iadd: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr v2 = ops->popOperand();
-        SValue::Ptr v1 = ops->popOperand();
-        ops->pushOperand(ops->add(v1, v2));
+        doBinaryOp(ops, ValueKind::Integer32,
+             [ops](auto lhs, auto rhs) { return ops->add(lhs, rhs); });
     }
 };
 
@@ -2177,11 +2115,9 @@ struct IP_iaload: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_iand: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
+    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr v2 = ops->popOperand();
-        SValue::Ptr v1 = ops->popOperand();
-        ops->pushOperand(JvmSemantics::binary(ops, "iand", v1, v2));
+        ASSERT_require2(false, "iand unimplemented");
     }
 };
 
@@ -2295,12 +2231,9 @@ struct IP_iconst_5: P {
         // Run-time Exceptions:
         //   ArithmeticException if the divisor is zero.
 struct IP_idiv: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
+    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr v2 = ops->popOperand();
-        SValue::Ptr v1 = ops->popOperand();
-        JvmSemantics::throwIfIntegerDivisorZero(ops, v2);
-        ops->pushOperand(JvmSemantics::div(ops, v1, v2));
+        ASSERT_require2(false, "idiv unimplemented");
     }
 };
 
@@ -2587,11 +2520,9 @@ struct IP_iload_3: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_imul: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
+    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr v2 = ops->popOperand();
-        SValue::Ptr v1 = ops->popOperand();
-        ops->pushOperand(JvmSemantics::mul(ops, v1, v2));
+        ASSERT_require2(false, "imul unimplemented");
     }
 };
 
@@ -2601,10 +2532,9 @@ struct IP_imul: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_ineg: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
+    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr v = ops->popOperand();
-        ops->pushOperand(JvmSemantics::neg(ops, v));
+        ASSERT_require2(false, "ineg unimplemented");
     }
 };
 
@@ -2693,11 +2623,9 @@ struct IP_invokevirtual: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_ior: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
+    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr v2 = ops->popOperand();
-        SValue::Ptr v1 = ops->popOperand();
-        ops->pushOperand(JvmSemantics::binary(ops, "ior", v1, v2));
+        ASSERT_require2(false, "ior unimplemented");
     }
 };
 
@@ -2707,12 +2635,9 @@ struct IP_ior: P {
         // Run-time Exceptions:
         //   ArithmeticException if the divisor is zero.
 struct IP_irem: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
+    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr v2 = ops->popOperand();
-        SValue::Ptr v1 = ops->popOperand();
-        JvmSemantics::throwIfIntegerDivisorZero(ops, v2);
-        ops->pushOperand(JvmSemantics::rem(ops, v1, v2));
+        ASSERT_require2(false, "irem unimplemented");
     }
 };
 
@@ -2735,11 +2660,9 @@ struct IP_ireturn: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_ishl: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
+    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr v2 = ops->popOperand();
-        SValue::Ptr v1 = ops->popOperand();
-        ops->pushOperand(JvmSemantics::binary(ops, "ishl", v1, v2));
+        ASSERT_require2(false, "ishl unimplemented");
     }
 };
 
@@ -2749,11 +2672,9 @@ struct IP_ishl: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_ishr: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
+    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr v2 = ops->popOperand();
-        SValue::Ptr v1 = ops->popOperand();
-        ops->pushOperand(JvmSemantics::binary(ops, "ishr", v1, v2));
+        ASSERT_require2(false, "ishr unimplemented");
     }
 };
 
@@ -2833,11 +2754,9 @@ struct IP_istore_3: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_isub: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
+    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr v2 = ops->popOperand();
-        SValue::Ptr v1 = ops->popOperand();
-        ops->pushOperand(JvmSemantics::sub(ops, v1, v2));
+        ASSERT_require2(false, "isub unimplemented");
     }
 };
 
@@ -2847,11 +2766,9 @@ struct IP_isub: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_iushr: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
+    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr v2 = ops->popOperand();
-        SValue::Ptr v1 = ops->popOperand();
-        ops->pushOperand(JvmSemantics::binary(ops, "iushr", v1, v2));
+        ASSERT_require2(false, "iushr unimplemented");
     }
 };
 
@@ -2861,11 +2778,9 @@ struct IP_iushr: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_ixor: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
+    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr v2 = ops->popOperand();
-        SValue::Ptr v1 = ops->popOperand();
-        ops->pushOperand(JvmSemantics::binary(ops, "ixor", v1, v2));
+        ASSERT_require2(false, "ixor unimplemented");
     }
 };
 
@@ -2905,10 +2820,9 @@ struct IP_jsr_w: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_l2d: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
+    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr v = ops->popOperand();
-        ops->pushOperand(JvmSemantics::convert(ops, "l2d", v));
+        ASSERT_require2(false, "l2d unimplemented");
     }
 };
 
@@ -2920,10 +2834,9 @@ struct IP_l2d: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_l2f: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
+    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr v = ops->popOperand();
-        ops->pushOperand(JvmSemantics::convert(ops, "l2f", v));
+        ASSERT_require2(false, "l2f unimplemented");
     }
 };
 
@@ -2935,10 +2848,9 @@ struct IP_l2f: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_l2i: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
+    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr v = ops->popOperand();
-        ops->pushOperand(JvmSemantics::convert(ops, "l2i", v));
+        ASSERT_require2(false, "l2i unimplemented");
     }
 };
 
@@ -2948,11 +2860,9 @@ struct IP_l2i: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_ladd: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
+    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr v2 = ops->popOperand();
-        SValue::Ptr v1 = ops->popOperand();
-        ops->pushOperand(ops->add(v1, v2));
+        ASSERT_require2(false, "ladd unimplemented");
     }
 };
 
@@ -2981,11 +2891,10 @@ struct IP_laload: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_land: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
+    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr v2 = ops->popOperand();
-        SValue::Ptr v1 = ops->popOperand();
-        ops->pushOperand(JvmSemantics::binary(ops, "land", v1, v2));
+        ASSERT_require(false);
+        ASSERT_require2(false, "land unimplemented");
     }
 };
 
@@ -3017,11 +2926,9 @@ struct IP_lastore: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_lcmp: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
+    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr v2 = ops->popOperand();
-        SValue::Ptr v1 = ops->popOperand();
-        ops->pushOperand(JvmSemantics::compare(ops, "lcmp", v1, v2));
+        ASSERT_require2(false, "lcmp unimplemented");
     }
 };
 
@@ -3097,12 +3004,9 @@ struct IP_ldc2_w: P {
         // Run-time Exceptions:
         //   ArithmeticException if the divisor is zero.
 struct IP_ldiv: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
+    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr v2 = ops->popOperand();
-        SValue::Ptr v1 = ops->popOperand();
-        JvmSemantics::throwIfLongDivisorZero(ops, v2);
-        ops->pushOperand(JvmSemantics::div(ops, v1, v2));
+        ASSERT_require2(false, "ldiv unimplemented");
     }
 };
 
@@ -3116,8 +3020,7 @@ struct IP_ldiv: P {
 struct IP_lload: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 1);
-        const uint32_t index = JvmSemantics::u1(args[0]);
-        ops->pushOperand(ops->readLocal(index));
+        ops->pushOperand(ops->readLocal(asU1(args[0])));
     }
 };
 
@@ -3183,11 +3086,9 @@ struct IP_lload_3: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_lmul: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
+    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr v2 = ops->popOperand();
-        SValue::Ptr v1 = ops->popOperand();
-        ops->pushOperand(JvmSemantics::mul(ops, v1, v2));
+        ASSERT_require2(false, "lmul unimplemented");
     }
 };
 
@@ -3197,10 +3098,9 @@ struct IP_lmul: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_lneg: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
+    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr v = ops->popOperand();
-        ops->pushOperand(JvmSemantics::neg(ops, v));
+        ASSERT_require2(false, "lneg unimplemented");
     }
 };
 
@@ -3224,11 +3124,9 @@ struct IP_lookupswitch: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_lor: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
+    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr v2 = ops->popOperand();
-        SValue::Ptr v1 = ops->popOperand();
-        ops->pushOperand(JvmSemantics::binary(ops, "lor", v1, v2));
+        ASSERT_require2(false, "lor unimplemented");
     }
 };
 
@@ -3238,12 +3136,9 @@ struct IP_lor: P {
         // Run-time Exceptions:
         //   ArithmeticException if the divisor is zero.
 struct IP_lrem: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
+    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr v2 = ops->popOperand();
-        SValue::Ptr v1 = ops->popOperand();
-        JvmSemantics::throwIfLongDivisorZero(ops, v2);
-        ops->pushOperand(JvmSemantics::rem(ops, v1, v2));
+        ASSERT_require2(false, "lrem unimplemented");
     }
 };
 
@@ -3266,11 +3161,9 @@ struct IP_lreturn: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_lshl: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
+    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr v2 = ops->popOperand();
-        SValue::Ptr v1 = ops->popOperand();
-        ops->pushOperand(JvmSemantics::binary(ops, "lshl", v1, v2));
+        ASSERT_require2(false, "ishl unimplemented");
     }
 };
 
@@ -3280,11 +3173,9 @@ struct IP_lshl: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_lshr: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
+    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr v2 = ops->popOperand();
-        SValue::Ptr v1 = ops->popOperand();
-        ops->pushOperand(JvmSemantics::binary(ops, "lshr", v1, v2));
+        ASSERT_require2(false, "lshr unimplemented");
     }
 };
 
@@ -3298,8 +3189,7 @@ struct IP_lshr: P {
 struct IP_lstore: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 1);
-        const uint32_t index = JvmSemantics::u1(args[0]);
-        ops->writeLocal(index, ops->popOperand());
+        ops->writeLocal(asU1(args[0]), ops->popOperand());
     }
 };
 
@@ -3365,11 +3255,9 @@ struct IP_lstore_3: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_lsub: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
+    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr v2 = ops->popOperand();
-        SValue::Ptr v1 = ops->popOperand();
-        ops->pushOperand(JvmSemantics::sub(ops, v1, v2));
+        ASSERT_require2(false, "lsub unimplemented");
     }
 };
 
@@ -3379,11 +3267,9 @@ struct IP_lsub: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_lushr: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
+    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr v2 = ops->popOperand();
-        SValue::Ptr v1 = ops->popOperand();
-        ops->pushOperand(JvmSemantics::binary(ops, "lushr", v1, v2));
+        ASSERT_require2(false, "lushr unimplemented");
     }
 };
 
@@ -3393,11 +3279,9 @@ struct IP_lushr: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_lxor: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
+    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr v2 = ops->popOperand();
-        SValue::Ptr v1 = ops->popOperand();
-        ops->pushOperand(JvmSemantics::binary(ops, "lxor", v1, v2));
+        ASSERT_require2(false, "lxor unimplemented");
     }
 };
 
@@ -3458,9 +3342,47 @@ struct IP_new: P {
         // Run-time Exceptions:
         //   NegativeArraySizeException if any requested dimension is negative.
 struct IP_newarray: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
+    void p(D d, Ops ops, I insn, Args args) {
         assert_args(insn, args, 1);
-        JvmSemantics::execute_newarray(ops, insn, args);
+        auto length = ops->popOperand();
+        ASSERT_require2(length->kind() == ValueKind::Integer32, "newarray requires Integer32 stack value");
+
+        // Make a copy for the ArrayReference
+        SValue::Ptr arrayRef = length->copy();
+        arrayRef->kind(ValueKind::ArrayReference);
+        arrayRef->arrayLength(length);
+        arrayRef->typeDescriptor("<unknown-type>"); // obtained and reset below
+
+        switch (d->asU1(args[0])) {
+          case 0x04:
+            arrayRef->typeDescriptor("Boolean");
+            break;
+          case 0x05:
+            arrayRef->typeDescriptor("Char");
+            break;
+          case 0x06:
+            arrayRef->typeDescriptor("Float");
+            break;
+          case 0x07:
+            arrayRef->typeDescriptor("Double");
+            break;
+          case 0x08:
+            arrayRef->typeDescriptor("Byte");
+            break;
+          case 0x09:
+            arrayRef->typeDescriptor("Short");
+            break;
+          case 0x0a:
+            arrayRef->typeDescriptor("Integer");
+            break;
+          case 0x0b:
+            arrayRef->typeDescriptor("Long");
+            break;
+          default:
+            ASSERT_require2(false, "unknown type for newarray");
+        }
+
+        ops->pushOperand(arrayRef);
     }
 };
 
@@ -3655,6 +3577,7 @@ struct IP_wide: P {
 
 void
 DispatcherJvm::initializeDispatchTable() {
+    iprocSet(0xbc,  new Jvm::IP_newarray);
     iprocSet(0xbd,  new Jvm::IP_anewarray);
     iprocSet(0xbe,  new Jvm::IP_arraylength);
     iprocSet(0x10,  new Jvm::IP_bipush);
@@ -3787,6 +3710,16 @@ DispatcherJvm::initializeMemoryState() {
             }
         }
     }
+}
+
+void
+DispatcherJvm::recordSemanticError(const std::string &msg) {
+//TODO: This should probably be improved (a switch/command-line option)
+#if MOVE_ON
+    operators()->comment(msg);
+#else
+    throw Rose::Exception(msg);
+#endif
 }
 
 } // namespace

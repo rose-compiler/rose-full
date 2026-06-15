@@ -78,11 +78,13 @@ public:
     /** Dynamic cast to DispatcherJvmPtr with assertion. */
     static Ptr promote(const BaseSemantics::DispatcherPtr&);
 
-
 public:
     // documented in the base class
     virtual BaseSemantics::DispatcherPtr create(const BaseSemantics::RiscOperatorsPtr&) const override;
     virtual int iprocKey(SgAsmInstruction*) const override;
+
+    /** Make a record of errors in the semantic analysis */
+    void recordSemanticError(const std::string &msg);
 
 private:
     // Initialize the dispatch table that handles each kind of instruction
@@ -90,7 +92,6 @@ private:
 
     // Initialize memory state, such as the default byte order
     void initializeMemoryState();
-
 };
 
 } // namespace

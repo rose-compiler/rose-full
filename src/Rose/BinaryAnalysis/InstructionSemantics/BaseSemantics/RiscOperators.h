@@ -687,6 +687,7 @@ public:
     /** Convert from one floating-point type to another.
      *
      *  Converts the floating-point value @p a having type @p aType to the return value having @p retType. */
+    virtual SValuePtr fpConvert(const SValuePtr &a, ValueKind retKind);
     virtual SValuePtr fpConvert(const SValuePtr &a, SgAsmFloatType *aType, SgAsmFloatType *retType);
 
     /** Whether a floating-point value is a special not-a-number bit pattern. */
@@ -910,7 +911,7 @@ public:
      *  but subclasses are welcome to override this behavior at any level.
      *
      */
-    virtual SValuePtr peekOperand();
+    virtual SValuePtr peekOperand(size_t depth = 0);
 
     /** Pops a value from the Frame Operand Stack.
      *

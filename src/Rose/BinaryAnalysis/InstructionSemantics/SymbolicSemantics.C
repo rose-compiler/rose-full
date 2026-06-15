@@ -138,8 +138,14 @@ SValue::boolean_(bool value) const {
 BaseSemantics::SValue::Ptr
 SValue::copy(size_t new_width) const {
     SValue::Ptr retval(new SValue(*this));
-    if (new_width!=0 && new_width!=retval->nBits())
+    if (new_width!=0 && new_width!=retval->nBits()) {
         retval->set_width(new_width);
+    }
+
+    retval->kind(kind());
+    retval->arrayLength(arrayLength());
+    retval->typeDescriptor(typeDescriptor());
+
     return retval;
 }
 

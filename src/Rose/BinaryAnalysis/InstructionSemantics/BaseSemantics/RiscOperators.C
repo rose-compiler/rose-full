@@ -323,6 +323,15 @@ RiscOperators::fpToInteger(const SValue::Ptr &/*fpValue*/, SgAsmFloatType *fpTyp
 }
 
 SValue::Ptr
+RiscOperators::fpConvert(const SValue::Ptr &a, ValueKind retKind) {
+    ASSERT_not_null(a);
+    if (a->kind() == retKind) {
+        return a->copy();
+    }
+    throw NotImplemented("fpConvert is not implemented for this ValueKind", currentInstruction());
+}
+
+SValue::Ptr
 RiscOperators::fpConvert(const SValue::Ptr &a, SgAsmFloatType *aType, SgAsmFloatType *retType) {
     ASSERT_not_null(a);
     ASSERT_not_null(aType);
@@ -576,9 +585,9 @@ RiscOperators::writeLocal(uint8_t index, const SValuePtr &value) {
 }
 
 SValue::Ptr
-RiscOperators::peekOperand() {
+RiscOperators::peekOperand(size_t depth) {
     ASSERT_not_null(currentState());
-    return currentState()->peekOperand();
+    return currentState()->peekOperand(depth);
 }
 
 SValue::Ptr

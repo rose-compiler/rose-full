@@ -80,30 +80,69 @@ FrameState::writeMemory(const SValue::Ptr &address_, const SValue::Ptr &value_, 
 }
 
 SValue::Ptr
-FrameState::readLocal(uint8_t index) const {
-    auto found = locals_.find(index);
-    if (found != locals_.end()) {
-        return found->second;
-    }
-    return {};
+FrameState::readLocal(size_t index) const {
+    ASSERT_require2(index < locals_.size(), "ERROR: locals array size exceeded\n");
+    return locals_[index];
+}
+
+bool
+FrameState::isCategory2Tail(const SValuePtr& sval) {
+    ASSERT_not_null(sval);
+    return sval->kind() == ValueKind::Category2Tail;
 }
 
 void
-FrameState::writeLocal(uint8_t index, const SValuePtr &sval) {
+FrameState::clearLocalRange(size_t begin, size_t nSlots) {
+    const size_t end = begin + nSlots;
+
+    for (size_t i = begin; i < end && i < locals_.size(); ++i) {
+        auto sval = locals_[i];
+        if (sval == nullptr) continue;
+
+        // Clear head of a category-2 tail
+        if (isCategory2Tail(sval) && i > 0) {
+            locals_[i - 1] = nullptr;
+        }
+        // Clear tail of a category-2 head
+        if (sval->isJvmCategory2() && i + 1 < locals_.size()) {
+            locals_[i + 1] = nullptr;
+        }
+        locals_[i] = nullptr;
+    }
+}
+
+void
+FrameState::writeLocal(size_t index, const SValuePtr &sval) {
+    ASSERT_not_null(sval);
+    const size_t nSlots = sval->isJvmCategory2() ? 2 : 1;
+
+    // Clear slot and overlapping category-2 ones
+    clearLocalRange(index, nSlots);
+
+    if (index + nSlots > locals_.size()) {
+        locals_.resize(index + nSlots);
+    }
+
     locals_[index] = sval;
+
+    if (nSlots == 2) {
+        auto tail = get_val_protoval()->copy();
+        tail->kind(ValueKind::Category2Tail);
+        locals_[index + 1] = tail;
+    }
 }
 
 SValue::Ptr
-FrameState::peekOperand() {
-    ASSERT_require2(stack_.size() >= 1, "ERROR: operand stack is empty\n");
-    return stack_.back();
+FrameState::peekOperand(size_t depth) {
+    ASSERT_require2(depth < stack_.size(), "ERROR: operand stack depth exceeded\n");
+    return stack_[stack_.size() - 1 - depth];
 }
 
 SValue::Ptr
 FrameState::popOperand() {
-    ASSERT_require2(stack_.size() >= 1, "ERROR: operand stack is empty\n");
+    ASSERT_require2(!stack_.empty(), "operand stack is empty");
     auto val = stack_.back();  // get value
-    stack_.pop_back();          // remove it
+    stack_.pop_back();         // remove it
     return val;
 }
 
@@ -143,11 +182,17 @@ FrameState::print(std::ostream &out, Formatter &formatter_) const {
             else if (sval->kind() == ValueKind::Integer64) {
                 out << *sval << ":Long";
             }
+            else if (sval->kind() == ValueKind::NativeInt) {
+                out << *sval << ":NativeInt";
+            }
             else if (sval->kind() == ValueKind::Float32) {
                 out << *sval << ":Float";
             }
             else if (sval->kind() == ValueKind::Float64) {
                 out << *sval << ":Double";
+            }
+            else if (sval->kind() == ValueKind::Category2Tail) {
+                out << "<category-2-tail>";
             }
             else if (sval->kind() == ValueKind::ArrayReference) {
                 SValuePtr count = sval->arrayLength();
@@ -155,7 +200,9 @@ FrameState::print(std::ostream &out, Formatter &formatter_) const {
                 if (sval->hasTypeDescriptor()) {
                     out << ":" << sval->typeDescriptor();
                 }
-                out << "\n";
+            }
+            else if (sval->kind() == ValueKind::Unknown) {
+                out << "<unknown>";
             }
             out << "\n";
         } else {
@@ -165,15 +212,8 @@ FrameState::print(std::ostream &out, Formatter &formatter_) const {
 
     bool first{true};
 
-//TODO:Print and test category-2 types
-#if 0
-local[1] = Long value
-local[2] = unusable/continuation slot
-#endif
-
-    for (const auto &entry : locals_) {
-        const auto &idx = entry.first;
-        const auto &sval = entry.second;
+    for (size_t idx = 0; idx < locals_.size(); ++idx) {
+        const auto &sval = locals_[idx];
 
         if (first) {
             out << "  locals:\n";
@@ -187,11 +227,17 @@ local[2] = unusable/continuation slot
             else if (sval->kind() == ValueKind::Integer64) {
                 out << *sval << ":Long";
             }
+            else if (sval->kind() == ValueKind::NativeInt) {
+                out << *sval << ":NativeInt";
+            }
             else if (sval->kind() == ValueKind::Float32) {
                 out << *sval << ":Float";
             }
             else if (sval->kind() == ValueKind::Float64) {
                 out << *sval << ":Double";
+            }
+            else if (sval->kind() == ValueKind::Category2Tail) {
+                out << "<category-2-tail>";
             }
             else if (sval->kind() == ValueKind::ArrayReference) {
                 SValuePtr count = sval->arrayLength();
@@ -199,7 +245,9 @@ local[2] = unusable/continuation slot
                 if (sval->hasTypeDescriptor()) {
                     out << ":" << sval->typeDescriptor();
                 }
-                out << "\n";
+            }
+            else if (sval->kind() == ValueKind::Unknown) {
+                out << "<unknown>";
             }
             out << "\n";
         }

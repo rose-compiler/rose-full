@@ -170,13 +170,13 @@ public:
     virtual void writeMemory(const SValuePtr &addr, const SValuePtr &value,
                              RiscOperators *addrOps, RiscOperators *valOps) = 0;
 
-    virtual SValuePtr readLocal(uint8_t index) const;
-    virtual void writeLocal(uint8_t index, const SValuePtr &value);
+    virtual SValuePtr readLocal(size_t index) const;
+    virtual void writeLocal(size_t index, const SValuePtr &value);
 
     /** Peek at an operand value.
      *
      */
-    virtual SValuePtr peekOperand();
+    virtual SValuePtr peekOperand(size_t depth = 0);
 
     /** Pop an operand value.
      *

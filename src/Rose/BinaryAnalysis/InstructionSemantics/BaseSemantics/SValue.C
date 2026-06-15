@@ -199,6 +199,25 @@ SValue::toString() const {
     return ss.str();
 }
 
+std::ostream&
+operator<<(std::ostream &o, ValueKind kind) {
+    switch (kind) {
+        case ValueKind::Unknown:            return o << "Unknown";
+        case ValueKind::Integer32:          return o << "Integer32";
+        case ValueKind::Integer64:          return o << "Integer64";
+        case ValueKind::NativeInt:          return o << "NativeInt";
+        case ValueKind::Float32:            return o << "Float32";
+        case ValueKind::Float64:            return o << "Float64";
+        case ValueKind::ArrayReference:     return o << "ArrayReference";
+        case ValueKind::ObjectReference:    return o << "ObjectReference";
+        case ValueKind::ReturnAddress:      return o << "ReturnAddress";
+        case ValueKind::Category2Tail:      return o << "Category2Tail";
+        case ValueKind::Invalid:            return o << "Invalid";
+        default:
+            return o << "ValueKind(" << static_cast<int>(kind) << ")";
+    }
+}
+
 std::string
 SValue::get_comment() const {
     return "";
@@ -206,6 +225,16 @@ SValue::get_comment() const {
 
 void
 SValue::set_comment(const std::string&) const {};
+
+bool
+SValue::isJvmCategory1() {
+    return !isJvmCategory2();
+}
+
+bool
+SValue::isJvmCategory2() {
+    return kind() == ValueKind::Integer64 || kind() == ValueKind::Float64;
+}
 
 } // namespace
 } // namespace

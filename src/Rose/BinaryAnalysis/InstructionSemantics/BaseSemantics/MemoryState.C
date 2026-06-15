@@ -86,20 +86,20 @@ MemoryState::set_byteOrder(ByteOrder::Endianness bo) {
 }
 
 SValuePtr
-MemoryState::readLocal(uint8_t index) const {
+MemoryState::readLocal(size_t index) const {
     (void) index;
     ASSERT_require2(false, "No implementation for MemoryState::readLocal\n");
     return {};
 }
 
 void
-MemoryState::writeLocal(uint8_t index, const SValuePtr &value){
+MemoryState::writeLocal(size_t index, const SValuePtr &value){
     (void) index;  (void) value;
     ASSERT_require2(false, "No implementation for MemoryState::writeLocal\n");
 }
 
 SValue::Ptr
-MemoryState::peekOperand() {
+MemoryState::peekOperand(size_t depth) {
     ASSERT_require2(false, "No implementation for MemoryState::peekOperand\n");
     return {};
 }
