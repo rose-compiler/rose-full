@@ -214,8 +214,6 @@ namespace JvmSemantics {
     void methodReturn(Ops ops, I insn);
     void methodReturn(Ops ops, I insn, SValue::Ptr value);
 
-    void stack_pop(Ops ops);
-    void stack_pop2(Ops ops);
     void stack_swap(Ops ops);
     void branch_goto(Ops ops, I insn, Args args);
     void branch_goto_w(Ops ops, I insn, Args args);
@@ -446,8 +444,6 @@ namespace JvmSemantics {
     void methodReturn(Ops /*ops*/, I /*insn*/) { jvmUnsupported("methodReturn(void)"); }
     void methodReturn(Ops /*ops*/, I /*insn*/, SValue::Ptr /*value*/) { jvmUnsupported("methodReturn(value)"); }
 
-    void stack_pop(Ops ops) { ops->popOperand(); }
-    void stack_pop2(Ops ops) { ops->popOperand(); ops->popOperand(); }
     void stack_swap(Ops ops) {
         SValue::Ptr v1 = ops->popOperand(), v2 = ops->popOperand();
         ops->pushOperand(v1); ops->pushOperand(v2);
@@ -3504,7 +3500,8 @@ struct IP_nop: P {
 struct IP_pop: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        JvmSemantics::stack_pop(ops);
+        auto v1 = ops->popOperand();
+        ASSERT_require2(!v1->isJvmCategory2(), "pop may not remove a cat2 object");
     }
 };
 
@@ -3518,7 +3515,14 @@ struct IP_pop: P {
 struct IP_pop2: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        JvmSemantics::stack_pop2(ops);
+        auto v1 = ops->popOperand();
+        if (v1->isJvmCategory2()) {
+            // Form 2
+        } else {
+            // Form 1
+            auto v2 = ops->popOperand();
+            ASSERT_require2(!v2->isJvmCategory2(), "pop2 may not remove cat1 followed by cat2");
+        }
     }
 };
 
@@ -3673,6 +3677,7 @@ struct IP_wide: P {
 
 void
 DispatcherJvm::initializeDispatchTable() {
+    iprocSet(0x00,  new Jvm::IP_nop);
     iprocSet(0xbc,  new Jvm::IP_newarray);
     iprocSet(0xbd,  new Jvm::IP_anewarray);
     iprocSet(0xbe,  new Jvm::IP_arraylength);
@@ -3751,6 +3756,9 @@ DispatcherJvm::initializeDispatchTable() {
     iprocSet(0x5c,  new Jvm::IP_dup2);
     iprocSet(0x5d,  new Jvm::IP_dup2_x1);
     iprocSet(0x5e,  new Jvm::IP_dup2_x2);
+
+    iprocSet(0x57,  new Jvm::IP_pop);
+    iprocSet(0x58,  new Jvm::IP_pop2);
 
     // Binary operators
     iprocSet(0x60,  new Jvm::IP_iadd);

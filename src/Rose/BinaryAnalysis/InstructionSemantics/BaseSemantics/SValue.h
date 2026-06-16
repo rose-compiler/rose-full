@@ -21,20 +21,8 @@ namespace InstructionSemantics {
 namespace BaseSemantics {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//                                      JVM Semantic Values
+//                                     CIL and JVM Semantic Values
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-/** JVM type system
-Category 1:
-  int
-  float
-  reference
-  returnAddress
-
-Category 2:
-  long
-  double
-*/
 
 /** Kind of an SValue for emulating JVM and CIL instructions. */
 enum class ValueKind {
