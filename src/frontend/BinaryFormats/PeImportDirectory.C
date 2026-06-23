@@ -79,9 +79,11 @@ SgAsmPEImportDirectory::hintNameTableExtent(AddressIntervalSet &extent/*in,out*/
     for (SgAsmPEImportItemPtrList::const_iterator ii=imports.begin(); ii!=imports.end(); ++ii) {
         SgAsmPEImportItem *import = *ii;
         if (!import->get_by_ordinal() && import->get_hintname_rva().rva()!=0 && import->get_hintname_nalloc()>0) {
-            size_t nbytes = std::min(import->get_hintname_nalloc(), import->hintNameRequiredSize());
-            extent.insert(AddressInterval::baseSize(*import->get_hintname_rva().va(), nbytes));
-            ++retval;
+            if (const auto va = import->get_hintname_rva().va()) {
+                size_t nbytes = std::min(import->get_hintname_nalloc(), import->hintNameRequiredSize());
+                extent.insert(AddressInterval::baseSize(*va, nbytes));
+                ++retval;
+            }
         }
     }
     return retval;
@@ -137,9 +139,9 @@ SgAsmPEImportDirectory::parse(Address idir_va, bool /*isLastEntry*/)
             mlog[WARN] <<"SgAsmPEImportDirectory::parse: import directory at va " <<StringUtility::addrToString(idir_va)
                        <<" has bad DLL name rva " <<get_dllNameRva() <<"\n";
         }
-    } else {
+    } else if (const auto dllNameVa = get_dllNameRva().va()) {
         try {
-            dll_name = get_dllNameRva().boundSection()->readContentString(fhdr->get_loaderMap(), *get_dllNameRva().va());
+            dll_name = get_dllNameRva().boundSection()->readContentString(fhdr->get_loaderMap(), *dllNameVa);
         } catch (const MemoryMap::NotMapped &e) {
             if (SgAsmPEImportSection::showImportMessage()) {
                 mlog[WARN] <<"SgAsmPEImportDirectory::parse: short read of dll name at rva "

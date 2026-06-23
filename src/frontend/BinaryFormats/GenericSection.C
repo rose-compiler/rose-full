@@ -368,7 +368,10 @@ SgAsmGenericSection::read_content(const MemoryMap::Ptr &map, const RelativeVirtu
 size_t
 SgAsmGenericSection::readContent(const MemoryMap::Ptr &map, const RelativeVirtualAddress &start, void *dst_buf, Address size,
                                  bool strict) {
-    return readContent(map, *start.va(), dst_buf, size, strict);
+    if (const auto va = start.va()) {
+        return readContent(map, *va, dst_buf, size, strict);
+    }
+    return 0; // RVA not bound to a section
 }
 
 size_t
@@ -448,7 +451,10 @@ SgAsmGenericSection::readContentString(Address abs_offset, bool strict)
 
 std::string
 SgAsmGenericSection::readContentString(const Rose::BinaryAnalysis::MemoryMap::Ptr &map, RelativeVirtualAddress rva, bool strict) {
-    return readContentString(map, *rva.va(), strict);
+    if (const auto va = rva.va()) {
+        return readContentString(map, *va, strict);
+    }
+    return ""; // RVA not bound to a section
 }
 
 std::string

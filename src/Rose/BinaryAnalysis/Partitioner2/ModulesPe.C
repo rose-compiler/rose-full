@@ -65,9 +65,10 @@ getImportIndex(const Partitioner::ConstPtr&, SgAsmPEFileHeader *peHeader, Import
                     for (SgAsmPEImportItem *import: importDir->get_imports()->get_vector()) {
                         if (import->get_hintname_rva() != 0 || import->get_hint() != 0 ||
                             !import->get_name()->get_string().empty()) {
-                            Address va = *import->get_hintname_rva().va();
-                            if (index.insertMaybe(va, import))
-                                ++nInserted;
+                            if (const auto va = import->get_hintname_rva().va()) {
+                                if (index.insertMaybe(*va, import))
+                                    ++nInserted;
+                            }
                         }
                     }
                 }

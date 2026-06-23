@@ -274,6 +274,7 @@ BinaryLoaderPe::link(SgAsmInterpretation* interp) {
         std::string header_name = header->get_file()->get_name();
         std::vector<std::string> deps = dependencies(header);
         for (std::vector<std::string>::iterator di=deps.begin(); di!=deps.end(); ++di) {
+            if (di->empty()) continue; // Skip empty library names from malformed PE imports
             mlog[TRACE] <<"library " <<*di <<" needed by " <<header_name <<"\n";
             std::string filename = findSoFile(*di);
             if (filename == "") continue;
@@ -398,11 +399,12 @@ BinaryLoaderPe::fixup(SgAsmInterpretation* interp, FixupErrors* /*errors*/) {
                         }
                         //Export entry found. Set address in the IAT
                         if(exportEntry != nullptr){
-                            Address exportAddr   = *exportEntry->get_exportRva().va();
-                            Address iatEntryAddr = importEntry->get_iatEntryVa();
-                            size_t written = memoryMap->writeUnsigned(exportAddr,iatEntryAddr);
-                            if(written > 0) importEntry->set_iat_written(true);
-                            mlog[TRACE]<<"Setting value in IAT: "<<dirName<<"."<<importName<<"-"<<entryOrdinal<<": IAT 0x"<<hex<<iatEntryAddr<<" Export: 0x"<<exportAddr<<dec<<endl;
+                            if (const auto exportAddr = exportEntry->get_exportRva().va()) {
+                                Address iatEntryAddr = importEntry->get_iatEntryVa();
+                                size_t written = memoryMap->writeUnsigned(*exportAddr,iatEntryAddr);
+                                if(written > 0) importEntry->set_iat_written(true);
+                                mlog[TRACE]<<"Setting value in IAT: "<<dirName<<"."<<importName<<"-"<<entryOrdinal<<": IAT 0x"<<hex<<iatEntryAddr<<" Export: 0x"<<*exportAddr<<dec<<endl;
+                            }
                         }
                     }//End import list iterator
                 }//End import directory iterator
