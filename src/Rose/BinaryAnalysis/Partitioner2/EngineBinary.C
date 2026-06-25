@@ -1697,7 +1697,12 @@ EngineBinary::partitionCilSections(const Partitioner::Ptr &partitioner) {
       settings().partitioner.doingPostAnalysis = false;
 
       ByteCode::CilContainer cilContainer{mdr};
+#if DONT_USE_OPS
       cilContainer.partition(partitioner);
+#else
+      BS::RiscOperatorsPtr nullOps{nullptr};
+      cilContainer.partition(partitioner, nullOps);
+#endif
       return true;
     }
 

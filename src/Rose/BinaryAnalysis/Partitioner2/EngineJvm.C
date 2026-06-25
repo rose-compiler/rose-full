@@ -904,24 +904,21 @@ EngineJvm::runPartitionerRecursive(const Partitioner::Ptr &partitioner) {
     for (auto rit = interpHeaders->get_headers().rbegin(); rit != interpHeaders->get_headers().rend(); rit++) {
         auto header = *rit;
 
-        // This is strange construction a ByteCode::Class needs information from its ByteCode::Namespace, like name
-        // Thus a cycle (is it more than strange, is it bad?)
-        std::shared_ptr<ByteCode::Namespace> ns{};
-
-#if 0   // Rasmussen: Needs better usage of shared pointers [2024.10.16]
-        auto jvmClass{std::make_shared<ByteCode::JvmClass>(ns, isSgAsmJvmFileHeader(header))};
-        ns->append(jvmClass);
-#else
-        auto jvmClass{ByteCode::JvmClass(ns, isSgAsmJvmFileHeader(header))};
-#endif
+        ByteCode::Namespace::Ptr ns = ByteCode::Namespace::instance();
+        ByteCode::JvmClass::Ptr jvmClass = ByteCode::JvmClass::instance(ns, isSgAsmJvmFileHeader(header));
 
         // Start discovering instructions and forming them into basic blocks and functions
         SAWYER_MESG(where) <<"discovering and populating functions\n";
-        jvmClass.partition(partitioner, functions_);
+#if DONT_USE_OPS
+        jvmClass->partition(partitioner, functions_);
+#else
+        auto ops = BS::RiscOperators::Ptr{nullptr};
+        jvmClass->partition(partitioner, ops, functions_);
+#endif
 
         if (DEBUG_WITH_DUMP) {
-            jvmClass.dump();
-            jvmClass.digraph();
+            jvmClass->dump();
+            jvmClass->digraph();
         }
     }
 }

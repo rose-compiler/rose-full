@@ -6,138 +6,249 @@
 #include <Rose/BinaryAnalysis/Disassembler/BasicTypes.h>
 #include <Rose/BinaryAnalysis/Partitioner2/BasicTypes.h>
 
+// For operators
+#include <Rose/BinaryAnalysis/InstructionSemantics/SymbolicSemantics.h>
+
 class SgAsmInstructionList;
+
+namespace P2 = Rose::BinaryAnalysis::Partitioner2;
+namespace BS = Rose::BinaryAnalysis::InstructionSemantics::BaseSemantics;
 
 namespace Rose {
 namespace BinaryAnalysis {
 namespace ByteCode {
 
-using BasicBlockPtr = Partitioner2::BasicBlockPtr;
-using PartitionerPtr = Partitioner2::PartitionerPtr;
+using BasicBlockPtr = P2::BasicBlockPtr;
+using PartitionerPtr = P2::PartitionerPtr;
 
 // Forward references
 class Class;
 class Namespace;
 
-class Code {
+using NamespacePtr = Sawyer::SharedPointer<Namespace>;
+
+/** Base class for ByteCode Code.
+ *
+ *  A Code object stores raw instructions for a Method.
+ */
+class Code: public Sawyer::SharedObject,
+            public Sawyer::SharedFromThis<Code> {
+  public:
+    /** Shared ownership pointer. */
+    using Ptr = Sawyer::SharedPointer<Code>;
+
+    virtual ~Code();
+
 public:
-  virtual const uint8_t* bytes() const = 0;
-  virtual size_t size() const = 0;
-  virtual Address offset() const = 0;
+    virtual const uint8_t* bytes() const = 0;
+    virtual size_t size() const = 0;
+    virtual Address offset() const = 0;
 
 protected:
-  Code() {}
+    Code();
 };
 
-class Field {
+/** Base class for ByteCode Fields.
+ *
+ *  A Field stores information about fields in a class.
+ */
+class Field: public Sawyer::SharedObject,
+             public Sawyer::SharedFromThis<Field> {
+  public:
+    /** Shared ownership pointer. */
+    using Ptr = Sawyer::SharedPointer<Field>;
+
+    virtual ~Field();
+
 public:
-  virtual std::string name() const = 0;
+    virtual std::string name() const = 0;
+
 protected:
-  Field() {}
+    Field();
 };
 
-class Method {
+/** Base class for ByteCode Methods.
+ *
+ *  A Method stores information about an instance method/function such as its name and
+ *  instructions.
+ */
+class Method: public Sawyer::SharedObject,
+              public Sawyer::SharedFromThis<Method> {
+  public:
+    /** Shared ownership pointer. */
+    using Ptr = Sawyer::SharedPointer<Method>;
+
+    virtual ~Method();
+
 public:
-  virtual std::string name() const = 0;
-  virtual bool isSystemReserved(const std::string &name) const = 0;
+    virtual std::string name() const = 0;
+    virtual bool isSystemReserved(const std::string &name) const = 0;
 
-  virtual const Code & code() const = 0;
-  virtual const SgAsmInstructionList* instructions() const = 0;
-  virtual void decode(const Disassembler::BasePtr&) const = 0;
+    virtual const Code & code() const = 0;
+    virtual const SgAsmInstructionList* instructions() const = 0;
+    virtual void decode(const Disassembler::BasePtr&) const = 0;
 
-  /* Annotate the AST (.e.g., add comments to instructions) */
-  virtual void annotate() = 0;
+    /* Annotate the AST (.e.g., add comments to instructions) */
+    virtual void annotate() = 0;
 
-  /* Set of instruction branch targets */
-  std::set<Address> targets() const;
+    /* Set of instruction branch targets */
+    std::set<Address> targets() const;
 
-  // Methods associated with basic blocks (Rose::BinaryAnalysis::Partitioner2)
-  //
-  const std::vector<BasicBlockPtr>& blocks() const;
-  void append(BasicBlockPtr bb);
+    // Methods associated with basic blocks (Rose::BinaryAnalysis::Partitioner2)
+    //
+    const std::vector<BasicBlockPtr>& blocks() const;
+    void append(BasicBlockPtr bb);
 
-  Method() = delete;
+    Method() = delete;
 
 protected:
-  Method(Address);
-  ~Method();
-  Address classAddr_;
-  Partitioner2::FunctionPtr function_;
-  std::vector<BasicBlockPtr> blocks_;
+    Method(Address);
+    Address classAddr_;
+    P2::FunctionPtr function_;
+    std::vector<BasicBlockPtr> blocks_;
 };
 
-class Interface {
-public:
-  virtual std::string name() const = 0;
-protected:
-  Interface() {}
+/** Base class for ByteCode Interface.
+ *
+ *  An Interface stores information about an interface.
+ */
+class Interface: public Sawyer::SharedObject,
+                 public Sawyer::SharedFromThis<Class> {
+  public:
+    /** Shared ownership pointers. */
+    using Ptr = Sawyer::SharedPointer<Interface>;
+
+    virtual ~Interface();
+
+    virtual std::string name() const = 0;
+
+  protected:
+    Interface();
 };
 
-class Attribute {
+/** Base class for ByteCode Attribute.
+ *
+ *  An Attribute stores information about an attribute.
+ */
+class Attribute: public Sawyer::SharedObject,
+                 public Sawyer::SharedFromThis<Attribute> {
 public:
-  virtual std::string name() const = 0;
-protected:
-  Attribute() {}
+    /** Shared ownership pointers. */
+    using Ptr = Sawyer::SharedPointer<Attribute>;
+
+    virtual ~Attribute();
+
+    virtual std::string name() const = 0;
+
+  protected:
+    Attribute();
 };
 
-class Class {
-public:
-  virtual std::string name() const = 0;
-  virtual std::string super_name() const = 0;
-  virtual std::string typeSeparator() const = 0;
-  virtual const std::vector<const Field*> &fields() const = 0;
-  virtual const std::vector<const Method*> &methods() const = 0;
-  virtual const std::vector<const Attribute*> &attributes() const = 0;
-  virtual const std::vector<const Interface*> &interfaces() const = 0;
-  virtual const std::vector<std::string> &strings() = 0;
-  virtual void partition(const PartitionerPtr &, std::map<std::string,Address> &) const;
-  virtual void digraph() const;
-  virtual void dump() = 0;
+/** Base class for ByteCode Class.
+ *
+ *  An Class stores information about a class, for example its name.
+ */
+class Class: public Sawyer::SharedObject,
+             public Sawyer::SharedFromThis<Class> {
+  public:
+    /** Shared ownership pointers. */
+    using Ptr = Sawyer::SharedPointer<Class>;
 
-  Address address() const {return address_;}
+    virtual ~Class();
 
-  Class() = delete;
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    // Dynamic pointer cast. No-op since this is the base class
+    //  static Class promote(const Class&);
 
-protected:
-  Address address_;
-  std::shared_ptr<Namespace> namespace_;
-  Class(std::shared_ptr<Namespace> ns, Address va) : address_{va}, namespace_{ns} {}
+    virtual std::string name() const = 0;
+    virtual std::string super_name() const = 0;
+    virtual std::string typeSeparator() const = 0;
+
+    virtual const std::vector<std::string>& strings();
+
+    const std::vector<Field::Ptr>& fields() const;
+    const std::vector<Method::Ptr>& methods() const;
+    const std::vector<Attribute::Ptr>& attributes() const;
+    const std::vector<Interface::Ptr>& interfaces() const;
+
+    virtual void partition(const PartitionerPtr &partitioner, BS::RiscOperatorsPtr &ops,
+                           std::map<std::string,Address> &discoveredFunctions) const;
+
+    virtual void digraph() const;
+    virtual void dump() = 0;
+
+    Address address() const;
+
+    Class() = delete;
+
+  protected:
+    Address address_;
+    NamespacePtr namespace_;
+    Class(NamespacePtr ns, Address va);
+
+    std::vector<Field::Ptr> fields_;
+    std::vector<Method::Ptr> methods_;
+    std::vector<Attribute::Ptr> attributes_;
+    std::vector<Interface::Ptr> interfaces_;
+    std::vector<std::string> strings_;
 };
 
-class Namespace {
-public:
-  virtual std::string name() const = 0;
-  virtual void partition(const PartitionerPtr &partitioner, std::map<std::string,Address> &) const;
+/** Base class for ByteCode Namespace.
+ *
+ *  A Namespace contains a vector of Classes.
+ */
+class Namespace: public Sawyer::SharedObject,
+                 public Sawyer::SharedFromThis<Namespace> {
+  public:
+    /** Shared ownership pointer. */
+    using Ptr = Sawyer::SharedPointer<Namespace>;
 
-  void append(std::shared_ptr<Class> ptr) {
-    classes_.push_back(ptr);
-  }
-  const std::vector<std::shared_ptr<Class>> &classes() const {
-    return classes_;
-  }
+    virtual ~Namespace();
 
-protected:
-  Namespace() {}
-  std::vector<std::shared_ptr<Class>> classes_;
+    /** Allocating constructor. */
+    static Ptr instance();
+
+    virtual std::string name() const;
+    virtual void partition(const PartitionerPtr &partitioner, BS::RiscOperatorsPtr &ops,
+                           std::map<std::string,Address> &discoveredFunctions) const;
+
+    void append(Class::Ptr ptr);
+
+    const std::vector<ByteCode::Class::Ptr>& classes() const;
+
+  protected:
+    Namespace();
+    std::vector<ByteCode::Class::Ptr> classes_;
 };
 
-class Container {
-public:
-  virtual std::string name() const = 0;
-  virtual bool isSystemReserved(const std::string &name) const = 0;
-  virtual void partition(const PartitionerPtr &partitioner) const;
+/** Base class for ByteCode Container.
+ *
+ *  A Container contains a vector of Namespaces.
+ */
+class Container: public Sawyer::SharedObject,
+                 public Sawyer::SharedFromThis<Container> {
+  public:
+    /** Shared ownership pointer. */
+    using Ptr = Sawyer::SharedPointer<Container>;
 
-  const std::vector<std::shared_ptr<Namespace>> &namespaces() const {return namespaces_;}
+    virtual ~Container();
 
-  /* A unique (per container) virtual address for system/library functions */
-  static Address nextSystemReservedVa();
+    /* A unique (per container) virtual address for system/library functions */
+    static Address nextSystemReservedVa();
 
-protected:
-  Container() {}
-  std::vector<std::shared_ptr<Namespace>> namespaces_;
+  public:
+    virtual std::string name() const = 0;
+    virtual bool isSystemReserved(const std::string &name) const = 0;
+    virtual void partition(const PartitionerPtr &partitioner, BS::RiscOperatorsPtr &ops) const;
 
-private:
-  static Address nextSystemReservedVa_;
+    const std::vector<Namespace::Ptr>& namespaces() const;
+
+  protected:
+    Container();
+    std::vector<Namespace::Ptr> namespaces_;
+
+  private:
+    static Address nextSystemReservedVa_;
 };
 
 } // namespace

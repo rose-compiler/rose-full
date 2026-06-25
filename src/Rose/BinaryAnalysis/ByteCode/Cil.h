@@ -16,122 +16,93 @@ namespace BinaryAnalysis {
 namespace ByteCode {
 
 class CilCode final : public Code {
-public:
-  virtual const uint8_t* bytes() const {
-    return bytes_; // UNIMPLEMENTED
-  }
-  virtual size_t size() const {
-    return size_; // UNIMPLEMENTED
-  }
-  virtual Address offset() const {
-    return offset_; // UNIMPLEMENTED
-  }
+  public:
+    /** Shared ownership pointer. */
+    using Ptr = Sawyer::SharedPointer<CilCode>;
 
-  explicit CilCode(uint8_t* bytes, size_t size, Address offset)
-    : bytes_{bytes}, size_{size}, offset_{offset} {
-  }
+  public:
+    const uint8_t* bytes() const override;
+    size_t size() const override;
+    Address offset() const override;
 
-private:
-  const uint8_t* bytes_;
-  size_t size_;
-  Address offset_;
+    CilCode(uint8_t* bytes, size_t size, Address offset);
+
+  private:
+    const uint8_t* bytes_;
+    size_t size_;
+    Address offset_;
 };
 
 class CilField final : public Field {
-public:
-  virtual std::string name() const {
-    return "CilField::name():UNIMPLEMENTED";
-  }
+  public:
+    /** Shared ownership pointer. */
+    using Ptr = Sawyer::SharedPointer<CilField>;
 
-  CilField() = delete;
-
-private:
+  public:
+    std::string name() const override;
+    CilField() = delete;
 };
 
 class CilMethod final : public Method {
-public:
-  virtual std::string name() const override;
-  virtual bool isSystemReserved(const std::string &name) const override;
+  public:
+    /** Shared ownership pointer. */
+    using Ptr = Sawyer::SharedPointer<CilMethod>;
 
-  virtual const Code & code() const override;
-  virtual const SgAsmInstructionList* instructions() const override;
-  virtual void decode(const Disassembler::BasePtr &disassembler) const override;
+    /** Allocating constructor. */
+    static Ptr instance(SgAsmCilMetadataRoot*, SgAsmCilMethodDef*, Address);
 
-  virtual void annotate() override;
+  public:
+    std::string name() const override;
+    bool isSystemReserved(const std::string &name) const override;
 
-  CilMethod() = delete;
-  explicit CilMethod(SgAsmCilMetadataRoot*, SgAsmCilMethodDef*, Address);
+    const Code & code() const override;
+    const SgAsmInstructionList* instructions() const override;
+    void decode(const Disassembler::BasePtr &disassembler) const override;
 
-private:
-  SgAsmCilMetadataRoot* mdr_;
-  SgAsmCilMethodDef* sgMethod_;
-  SgAsmInstructionList* insns_;
-  CilCode code_;
+    void annotate() override;
+
+    CilMethod() = delete;
+    CilMethod(SgAsmCilMetadataRoot*, SgAsmCilMethodDef*, Address);
+
+  private:
+    SgAsmCilMetadataRoot* mdr_;
+    SgAsmCilMethodDef* sgMethod_;
+    SgAsmInstructionList* insns_;
+    CilCode code_;
 };
 
 class CilInterface final : public Interface {
-public:
-  virtual std::string name() const {
-    return "CilInterface::name():UNIMPLEMENTED";
-  }
-
-  CilInterface() = delete;
-
-private:
+  public:
+    std::string name() const override;
+    CilInterface() = delete;
 };
 
 class CilAttribute final : public Attribute {
-public:
-  virtual std::string name() const {
-    return "CilAttribute::name():UNIMPLEMENTED";
-  }
-
-  CilAttribute() = delete;
-
-private:
+  public:
+    std::string name() const override;
+    CilAttribute() = delete;
 };
 
 class CilClass final : public Class {
-public:
-  virtual std::string name() const {
-    return name_;
-  }
-  virtual std::string super_name() const {
-    return "CilClass::super_name():UNIMPLEMENTED";
-  }
-  virtual std::string typeSeparator() const {
-    return ".";
-  }
+  public:
+    /** Shared ownership pointers. */
+    using Ptr = Sawyer::SharedPointer<CilClass>;
 
-  virtual const std::vector<std::string> &strings() {
-    return strings_;
-  }
-  virtual const std::vector<const Interface*> &interfaces() const {
-    return interfaces_;
-  }
-  virtual const std::vector<const Field*> &fields() const {
-    return fields_;
-  }
-  virtual const std::vector<const Method*> &methods() const {
-    return methods_;
-  }
-  virtual const std::vector<const Attribute*> &attributes() const {
-    return attributes_;
-  }
+    /** Allocating constructor. */
+    static Ptr instance(NamespacePtr& ns, SgAsmCilMetadataRoot*, const std::string &, size_t, size_t);
 
-  virtual void dump();
+    static Class::Ptr promote(const Sawyer::SharedPointer<Class>& from);
+    static std::string objectName(const SgAsmCilMetadata*, SgAsmCilMetadataRoot*);
 
-  static std::string objectName(const SgAsmCilMetadata*, SgAsmCilMetadataRoot*);
+    std::string name() const override;
+    std::string super_name() const override;
+    std::string typeSeparator() const override;
+    void dump() override;
 
-  CilClass() = delete;
-  explicit CilClass(std::shared_ptr<Namespace> ns, SgAsmCilMetadataRoot*, const std::string &, size_t, size_t);
+    CilClass() = delete;
+    CilClass(NamespacePtr& ns, SgAsmCilMetadataRoot*, const std::string &, size_t, size_t);
 
 private:
-    std::vector<const Field*> fields_;
-    std::vector<const Method*> methods_;
-    std::vector<const Attribute*> attributes_;
-    std::vector<const Interface*> interfaces_;
-    std::vector<std::string> strings_;
     std::string name_;
     SgAsmCilMetadataRoot* mdr_;
     //WARNING: not used yet!
@@ -140,10 +111,16 @@ private:
 
 class CilNamespace final : public Namespace {
 public:
-    virtual std::string name() const;
+    /** Shared ownership pointers. */
+    using Ptr = Sawyer::SharedPointer<CilNamespace>;
+
+    std::string name() const override;
+
+    /** Allocating constructor. */
+    static Ptr instance(SgAsmCilMetadataRoot*, const std::string &);
 
     CilNamespace() = delete;
-    explicit CilNamespace(SgAsmCilMetadataRoot*, const std::string &);
+    CilNamespace(SgAsmCilMetadataRoot*, const std::string &);
 
 private:
     //WARNING: not used yet!
@@ -152,23 +129,27 @@ private:
 };
 
 class CilContainer final : public Container {
-public:
-  virtual std::string name() const override;
-  virtual bool isSystemReserved(const std::string &name) const override;
-  static  bool isCilSystemReserved(const std::string &name);
+  public:
+    /** Shared ownership pointer. */
+    using Ptr = Sawyer::SharedPointer<CilContainer>;
 
-  void printAssemblies(std::ostream& os) const;
-  void printMethods(std::ostream& os, size_t beg, size_t lim) const;
-  void printModules(std::ostream& os) const;
-  void printTypeDefs(std::ostream& os) const;
+  public:
+    std::string name() const override;
+    bool isSystemReserved(const std::string &name) const override;
+    static  bool isCilSystemReserved(const std::string &name);
 
-  static SgAsmCilMetadata* resolveToken(SgAsmIntegerValueExpression*, SgAsmCilMetadataRoot*);
+    void printAssemblies(std::ostream& os) const;
+    void printMethods(std::ostream& os, size_t beg, size_t lim) const;
+    void printModules(std::ostream& os) const;
+    void printTypeDefs(std::ostream& os) const;
 
-  CilContainer() = delete;
-  explicit CilContainer(SgAsmCilMetadataRoot*);
+    static SgAsmCilMetadata* resolveToken(SgAsmIntegerValueExpression*, SgAsmCilMetadataRoot*);
 
-private:
-  SgAsmCilMetadataRoot* mdr_;
+    CilContainer() = delete;
+    explicit CilContainer(SgAsmCilMetadataRoot*);
+
+  private:
+    SgAsmCilMetadataRoot* mdr_;
 };
 
 } // namespace

@@ -3,6 +3,7 @@
 #include <featureTests.h>
 #ifdef ROSE_ENABLE_BINARY_ANALYSIS
 
+#include <Rose/BinaryAnalysis/InstructionSemantics/BaseSemantics/BasicTypes.h>
 #include <Rose/BinaryAnalysis/ByteCode/Analysis.h>
 
 class SgAsmJvmConstantPool;
@@ -16,145 +17,151 @@ namespace BinaryAnalysis {
 namespace ByteCode {
 
 class JvmCode final : public Code {
-public:
-  virtual const uint8_t* bytes() const {
-    return bytes_;
-  }
-  virtual size_t size() const {
-    return size_;
-  }
-  Address offset() const {
-    return offset_;
-  }
-  void bytes(const uint8_t* buf) {
-    bytes_ = buf;
-  }
-  void size(size_t sz) {
-    size_ = sz;
-  }
-  void offset(Address off) {
-    offset_ = off;
-  }
+  public:
+    /** Shared ownership pointer. */
+    using Ptr = Sawyer::SharedPointer<JvmCode>;
 
-  explicit JvmCode(uint8_t* bytes, size_t size, Address offset)
-    : bytes_{bytes}, size_{size}, offset_{offset} {
-  }
+    /** Allocating constructor. */
+    static Ptr instance(uint8_t* bytes, size_t size, Address offset);
 
-private:
-  const uint8_t* bytes_;
-  size_t size_;
-  Address offset_;
+  public:
+    const uint8_t* bytes() const override;
+    size_t size() const override;
+    Address offset() const override;
+
+    void bytes(const uint8_t* buf);
+    void size(size_t sz);
+    void offset(Address off);
+
+    JvmCode(uint8_t* bytes, size_t size, Address offset);
+
+  private:
+    const uint8_t* bytes_;
+    size_t size_;
+    Address offset_;
 };
 
 class JvmField final : public Field {
-public:
-  virtual std::string name() const;
+  public:
+    /** Shared ownership pointers. */
+    using Ptr = Sawyer::SharedPointer<JvmField>;
 
-  JvmField() = delete;
-  explicit JvmField(SgAsmJvmFileHeader* jfh, SgAsmJvmField* field)
-    : jfh_{jfh}, sgField_{field} {
-  }
+    /** Allocating constructor. */
+    static Ptr instance(SgAsmJvmFileHeader* jfh, SgAsmJvmField* fld);
 
-private:
-  SgAsmJvmFileHeader* jfh_;
-  SgAsmJvmField* sgField_;
+  public:
+    std::string name() const override;
+
+    JvmField() = delete;
+    JvmField(SgAsmJvmFileHeader* jfh, SgAsmJvmField* field);
+
+  private:
+    SgAsmJvmFileHeader* jfh_;
+    SgAsmJvmField* sgField_;
 };
 
 class JvmMethod final : public Method {
-public:
-  virtual std::string name() const override;
-  virtual bool isSystemReserved(const std::string &name) const override;
+  public:
+    /** Shared ownership pointers. */
+    using Ptr = Sawyer::SharedPointer<JvmMethod>;
 
-  virtual const Code & code() const override;
-  virtual const SgAsmInstructionList* instructions() const override;
-  virtual void decode(const Disassembler::BasePtr &disassembler) const override;
+    /** Allocating constructor. */
+    static Ptr instance(SgAsmJvmFileHeader*, SgAsmJvmMethod*, Address);
 
-  virtual void annotate() override;
+    JvmMethod::Ptr promote(const Sawyer::SharedPointer<Method>& from);
 
-  JvmMethod() = delete;
-  explicit JvmMethod(SgAsmJvmFileHeader*, SgAsmJvmMethod*, Address);
+    std::string name() const override;
+    bool isSystemReserved(const std::string &name) const override;
 
-private:
-  SgAsmJvmFileHeader* jfh_;
-  SgAsmJvmMethod* sgMethod_;
-  JvmCode code_;
+    const Code & code() const override;
+    const SgAsmInstructionList* instructions() const override;
+    void decode(const Disassembler::BasePtr &disassembler) const override;
+
+    void annotate() override;
+
+    bool isStatic() const;
+    std::string descriptor() const;
+
+    JvmMethod() = delete;
+    JvmMethod(SgAsmJvmFileHeader*, SgAsmJvmMethod*, Address);
+
+  private:
+    SgAsmJvmFileHeader* jfh_;
+    SgAsmJvmMethod* sgMethod_;
+    JvmCode code_;
 };
 
 class JvmInterface final : public Interface {
 public:
-  virtual std::string name() const;
-  uint16_t index() const {return index_;}
+    /** Shared ownership pointers. */
+    using Ptr = Sawyer::SharedPointer<JvmInterface>;
 
-  JvmInterface() = delete;
-  explicit JvmInterface(SgAsmJvmFileHeader* jfh, uint16_t index)
-    : jfh_{jfh}, index_{index} {
-  }
+    /** Allocating constructor. */
+    static Ptr instance(SgAsmJvmFileHeader* jfh, uint16_t index);
 
-private:
-  SgAsmJvmFileHeader* jfh_;
-  uint16_t index_;
+    std::string name() const override;
+    uint16_t index() const;
+
+    JvmInterface() = delete;
+    JvmInterface(SgAsmJvmFileHeader* jfh, uint16_t index);
+
+  private:
+    SgAsmJvmFileHeader* jfh_;
+    uint16_t index_;
 };
 
 class JvmAttribute final : public Attribute {
-public:
-  virtual std::string name() const;
-  uint16_t index() const {return index_;}
+  public:
+    /** Shared ownership pointers. */
+    using Ptr = Sawyer::SharedPointer<JvmAttribute>;
 
-  JvmAttribute() = delete;
-  explicit JvmAttribute(SgAsmJvmFileHeader* jfh, uint16_t index)
-    : jfh_{jfh}, index_{index} {
-  }
+    /** Allocating constructor. */
+    static Ptr instance(SgAsmJvmFileHeader* jfh, uint16_t index);
 
-private:
-  SgAsmJvmFileHeader* jfh_;
-  uint16_t index_;
+    std::string name() const override;
+    uint16_t index() const;
+
+    JvmAttribute() = delete;
+    JvmAttribute(SgAsmJvmFileHeader* jfh, uint16_t index);
+
+  private:
+    SgAsmJvmFileHeader* jfh_;
+    uint16_t index_;
 };
 
 class JvmClass final : public Class {
-public:
-  virtual std::string name() const;
-  virtual std::string super_name() const;
-  virtual std::string typeSeparator() const {
-    return "::";
-  }
+  public:
+    /** Shared ownership pointers. */
+    using Ptr = Sawyer::SharedPointer<JvmClass>;
 
-  virtual const std::vector<std::string> &strings();
-  virtual const std::vector<const Interface*> &interfaces() const {
-    return interfaces_;
-  }
-  virtual const std::vector<const Field*> &fields() const {
-    return fields_;
-  }
-  virtual const std::vector<const Method*> &methods() const {
-    return methods_;
-  }
-  virtual const std::vector<const Attribute*> &attributes() const {
-    return attributes_;
-  }
+    /** Allocating constructor. */
+    static Ptr instance(NamespacePtr& ns, SgAsmJvmFileHeader* jfh);
 
-  SgAsmJvmConstantPool* constant_pool();
+    JvmClass::Ptr promote(const Sawyer::SharedPointer<Class>& from);
 
-  virtual void dump();
+    /** The string found at the given index into the constant pool. */
+    static std::string name(uint16_t index, const SgAsmJvmConstantPool*);
 
-  static std::string name(uint16_t, const SgAsmJvmConstantPool*);
+    std::string name() const override;
+    std::string super_name() const override;
+    std::string typeSeparator() const override;
+    void dump() override;
 
-  JvmClass() = delete;
-  explicit JvmClass(std::shared_ptr<Namespace> ns, SgAsmJvmFileHeader* jfh);
+    const std::vector<std::string>& strings() override;
+    SgAsmJvmConstantPool* constant_pool();
 
-private:
-  SgAsmJvmFileHeader* jfh_;
-  std::vector<const Field*> fields_;
-  std::vector<const Method*> methods_;
-  std::vector<const Attribute*> attributes_;
-  std::vector<const Interface*> interfaces_;
-  std::vector<std::string> strings_;
+    JvmClass() = delete;
+    JvmClass(NamespacePtr& ns, SgAsmJvmFileHeader* jfh);
+
+  private:
+    SgAsmJvmFileHeader* jfh_;
 };
 
 class JvmContainer final : public Container {
-public:
-  virtual std::string name() const override;
-  virtual bool isSystemReserved(const std::string &name) const override;
-  static  bool isJvmSystemReserved(const std::string &name);
+  public:
+    std::string name() const override;
+    bool isSystemReserved(const std::string &name) const override;
+    static bool isJvmSystemReserved(const std::string &name);
 };
 
 } // namespace
