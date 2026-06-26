@@ -2,7 +2,7 @@
 	
 ROSE is an open source compiler infrastructure to build source-to-source program transformation and analysis tools for large-scale Fortran (77/95/2003), C (up to C23), C++ (up to C++17), OpenMP, Cuda, and UPC applications. ROSE also has support for Java (7), Ada (95), and the analysis of binary files which use the ARM, AMD64 (x86_64), Intel x86, MIPS, Motorola 68k, PowerPC (32- and 64-bit), Java byte code, or CIL instruction sets. The intended users of ROSE could be either experienced compiler researchers or library and tool developers who may have minimal compiler experience. ROSE is particularly well suited for building custom tools for static analysis, program optimization, arbitrary program transformation, domain-specific optimizations, complex loop optimizations, performance analysis, and cyber-security.
 
-http://www.rosecompiler.org/
+[ROSE Doxygen API](http://rose-compiler.github.io/)
 
 # Why Use ROSE
 
@@ -39,7 +39,7 @@ When not using c/c++ support GCC 7 through 13 are supported.
 # Documentation
 For more information about ROSE and how to use it visit the github wiki at https://github.com/rose-compiler/rose/wiki
 
-The ROSE API can be found at http://doxygen.rosecompiler.org. The API can also be made locally by going to `cd $ROSE_BUILD/docs/Rose` and running `make doxygen_docs`. The html pages can then be found in `${ROSE_BUILD}/docs/Rose/ROSE_WebPages` and can be easily viewed by pointing your browser at `${ROSE_BUILD}/docs/Rose/ROSE_WebPages`.
+The ROSE API can be found at http://rose-compiler.github.io/. The API can also be made locally by going to `cd $ROSE_BUILD/docs/Rose` and running `make doxygen_docs`. The html pages can then be found in `${ROSE_BUILD}/docs/Rose/ROSE_WebPages` and can be easily viewed by pointing your browser at `${ROSE_BUILD}/docs/Rose/ROSE_WebPages`.
 
 
 # License
