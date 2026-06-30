@@ -234,27 +234,28 @@ public:
   //! If call_on_diff is given, it is invoked on each pair of different names, and the pair are treated 
   //! different only if the function returns true.
   static bool AstIdentical(const AstNodePtr& first, const AstNodePtr& second, 
-                           std::function<bool(const std::string&, const std::string&)>* call_on_diff = 0);
+                           std::function<bool(const AstNodePtr&, const AstNodePtr&)>* call_on_diff = 0);
   //! Check whether the two given AST types are identical syntax trees.
   //! If call_on_diff is given, it is invoked on each pair of different names and the pair are treated 
   //! different only if the function returns true.
   static bool AstTypeIdentical(const AstNodeType& first, const AstNodeType& second, 
-                           std::function<bool(const std::string&, const std::string&)>* call_on_diff = 0);
+                           std::function<bool(const AstNodePtr&, const AstNodePtr&)>* call_on_diff = 0);
   //! Check whether the two given lists are identical syntax trees.
   //! If call_on_diff is given, it is invoked on each pair of different names, and the pair are treated 
   //! different only if the function returns true.
   template <class List, class Node>
   static bool AstListIdentical(const List& first, const List& second, 
-                           std::function<bool(const std::string&, const std::string&)>* call_on_diff = 0) {
-    
+                           std::function<bool(const AstNodePtr&, const AstNodePtr&)>* call_on_diff = 0) {
+    bool result = true; 
     typename List::const_iterator p1 = first.begin(), p2 = second.begin();
     for (; p1 != first.end() && p2 != second.end(); p1++, p2++) {
        Node cur1 = *p1, cur2 = *p2;
+       // Here we compare each item without early termination to allow computing statistics.
        if (!AstIdentical(cur1, cur2, call_on_diff)) {
-         return false;
+          result = false;
        }
     }
-    return p1 == first.end() && p2 == second.end();
+    return result && p1 == first.end() && p2 == second.end();
   }
   AstNodePtr CreateBlock( const AstNodePtr& orig = AST_NULL) ;
   /* if flatter_s == true, always flatten s if it is a block*/
@@ -365,7 +366,7 @@ public:
   static std::string GetVarName( const AstNodePtr& exp, bool use_global_unique_name = false);
 
   static bool IsSameVarRef( const AstNodePtr& v1, const AstNodePtr& v2,
-                   std::function<bool(const std::string&, const std::string&)>* call_on_diff = 0);
+                   std::function<bool(const AstNodePtr&, const AstNodePtr&)>* call_on_diff = 0);
 
   /*QY: by default variable declarations are merely saved to be inserted later*/
   std::string NewVar (const AstNodeType& t, const std::string& name = "", 

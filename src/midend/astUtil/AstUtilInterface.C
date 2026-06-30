@@ -107,7 +107,7 @@ void AstUtilInterface::ComputeAstSideEffects(SgNode* ast,
       }
       {
         auto ref_aliased = alias_map.find(AstInterface::GetVariableSignature(ref));
-        DebugAstUtil([&ref](){ return "Looking for aliased reference:" + AstInterface::AstToString(ref); });
+        DebugAstUtil([&ref](){ return "Looking for aliased reference:" + AstInterface::GetVariableSignature(ref); });
         if (ref_aliased != alias_map.end()) {
            ref = AstNodePtr((*ref_aliased).second);
            is_local_ref = false;
