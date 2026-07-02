@@ -80,11 +80,9 @@ void AstUtilInterface::ComputeAstSideEffects(SgNode* ast,
       auto sig_first = AstInterface::GetVariableSignature(first);
       AstNodePtr base;
       if (AstInterface::IsAddressOfOp(second, &base)) {
-          alias_map["_deref_" + sig_first] = base;
+          alias_map["_deref_(" + sig_first + ")"] = base;
       }
-      else {
-         alias_map[sig_first] = second;
-      }
+      alias_map[sig_first] = second;
       if (collect != 0) (*collect)(first, second, OperatorSideEffect(OperatorSideEffect::EnumVariant::Alias, 0));
       return true;
     };
@@ -100,7 +98,6 @@ void AstUtilInterface::ComputeAstSideEffects(SgNode* ast,
         AstNodePtr array;
         // No need to check local ref if annotation is not needed. 
         if (AstInterface::IsArrayAccess(ref, &array)) {
-           ref = array;
            is_local_ref = false;
            DebugAstUtil([&ref](){ return "Finding array reference:" + AstInterface::AstToString(ref); });
         }

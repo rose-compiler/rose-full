@@ -2031,7 +2031,7 @@ IsVarRef( SgNode* exp, SgType** vartype, std::string* varname,
        }
        if (IsVarRef(isSgPointerDerefExp(exp)->get_operand(), vartype, varname, _scope, defined_in_global, use_global_unique_name)) {
           if (varname != 0) {
-             (*varname) = "_deref_" + (*varname);
+             (*varname) = "_deref_(" + (*varname) +")";
           }
           if (vartype != 0) {
             SgPointerType* ptype = isSgPointerType(AstNodeTypeImpl(*vartype).get_ptr());
@@ -3126,7 +3126,7 @@ bool AstInterface:: AstIdentical(const AstNodePtr& _first, const AstNodePtr& _se
       return AstListIdentical<AstNodeList, AstNodePtr>(params1, params2, call_on_diff) &&
              AstListIdentical<AstNodeList, AstNodePtr>(args1, args2, call_on_diff) &&
              AstTypeIdentical(returntype1, returntype2, call_on_diff) && 
-             bodydiff;; 
+             bodydiff; 
   }
   if (IsBlock(_first, 0, &args1) && IsBlock(_second, 0, &args2)) {
      return AstListIdentical<AstNodeList,AstNodePtr>(args1, args2, call_on_diff);
@@ -4867,9 +4867,11 @@ std::string AstInterface:: GetVariableSignature(const AstNodePtr& _variable) {
     {
     AstNodePtr f;
     AstNodeList args;
-    bool is_function_call = AstInterface::IsFunctionCall(variable, &f, &args);
-    bool is_array_ref = AstInterface::IsArrayAccess(variable, &f, &args); 
-    if (is_function_call || is_array_ref) {
+    if (AstInterface::IsArrayAccess(variable, &f)) {
+       res += "_deref_(" + GetVariableSignature(f.get_ptr()) + ")";
+       return res;
+    } 
+    if (AstInterface::IsFunctionCall(variable, &f, &args)) {
        res += GetVariableSignature(f.get_ptr()) + "(";
        bool is_first = true;
        for (auto x : args) {
