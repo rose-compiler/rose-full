@@ -385,12 +385,12 @@ GPU:
 Plumhall-CVS:
     extends: .release-base 
     script:
-        - ./$TEST_DIRECTORY/release_launcher.sh $CI_JOB_NAME 17 #Second arg is EXPECTED_FAILS
+        - ./$TEST_DIRECTORY/release_launcher.sh $CI_JOB_NAME 16 #Second arg is EXPECTED_FAILS
     
 Plumhall-XVS:
     extends: .release-base 
     script:
-        - ./$TEST_DIRECTORY/release_launcher.sh $CI_JOB_NAME 3977 #Second arg is EXPECTED_SUCCESS
+        - ./$TEST_DIRECTORY/release_launcher.sh $CI_JOB_NAME 4010 #Second arg is EXPECTED_SUCCESS
 
 SAPOH-initialize:
     extends: .release-base 
@@ -447,7 +447,7 @@ Status-Post-Processing:
 
 Coverage-Analysis:
     extends: .release-base 
-    timeout: 12h
+    timeout: 16h
 
 Coverage-Analysis-Ada:
     extends: .release-base 
