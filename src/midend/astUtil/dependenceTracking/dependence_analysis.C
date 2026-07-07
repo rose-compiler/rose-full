@@ -178,23 +178,32 @@ template <class NodeIterator, class EdgeIterator>
 void WholeProgramDependenceAnalysis<NodeIterator,EdgeIterator>::ComputeDependences(SgNode* input, SgNode* root) {
   DebugLog DebugSaveDep("-debugdep");
   std::string function_name;
-  AstInterface::AstNodeList params, children;
-  AstNodePtr body;
-  if (AstInterface::IsFunctionDefinition(input, &function_name, &params, 0, &body, 0, 0,/*use_global_name*/true) && body != 0) {
-    Log.push("Computing dependences for " + input->unparseToString());
-    std::function<bool(const AstNodePtr&, const AstNodePtr&, const AstUtilInterface::OperatorSideEffect&)> save_dep = 
-        [this,input,body] (const AstNodePtr& first, const AstNodePtr&, const AstUtilInterface::OperatorSideEffect& relation) {
+  AstInterface::AstNodeList children;
+  std::function<bool(const AstNodePtr&, const AstNodePtr&, const AstUtilInterface::OperatorSideEffect&)> save_function_dep = 
+        [this,input] (const AstNodePtr& first, const AstNodePtr& second, const AstUtilInterface::OperatorSideEffect& relation) {
         assert(main_table != 0);
         main_table->addEdge(main_table->addNode(input), main_table->addNode(first.get_ptr()), relation);
         return true;
-      };
-     AstUtilInterface::ComputeAstSideEffects(input, &save_dep, annot_table);
-  }
-  if (AstInterface::IsBlock(input, 0, &children)) {
+  };
+  std::function<bool(const AstNodePtr&, const AstNodePtr&, const AstUtilInterface::OperatorSideEffect&)> save_variable_dep = 
+        [this,input] (const AstNodePtr& first, const AstNodePtr& second, const AstUtilInterface::OperatorSideEffect& relation) {
+        assert(main_table != 0);
+        if (second != AST_NULL) {
+           main_table->addEdge(main_table->addNode(first.get_ptr()), main_table->addNode(second.get_ptr()), relation);
+        }
+        return true;
+  };
+  if (AstInterface::IsBlock(input, &function_name, &children)) {
+    if (!function_name.empty()) {
+       Log.push("Computing dependences for " + function_name);
+       AstUtilInterface::ComputeAstSideEffects(input, &save_function_dep, annot_table);
+    }
     for (AstInterface::AstNodeList::const_iterator p = children.begin(); p != children.end(); ++p) {
       AstNodePtr current = *p;
       ComputeDependences(current.get_ptr(), root);
     }
+  } else if (AstInterface::IsVariableDecl(input)) {
+     AstUtilInterface::ComputeAstSideEffects(input, &save_variable_dep, annot_table);
   }
 }
 void CollectDependences:: save_annotation(const DependenceEntry& e) {

@@ -343,7 +343,7 @@ AppendVariableDecl(AstInterface& /* fa */, const AstNodePtr& variable, const Ast
      if (varcollect != 0) {
             (*varcollect)(variable, var_init);
      } else if (modcollect != 0) {
-            (*modcollect)(variable, curstmt);
+            (*modcollect)(variable, var_init);
      }
     }
 
