@@ -14,7 +14,7 @@ namespace AstUtilInterface{
    template<class NodeIterator, class EdgeIterator> class WholeProgramDependenceAnalysis;
    class OperatorSideEffect {
     public:
-     enum class EnumVariant {Modify, Read, Kill, Alias, Call,  Decl, Allocate, Free, Parameter, Return, Unexpected};
+     enum class EnumVariant {Modify, Read, Kill, Alias, Call,  Decl, Allocate, Free, Parameter, Return, Init, Unexpected};
 
     private:
       EnumVariant enum_ = EnumVariant::Unexpected; 
@@ -43,6 +43,7 @@ namespace AstUtilInterface{
          else if (what == "call") { enum_ = EnumVariant::Call; }
          else if (what == "parameter") { enum_ = EnumVariant::Parameter; }
          else if (what == "return") { enum_ = EnumVariant::Return; }
+         else if (what == "init") { enum_ = EnumVariant::Init; }
          else { std::cerr << "unexpected side effect name for:" << what << "\n"; assert(0); }
        }
      }
@@ -59,6 +60,7 @@ namespace AstUtilInterface{
         case EnumVariant::Read: result.push_back("read"); break;
         case EnumVariant::Parameter: result.push_back("read"); result.push_back("parameter"); break;
         case EnumVariant::Return: result.push_back("read"); result.push_back("return"); break;
+        case EnumVariant::Init: result.push_back("read"); result.push_back("init"); break;
         default:
           std::cerr << "Error: Unexpected enum value:" << (int)enum_ << "\n";
           assert(false);

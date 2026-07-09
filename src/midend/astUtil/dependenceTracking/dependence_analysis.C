@@ -180,16 +180,23 @@ void WholeProgramDependenceAnalysis<NodeIterator,EdgeIterator>::ComputeDependenc
   std::string function_name;
   AstInterface::AstNodeList children;
   std::function<bool(const AstNodePtr&, const AstNodePtr&, const AstUtilInterface::OperatorSideEffect&)> save_function_dep = 
-        [this,input] (const AstNodePtr& first, const AstNodePtr& second, const AstUtilInterface::OperatorSideEffect& relation) {
+        [this,input] (const AstNodePtr& first, const AstNodePtr&, const AstUtilInterface::OperatorSideEffect& relation) {
         assert(main_table != 0);
-        main_table->addEdge(main_table->addNode(input), main_table->addNode(first.get_ptr()), relation);
+        auto first_sig = AstInterface::GetVariableSignature(first);
+        if (first_sig != "") {
+           main_table->addEdge(main_table->addNode(input), main_table->addNode(first.get_ptr()), relation);
+        }
         return true;
   };
   std::function<bool(const AstNodePtr&, const AstNodePtr&, const AstUtilInterface::OperatorSideEffect&)> save_variable_dep = 
-        [this,input] (const AstNodePtr& first, const AstNodePtr& second, const AstUtilInterface::OperatorSideEffect& relation) {
+        [this,input] (const AstNodePtr& first, const AstNodePtr& second, const AstUtilInterface::OperatorSideEffect&) {
         assert(main_table != 0);
         if (second != AST_NULL) {
-           main_table->addEdge(main_table->addNode(first.get_ptr()), main_table->addNode(second.get_ptr()), relation);
+           auto first_sig = AstInterface::GetVariableSignature(first);
+           auto init = AstInterface::GetVariableSignature(second);
+           if (first_sig != "" && init.find("_UNKNOWN_") == std::string::npos)  {
+             main_table->addEdge(main_table->addNode(first.get_ptr()), main_table->addNode(second.get_ptr()), AstUtilInterface::OperatorSideEffect::EnumVariant::Init);
+           }
         }
         return true;
   };
