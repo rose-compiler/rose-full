@@ -1209,7 +1209,7 @@ endif()
 
 find_package(FLEX)
 
-# Find libm.so, libquadmath.so for C Support on Linux and find librt.so for Linux systems
+# Find libm.so for C Support on Linux and find librt.so for Linux systems
 if(NOT WIN32 AND NOT APPLE)
   if(ENABLE_C)
     # libc.so
@@ -1223,27 +1223,29 @@ if(NOT WIN32 AND NOT APPLE)
   find_library(RT_LIB rt QUIET)
 endif()
 
-# Only use quadmath if C/C++ is enable and it is available (also exclude windows)
+# Only enable __float128 support in EDG if C/C++ is enabled and the compiler
+# supports the type (also exclude windows). EDG approximates __float128
+# conversions with long double routines (APPROXIMATE_QUADMATH), so the GNU
+# quadmath library is not needed.
 if(ENABLE_C AND NOT ROSE_SUPPORT_MICROSOFT_EXTENSIONS)
   set(COMPILE_TEST_SOURCE "
-  #include <quadmath.h>
-  int main() { return 0; }")
-  
+  int main() { __float128 x = 0; return (int)x; }")
+
   # Perform the compile test
-  check_cxx_source_compiles("${COMPILE_TEST_SOURCE}" HAVE_QUADMATH_COMPILE)
-  
-  # Determine whether quadmath is usable
-  if(HAVE_QUADMATH_COMPILE)
+  check_cxx_source_compiles("${COMPILE_TEST_SOURCE}" HAVE_FLOAT128_COMPILE)
+
+  # Determine whether __float128 is usable
+  if(HAVE_FLOAT128_COMPILE)
     set(ROSE_USE_EDG_QUAD_FLOAT 1)
-    set(SUPPORT_FLOAT128 ON CACHE BOOL "Variable that will persist to EDG submodule telling it to include quadmath")
+    set(SUPPORT_FLOAT128 ON CACHE BOOL "Variable that will persist to EDG submodule telling it to enable __float128 support")
     if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-      message(STATUS "quadmath is available and usable, ROSE_USE_EDG_QUAD_FLOAT set to 1")
-    endif() 
+      message(STATUS "__float128 is available and usable, ROSE_USE_EDG_QUAD_FLOAT set to 1")
+    endif()
   else()
-    # Comment this line out for issues with clang 
+    # Comment this line out for issues with clang
     set(ROSE_USE_EDG_QUAD_FLOAT 0)
     if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-      message(STATUS "quadmath is not available or not usable, ROSE_USE_EDG_QUAD_FLOAT set to 0")
+      message(STATUS "__float128 is not available or not usable, ROSE_USE_EDG_QUAD_FLOAT set to 0")
     endif()
   endif()
 
@@ -1338,11 +1340,7 @@ if(NOT WIN32 AND NOT APPLE)
   if(M_LIB AND NOT DL_LIB STREQUAL "DL_LIB-NOTFOUND")
     list(APPEND link_with_libraries ${DL_LIB})
   endif()
-  # Conditionally append libquadmath.so to list of libraries rose will link to 
-  if(HAVE_QUADMATH_COMPILE)
-    list(APPEND link_with_libraries quadmath)
-  endif()
-  # Conditionally append librt.so to list of libraries rose will link to  
+  # Conditionally append librt.so to list of libraries rose will link to
   if(RT_LIB AND NOT RT_LIB STREQUAL "RT_LIB-NOTFOUND")
     list(APPEND link_with_libraries ${RT_LIB})
   endif()    

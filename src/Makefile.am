@@ -752,9 +752,6 @@ rose_config_installed_ldflags =			\
 	$(ROSE_GCRYPT_LIBS_WITH_PATH)		\
 	$(ROSE_CAPSTONE_LIBS_WITH_PATH)		\
 	-lm
-if ROSE_USE_EDG_QUAD_FLOAT
-  rose_config_installed_ldflags += -lquadmath
-endif
 if ROSE_EXPERIMENTAL_ADA_ROSE_CONNECTION
   rose_config_installed_ldflags += -L${DOT_ASIS_LIB_DIR_} -lasis_adapter
 endif

@@ -198,17 +198,16 @@ AC_SUBST(ROSE_SUPPORT_MICROSOFT_EXTENSIONS)
 AM_CONDITIONAL(ROSE_USE_MICROSOFT_EXTENSIONS, [test "x$enable_microsoft_extensions" = xyes])
 
 # TV (12/31/2018): Defining macro to detect the support of __float128 in EDG
-#   Only valid if compiling ROSE using GNU compiler (depends on -lquadmath)
+#   EDG approximates __float128 conversions with long double routines
+#   (APPROXIMATE_QUADMATH), so only compiler support for __float128 is
+#   needed (no dependency on -lquadmath).
 AC_LANG(C++)
 AX_COMPILER_VENDOR
 
-ac_save_LIBS="$LIBS"
-LIBS="$ac_save_LIBS -lquadmath"
-AC_LINK_IFELSE([
-            AC_LANG_PROGRAM([[#include <quadmath.h>]])],
+AC_COMPILE_IFELSE([
+            AC_LANG_PROGRAM([[]], [[__float128 x = 0; (void)x;]])],
             [rose_use_edg_quad_float=yes],
             [rose_use_edg_quad_float=no])
-LIBS="$ac_save_LIBS"
 
 if test "$ROSE_SUPPORT_MICROSOFT_EXTENSIONS" == "TRUE"; then
   rose_use_edg_quad_float=no

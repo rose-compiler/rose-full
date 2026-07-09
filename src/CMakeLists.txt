@@ -1345,10 +1345,6 @@ if(Threads_FOUND OR "${Boost_LIBRARIES}" MATCHES "Boost::thread")
 endif()
 # Add Boost dir before boost libs to maximize portability by making sure boost is only looked for in one location 
 string(REPLACE " -lboost_chrono " " -L${Boost_LIBRARY_DIRS} -lboost_chrono " rose_config_installed_ldflags "${rose_config_installed_ldflags}")
-# Add libquadmath if needed for EDG
-if(SUPPORT_FLOAT128)
-  set(rose_config_installed_ldflags "${rose_config_installed_ldflags} -lquadmath")
-endif()
 ########################################################################################################################
 
 # Function for rose-config to ensure rose tools use correct compiler 
