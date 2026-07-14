@@ -13753,7 +13753,8 @@ void
 SgTypedefDeclaration::post_construction_initialization() {
     ASSERT_not_null(get_base_type());
     ASSERT_not_null(get_base_type()->get_typedefs());
-    ASSERT_require(get_base_type()->get_typedefs()->get_typedefs().size() >= 0);
+    // PL (7/14/2026): Commenting out because .size() is unsigned, therefore this is always true and triggers a warning.
+    // ASSERT_require(get_base_type()->get_typedefs()->get_typedefs().size() >= 0);
 }
 
 bool
@@ -14271,7 +14272,8 @@ SgTemplateTypedefDeclaration::post_construction_initialization()
    {
      ROSE_ASSERT (get_base_type() != NULL);
      ROSE_ASSERT (get_base_type()->get_typedefs() != NULL);
-     ROSE_ASSERT (get_base_type()->get_typedefs()->get_typedefs().size() >= 0);
+     // PL (7/14/2026): Commenting out because .size() is unsigned, therefore this is always true and triggers a warning.
+     // ROSE_ASSERT (get_base_type()->get_typedefs()->get_typedefs().size() >= 0);
    }
 
 SOURCE_TEMPLATE_TYPEDEF_DECLARATION_STATEMENT_END
@@ -14301,7 +14303,8 @@ SgTemplateInstantiationTypedefDeclaration::post_construction_initialization()
      ROSE_ASSERT(p_type == NULL);
      ROSE_ASSERT (get_base_type() != NULL);
      ROSE_ASSERT (get_base_type()->get_typedefs() != NULL);
-     ROSE_ASSERT (get_base_type()->get_typedefs()->get_typedefs().size() >= 0);
+     // PL (7/14/2026): Commenting out because .size() is unsigned, therefore this is always true and triggers a warning.
+     // ROSE_ASSERT (get_base_type()->get_typedefs()->get_typedefs().size() >= 0);
    }
 
 void
