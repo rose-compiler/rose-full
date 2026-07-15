@@ -208,7 +208,6 @@ namespace JvmSemantics {
     SValue::Ptr mul(Ops ops, SValue::Ptr a, SValue::Ptr b);
     SValue::Ptr div(Ops ops, SValue::Ptr a, SValue::Ptr b);
     SValue::Ptr rem(Ops ops, SValue::Ptr a, SValue::Ptr b);
-    SValue::Ptr neg(Ops ops, SValue::Ptr a);
     SValue::Ptr convert(Ops ops, const char *op, SValue::Ptr a);
 
     void methodReturn(Ops ops, I insn);
@@ -412,8 +411,22 @@ namespace JvmSemantics {
         return ops->signedModulo(a, b);
     }
 
-    SValue::Ptr neg(Ops ops, SValue::Ptr a) {
-        return ops->negate(a);
+    template<class UnaryFunc>
+    void
+    doUnaryOp(Ops ops, ValueKind kind, UnaryFunc func) {
+        auto sval = ops->popOperand();
+
+        if (sval->kind() != kind) {
+            std::ostringstream msg;
+            msg << "operand kind differs from " << kind;
+            ASSERT_require2(false, msg.str());
+        }
+
+        auto result = func(sval);
+        ASSERT_not_null(result);
+
+        result->kind(kind);
+        ops->pushOperand(result);
     }
 
     template<class BinaryFunc>
@@ -729,6 +742,7 @@ bool isSubclassOf(SgClassType* derived, SgClassType* base) {
 
 using JvmSemantics::asU1;
 using JvmSemantics::doBinaryOp;
+using JvmSemantics::doUnaryOp;
 using JvmSemantics::isReference;
 
 // aaload (50 (0x32))
@@ -2624,9 +2638,10 @@ struct IP_imul: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_ineg: P {
-    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
+    void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ASSERT_require2(false, "ineg unimplemented");
+        doUnaryOp(ops, ValueKind::Integer32,
+             [ops](auto sval) { return ops->negate(sval); });
     }
 };
 
@@ -3764,6 +3779,9 @@ DispatcherJvm::initializeDispatchTable() {
     // Binary operators
     iprocSet(0x60,  new Jvm::IP_iadd);
     iprocSet(0x64,  new Jvm::IP_isub);
+
+    // Unary operators
+    iprocSet(0x74,  new Jvm::IP_ineg);
 }
 
 DispatcherJvm::~DispatcherJvm() {}
