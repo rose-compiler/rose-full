@@ -2767,9 +2767,22 @@ struct IP_ireturn: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_ishl: P {
-    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
+    void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ASSERT_require2(false, "ishl unimplemented");
+
+        auto count = ops->popOperand();
+        auto value = ops->popOperand();
+
+        ASSERT_require(count->kind() == ValueKind::Integer32);
+        ASSERT_require(value->kind() == ValueKind::Integer32);
+
+        // JVM uses only low 5 bits of the shift count for int shifts.
+        auto maskedCount = ops->and_(count, ops->number_(32, 0x1f));
+
+        auto result = ops->shiftLeft(value, maskedCount);
+        result->kind(ValueKind::Integer32);
+
+        ops->pushOperand(result);
     }
 };
 
@@ -3271,7 +3284,8 @@ struct IP_lreturn: P {
 struct IP_lshl: P {
     void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
         assert_args(insn, args, 0);
-        ASSERT_require2(false, "ishl unimplemented");
+        // Use this mask, see ishl: shiftCount & 0x3f
+        ASSERT_require2(false, "lshl unimplemented");
     }
 };
 
@@ -3780,8 +3794,9 @@ DispatcherJvm::initializeDispatchTable() {
     iprocSet(0x60,  new Jvm::IP_iadd);
     iprocSet(0x64,  new Jvm::IP_isub);
 
-    // Unary operators
+    // Unary(ish) operators
     iprocSet(0x74,  new Jvm::IP_ineg);
+    iprocSet(0x78,  new Jvm::IP_ishl);
 }
 
 DispatcherJvm::~DispatcherJvm() {}
