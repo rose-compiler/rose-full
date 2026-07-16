@@ -3660,8 +3660,20 @@ struct IP_sastore: P {
         //   None specified other than VirtualMachineError subclasses.
 struct IP_sipush: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
-        assert_args(insn, args, 2);
-        ops->pushOperand(ops->number_(32, JvmSemantics::s2(args)));
+        assert_args(insn, args, 1);
+
+        auto ivExpr = isSgAsmIntegerValueExpression(args[0]);
+        ASSERT_not_null(ivExpr);
+
+        // sipush has one signed 16-bit immediate operand.
+        int16_t imm16 = static_cast<int16_t>(ivExpr->get_signedValue());
+        int32_t imm32 = imm16;
+
+        // Create the SValue and set its type/kind
+        auto result = ops->number_(32, imm32);
+        result->kind(ValueKind::Integer32);
+
+        ops->pushOperand(result);
     }
 };
 
@@ -3720,6 +3732,7 @@ DispatcherJvm::initializeDispatchTable() {
     iprocSet(0xbd,  new Jvm::IP_anewarray);
     iprocSet(0xbe,  new Jvm::IP_arraylength);
     iprocSet(0x10,  new Jvm::IP_bipush);
+    iprocSet(0x11,  new Jvm::IP_sipush);
 
     iprocSet(0x19,  new Jvm::IP_aload);
     iprocSet(0x2a,  new Jvm::IP_aload_0);
