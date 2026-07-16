@@ -1073,7 +1073,15 @@ struct IP_bastore: P {
 struct IP_bipush: P {
     void p(D d, Ops ops, I insn, Args args) {
         assert_args(insn, args, 1);
-        ops->pushOperand(d->makeConstant("b", d->asU1(args[0]), 32));
+
+        // bipush has one signed 8-bit immediate operand.
+        auto imm = d->asS1(args[0]);
+
+        // Create the SValue and set its type/kind
+        auto result = ops->number_(32, imm);
+        result->kind(ValueKind::Integer32);
+
+        ops->pushOperand(result);
     }
 };
 
