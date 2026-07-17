@@ -2171,9 +2171,16 @@ struct IP_i2f: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_i2l: P {
-    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
+    void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ASSERT_require2(false, "i2l unimplemented");
+
+        auto sval = ops->popOperand();
+        ASSERT_require(sval->kind() == ValueKind::Integer32);
+
+        auto result = ops->signExtend(sval, 64);
+        result->kind(ValueKind::Integer64);
+
+        ops->pushOperand(result);
     }
 };
 
@@ -3818,6 +3825,8 @@ DispatcherJvm::initializeDispatchTable() {
     // Unary(ish) operators
     iprocSet(0x74,  new Jvm::IP_ineg);
     iprocSet(0x78,  new Jvm::IP_ishl);
+
+    iprocSet(0x85,  new Jvm::IP_i2l);
 }
 
 DispatcherJvm::~DispatcherJvm() {}
