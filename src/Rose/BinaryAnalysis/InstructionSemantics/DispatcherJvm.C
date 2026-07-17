@@ -3416,9 +3416,23 @@ struct IP_lsub: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_lushr: P {
-    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
+    void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ASSERT_require2(false, "lushr unimplemented");
+
+        auto count = ops->popOperand(); // int
+        auto value = ops->popOperand(); // long
+
+        ASSERT_require(value->kind() == ValueKind::Integer64);
+        ASSERT_require(count->kind() == ValueKind::Integer32);
+
+        // JVM long shifts mask count with 0x3f.
+        auto maskedCount = ops->and_(count, ops->number_(32, 0x3f));
+
+        // Use the logical/unsigned right-shift operator, not arithmetic shift.
+        auto result = ops->shiftRight(value, maskedCount);
+        result->kind(ValueKind::Integer64);
+
+        ops->pushOperand(result);
     }
 };
 
@@ -3838,6 +3852,8 @@ DispatcherJvm::initializeDispatchTable() {
     iprocSet(0x74,  new Jvm::IP_ineg);
     iprocSet(0x78,  new Jvm::IP_ishl);
     iprocSet(0x79,  new Jvm::IP_lshl);
+
+    iprocSet(0x7d,  new Jvm::IP_lushr);
 
     iprocSet(0x85,  new Jvm::IP_i2l);
 }
