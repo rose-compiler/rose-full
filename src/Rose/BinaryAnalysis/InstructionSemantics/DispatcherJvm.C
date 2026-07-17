@@ -2788,8 +2788,8 @@ struct IP_ishl: P {
         auto count = ops->popOperand();
         auto value = ops->popOperand();
 
-        ASSERT_require(count->kind() == ValueKind::Integer32);
-        ASSERT_require(value->kind() == ValueKind::Integer32);
+        ASSERT_require2(count->kind() == ValueKind::Integer32, "ishl shift count must be Integer32");
+        ASSERT_require2(value->kind() == ValueKind::Integer32, "ishl value must be Integer32");
 
         // JVM uses only low 5 bits of the shift count for int shifts.
         auto maskedCount = ops->and_(count, ops->number_(32, 0x1f));
@@ -3297,10 +3297,22 @@ struct IP_lreturn: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_lshl: P {
-    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
+    void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        // Use this mask, see ishl: shiftCount & 0x3f
-        ASSERT_require2(false, "lshl unimplemented");
+
+        auto count = ops->popOperand();
+        auto value = ops->popOperand();
+
+        ASSERT_require2(count->kind() == ValueKind::Integer32, "lshl shift count must be Integer32");
+        ASSERT_require2(value->kind() == ValueKind::Integer64, "lshl value must be Long");
+
+        // JVM long shifts use only the low six bits of the shift distance.
+        auto maskedCount = ops->and_(count, ops->number_(32, 0x3f));
+
+        auto result = ops->shiftLeft(value, maskedCount);
+        result->kind(ValueKind::Integer64);
+
+        ops->pushOperand(result);
     }
 };
 
@@ -3825,6 +3837,7 @@ DispatcherJvm::initializeDispatchTable() {
     // Unary(ish) operators
     iprocSet(0x74,  new Jvm::IP_ineg);
     iprocSet(0x78,  new Jvm::IP_ishl);
+    iprocSet(0x79,  new Jvm::IP_lshl);
 
     iprocSet(0x85,  new Jvm::IP_i2l);
 }
