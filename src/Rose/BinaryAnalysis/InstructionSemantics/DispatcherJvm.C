@@ -3234,9 +3234,10 @@ struct IP_lmul: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_lneg: P {
-    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
+    void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ASSERT_require2(false, "lneg unimplemented");
+        doUnaryOp(ops, ValueKind::Integer64,
+             [ops](auto sval) { return ops->negate(sval); });
     }
 };
 
@@ -3852,6 +3853,7 @@ DispatcherJvm::initializeDispatchTable() {
 
     // Unary(ish) operators
     iprocSet(0x74,  new Jvm::IP_ineg);
+    iprocSet(0x75,  new Jvm::IP_lneg);
     iprocSet(0x78,  new Jvm::IP_ishl);
     iprocSet(0x79,  new Jvm::IP_lshl);
 
