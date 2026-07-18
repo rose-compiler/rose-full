@@ -3404,9 +3404,10 @@ struct IP_lstore_3: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_lsub: P {
-    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
+    void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ASSERT_require2(false, "lsub unimplemented");
+        doBinaryOp(ops, ValueKind::Integer64,
+             [ops](auto lhs, auto rhs) { return ops->subtract(lhs, rhs); });
     }
 };
 
@@ -3847,6 +3848,7 @@ DispatcherJvm::initializeDispatchTable() {
     // Binary operators
     iprocSet(0x60,  new Jvm::IP_iadd);
     iprocSet(0x64,  new Jvm::IP_isub);
+    iprocSet(0x65,  new Jvm::IP_lsub);
 
     // Unary(ish) operators
     iprocSet(0x74,  new Jvm::IP_ineg);
