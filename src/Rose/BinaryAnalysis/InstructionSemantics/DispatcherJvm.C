@@ -2204,10 +2204,9 @@ struct IP_i2s: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_iadd: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
+    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
         assert_args(insn, args, 0);
-        doBinaryOp(ops, ValueKind::Integer32,
-             [ops](auto lhs, auto rhs) { return ops->add(lhs, rhs); });
+        ASSERT_require2(false, "iadd unimplemented");
     }
 };
 
@@ -2902,9 +2901,22 @@ struct IP_isub: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_iushr: P {
-    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
+    void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ASSERT_require2(false, "iushr unimplemented");
+
+        auto count = ops->popOperand();
+        auto value = ops->popOperand();
+
+        ASSERT_require2(count->kind() == ValueKind::Integer32, "iushr shift distance must be Integer32");
+        ASSERT_require2(value->kind() == ValueKind::Integer32, "iushr value must be Integer32");
+
+        // JVM int shifts use only the low five bits.
+        auto maskedCount = ops->and_(count, ops->number_(32, 0x1f));
+
+        auto result = ops->shiftRight(value, maskedCount);
+        result->kind(ValueKind::Integer32);
+
+        ops->pushOperand(result);
     }
 };
 
@@ -3424,8 +3436,8 @@ struct IP_lushr: P {
         auto count = ops->popOperand(); // int
         auto value = ops->popOperand(); // long
 
-        ASSERT_require(value->kind() == ValueKind::Integer64);
-        ASSERT_require(count->kind() == ValueKind::Integer32);
+        ASSERT_require2(count->kind() == ValueKind::Integer32, "lushr shift distance must be Integer32");
+        ASSERT_require2(value->kind() == ValueKind::Integer64, "lushr value must be Integer64");
 
         // JVM long shifts mask count with 0x3f.
         auto maskedCount = ops->and_(count, ops->number_(32, 0x3f));
@@ -3847,7 +3859,6 @@ DispatcherJvm::initializeDispatchTable() {
     iprocSet(0x58,  new Jvm::IP_pop2);
 
     // Binary operators
-    iprocSet(0x60,  new Jvm::IP_iadd);
     iprocSet(0x64,  new Jvm::IP_isub);
     iprocSet(0x65,  new Jvm::IP_lsub);
 
@@ -3857,6 +3868,7 @@ DispatcherJvm::initializeDispatchTable() {
     iprocSet(0x78,  new Jvm::IP_ishl);
     iprocSet(0x79,  new Jvm::IP_lshl);
 
+    iprocSet(0x7c,  new Jvm::IP_iushr);
     iprocSet(0x7d,  new Jvm::IP_lushr);
 
     iprocSet(0x85,  new Jvm::IP_i2l);
