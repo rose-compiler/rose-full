@@ -2748,9 +2748,18 @@ struct IP_ior: P {
         // Run-time Exceptions:
         //   ArithmeticException if the divisor is zero.
 struct IP_irem: P {
-    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
+    void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ASSERT_require2(false, "irem unimplemented");
+
+        auto divisor = ops->peekOperand();
+        if (divisor->isConcrete() && divisor->toUnsigned().get() == 0) {
+            // Eventually: model java/lang/ArithmeticException.
+            ASSERT_require2(false, "irem division by zero");
+        }
+
+        // Otherwise calculate the signedModulo
+        doBinaryOp(ops, ValueKind::Integer32,
+             [ops](auto lhs, auto rhs) { return ops->signedModulo(lhs, rhs); });
     }
 };
 
@@ -3856,6 +3865,8 @@ DispatcherJvm::initializeDispatchTable() {
     iprocSet(0x61,  new Jvm::IP_ladd);
     iprocSet(0x64,  new Jvm::IP_isub);
     iprocSet(0x65,  new Jvm::IP_lsub);
+
+    iprocSet(0x70,  new Jvm::IP_irem);
 
     // Unary(ish) operators
     iprocSet(0x74,  new Jvm::IP_ineg);
