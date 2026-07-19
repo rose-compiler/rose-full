@@ -204,7 +204,6 @@ namespace JvmSemantics {
     SValue::Ptr arrayLoad(Ops ops, const char *kind, SValue::Ptr arrayref, SValue::Ptr index);
     void        arrayStore(Ops ops, const char *kind, SValue::Ptr arrayref, SValue::Ptr index, SValue::Ptr value);
 
-    SValue::Ptr sub(Ops ops, SValue::Ptr a, SValue::Ptr b);
     SValue::Ptr mul(Ops ops, SValue::Ptr a, SValue::Ptr b);
     SValue::Ptr div(Ops ops, SValue::Ptr a, SValue::Ptr b);
     SValue::Ptr rem(Ops ops, SValue::Ptr a, SValue::Ptr b);
@@ -241,7 +240,6 @@ namespace JvmSemantics {
     void execute_checkcast(Ops ops, I insn, Args args);
     void execute_getfield(Ops ops, I insn, Args args);
     void execute_getstatic(Ops ops, I insn, Args args);
-    void execute_iconst_4(Ops ops, I insn, Args args);
     void execute_iconst_5(Ops ops, I insn, Args args);
     void execute_iinc(Ops ops, I insn, Args args);
     void execute_instanceof(Ops ops, I insn, Args args);
@@ -395,10 +393,6 @@ namespace JvmSemantics {
         ops->writeMemory(RegisterDescriptor(), addr, value, cond);
     }
 
-    SValue::Ptr sub(Ops ops, SValue::Ptr a, SValue::Ptr b) {
-        return ops->subtract(a, b);
-    }
-
     SValue::Ptr mul(Ops ops, SValue::Ptr a, SValue::Ptr b) {
         return ops->signedMultiply(a, b);
     }
@@ -508,7 +502,6 @@ namespace JvmSemantics {
     void execute_checkcast(Ops, I, Args) { jvmUnsupported("execute_checkcast"); }
     void execute_getfield(Ops, I, Args) { jvmUnsupported("execute_getfield"); }
     void execute_getstatic(Ops, I, Args) { jvmUnsupported("execute_getstatic"); }
-    void execute_iconst_4(Ops ops, I, Args args) { ASSERT_require(args.empty()); ops->pushOperand(ops->number_(32, 4)); }
     void execute_iconst_5(Ops ops, I, Args args) { ASSERT_require(args.empty()); ops->pushOperand(ops->number_(32, 5)); }
     void execute_iinc(Ops, I, Args) { jvmUnsupported("execute_iinc"); }
     void execute_instanceof(Ops, I, Args) { jvmUnsupported("execute_instanceof"); }
@@ -2050,11 +2043,9 @@ struct IP_fstore_3: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_fsub: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
+    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr v2 = ops->popOperand();
-        SValue::Ptr v1 = ops->popOperand();
-        ops->pushOperand(JvmSemantics::sub(ops, v1, v2));
+        ASSERT_require2(false, "fsub unimplemented");
     }
 };
 
@@ -3008,9 +2999,10 @@ struct IP_l2i: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_ladd: P {
-    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
+    void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ASSERT_require2(false, "ladd unimplemented");
+        doBinaryOp(ops, ValueKind::Integer64,
+             [ops](auto lhs, auto rhs) { return ops->add(lhs, rhs); });
     }
 };
 
@@ -3859,6 +3851,7 @@ DispatcherJvm::initializeDispatchTable() {
     iprocSet(0x58,  new Jvm::IP_pop2);
 
     // Binary operators
+    iprocSet(0x61,  new Jvm::IP_ladd);
     iprocSet(0x64,  new Jvm::IP_isub);
     iprocSet(0x65,  new Jvm::IP_lsub);
 
