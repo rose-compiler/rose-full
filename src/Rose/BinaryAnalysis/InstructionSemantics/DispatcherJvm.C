@@ -2195,9 +2195,10 @@ struct IP_i2s: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_iadd: P {
-    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
+    void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ASSERT_require2(false, "iadd unimplemented");
+        doBinaryOp(ops, ValueKind::Integer32,
+             [ops](auto lhs, auto rhs) { return ops->add(lhs, rhs); });
     }
 };
 
@@ -3851,6 +3852,7 @@ DispatcherJvm::initializeDispatchTable() {
     iprocSet(0x58,  new Jvm::IP_pop2);
 
     // Binary operators
+    iprocSet(0x60,  new Jvm::IP_iadd);
     iprocSet(0x61,  new Jvm::IP_ladd);
     iprocSet(0x64,  new Jvm::IP_isub);
     iprocSet(0x65,  new Jvm::IP_lsub);
