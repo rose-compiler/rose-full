@@ -126,7 +126,6 @@ JvmMethod::promote(const Sawyer::SharedPointer<Method>& from) {
     if (from == nullptr) {
         return JvmMethod::Ptr();
     }
-
     JvmMethod::Ptr derived = from.dynamicCast<JvmMethod>();
     ASSERT_not_null(derived);
     return derived;
@@ -335,7 +334,6 @@ JvmClass::promote(const Sawyer::SharedPointer<Class>& from) {
     if (from == nullptr) {
         return JvmClass::Ptr();
     }
-
     JvmClass::Ptr derived = from.dynamicCast<JvmClass>();
     ASSERT_not_null(derived);
     return derived;

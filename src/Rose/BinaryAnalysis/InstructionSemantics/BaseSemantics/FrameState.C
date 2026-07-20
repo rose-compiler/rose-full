@@ -1,6 +1,9 @@
 #include <featureTests.h>
 #ifdef ROSE_ENABLE_BINARY_ANALYSIS
+
+#include <Rose/BinaryAnalysis/ByteCode/Analysis.h>
 #include <Rose/BinaryAnalysis/InstructionSemantics/BaseSemantics/FrameState.h>
+#include <Rose/BinaryAnalysis/InstructionSemantics/BaseSemantics/RiscOperators.h>
 #include <Rose/BinaryAnalysis/InstructionSemantics/BaseSemantics/SymbolicMemory.h>
 #include <Rose/BinaryAnalysis/InstructionSemantics/BaseSemantics/SValue.h>
 #include <Rose/StringUtility/NumberToString.h>
@@ -41,8 +44,12 @@ FrameState::create(const SValuePtr &addrProtoval, const SValuePtr &valProtoval) 
 
 AddressSpace::Ptr
 FrameState::clone() const {
-    ASSERT_require2(false, "TODO:FrameState::clone\n");
-    return {};
+    Ptr retval = instance(get_val_protoval());
+
+    retval->locals_ = locals_;
+    retval->stack_ = stack_;
+
+    return retval;
 }
 
 FrameState::Ptr
@@ -55,6 +62,54 @@ FrameState::promote(const AddressSpace::Ptr &x) {
 void
 FrameState::clear() {
     stack_.clear();
+    locals_.clear();
+}
+
+void
+FrameState::clearFrame() {
+    clear();
+}
+
+ByteCode::Class::Ptr
+FrameState::analysisClass() {
+    return class_;
+}
+
+void
+FrameState::analysisClass(ByteCode::Class::Ptr& c) {
+    class_ = c;
+}
+
+void
+FrameState::initializeFrame(RiscOperatorsPtr& ops, std::string& /*className*/,
+                            std::string& desc, uint16_t access, uint16_t maxLocals) {
+    ASSERT_require2(stack_.size() == 0, "stack must be empty");
+    ASSERT_require2(locals_.size() == 0, "locals array must be empty");
+    // Clear anyway, can they be populated?
+    clear();
+
+    locals_.resize(maxLocals);
+
+    constexpr uint16_t ACC_STATIC = 0x0008;
+    bool isStatic = (access & ACC_STATIC) != 0;
+    ASSERT_require2(!isStatic, "static frame inititialization not yet supported");
+
+    // Create the this object for the frame
+
+    SValuePtr this_ = ops->protoval();
+    this_->kind(ValueKind::ObjectReference);
+    this_->typeDescriptor(desc);
+
+    // Not static so has this pointer
+    ops->writeLocal(0, this_);
+
+    //TODO: Just placeholders for function arguments, need function signatures.
+    auto arg1 = ops->undefined_(32);
+    arg1->kind(ValueKind::Integer32);
+    auto arg2 = ops->undefined_(64);
+    arg2->kind(ValueKind::Integer64);
+    ops->writeLocal(1, arg1);
+    ops->writeLocal(2, arg2);
 }
 
 SValue::Ptr
@@ -153,8 +208,9 @@ FrameState::pushOperand(const SValuePtr &sval) {
 
 bool
 FrameState::merge(const AddressSpace::Ptr &other_, RiscOperators */*addrOps*/, RiscOperators */*valOps*/) {
-    (void) other_;
-    ASSERT_require2(false, "TODO::merge\n");
+    ASSERT_require2(name() == other_->name(), "TODO::FrameState::merge(), names diff");
+    ASSERT_require2(purpose() == other_->purpose(), "TODO::FrameState::merge(), purpose differs");
+    return false;
 }
 
 void
@@ -201,6 +257,12 @@ FrameState::print(std::ostream &out, Formatter &formatter_) const {
                     out << ":" << sval->typeDescriptor();
                 }
             }
+            else if (sval->kind() == ValueKind::ObjectReference) {
+                out << "ObjectReference";
+                if (sval->hasTypeDescriptor()) {
+                    out << ":" << sval->typeDescriptor();
+                }
+            }
             else if (sval->kind() == ValueKind::Unknown) {
                 out << "<unknown>";
             }
@@ -242,6 +304,12 @@ FrameState::print(std::ostream &out, Formatter &formatter_) const {
             else if (sval->kind() == ValueKind::ArrayReference) {
                 SValuePtr count = sval->arrayLength();
                 out << "ArrayReference[" << *count << "]";
+                if (sval->hasTypeDescriptor()) {
+                    out << ":" << sval->typeDescriptor();
+                }
+            }
+            else if (sval->kind() == ValueKind::ObjectReference) {
+                out << "ObjectReference";
                 if (sval->hasTypeDescriptor()) {
                     out << ":" << sval->typeDescriptor();
                 }

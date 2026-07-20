@@ -6,6 +6,7 @@
 #include <Rose/BinaryAnalysis/InstructionSemantics/BaseSemantics/BasicTypes.h>
 #include <Rose/BinaryAnalysis/InstructionSemantics/BaseSemantics/AddressSpace.h>
 #include <Rose/BinaryAnalysis/InstructionSemantics/BaseSemantics/MemoryState.h>
+#include <Rose/BinaryAnalysis/ByteCode/Analysis.h>
 
 namespace Rose {
 namespace BinaryAnalysis {
@@ -55,8 +56,8 @@ using FrameStatePtr = boost::shared_ptr<class FrameState>;
  */
 
 /** The set of all frames and their values. FrameState objects are allocated on the heap and reference counted.  The
- *  BaseSemantics::FrameState is an abstract class that defines the interface.  See the
- *  Rose::BinaryAnalysis::InstructionSemantics namespace for an overview of how the parts fit together.*/
+ *  See the Rose::BinaryAnalysis::InstructionSemantics namespace for an overview of how the various memory state
+ *  parts fit together.*/
 class FrameState: public MemoryState {
 public:
     /** Base type. */
@@ -68,6 +69,7 @@ public:
 private:
     std::vector<SValuePtr> stack_;  // operand stack for the frame
     std::vector<SValuePtr> locals_; // local variables for the frame
+    ByteCode::Class::Ptr class_; // information pertaining to the current analysis class
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     // Serialization
@@ -98,10 +100,10 @@ public:
 
 public:
     // documented in base class
-    virtual MemoryStatePtr create(const SValuePtr &addrProtoval, const SValuePtr &valProtoval) const override;
+    MemoryStatePtr create(const SValuePtr &addrProtoval, const SValuePtr &valProtoval) const override;
 
     // documented in base class
-    virtual AddressSpacePtr clone() const override;
+    AddressSpacePtr clone() const override;
 
     /** Convert pointer to a FrameState pointer.
      *
@@ -109,18 +111,19 @@ public:
     static FrameStatePtr promote(const AddressSpacePtr&);
 
 public:
-    virtual bool merge(const AddressSpacePtr &other, RiscOperators *addrOps, RiscOperators *valOps) override;
+    void clear() override;
+    void clearFrame();
 
-    virtual void clear() override;
+    bool merge(const AddressSpacePtr &other, RiscOperators *addrOps, RiscOperators *valOps) override;
 
-    virtual SValuePtr readMemory(const SValuePtr &address, const SValuePtr &dflt,
-                                 RiscOperators *addrOps, RiscOperators *valOps) override;
+    SValuePtr readMemory(const SValuePtr &address, const SValuePtr &dflt,
+                         RiscOperators *addrOps, RiscOperators *valOps) override;
 
-    virtual void writeMemory(const SValuePtr &address, const SValuePtr &value,
-                             RiscOperators *addrOps, RiscOperators *valOps) override;
+    void writeMemory(const SValuePtr &address, const SValuePtr &value,
+                     RiscOperators *addrOps, RiscOperators *valOps) override;
 
-    virtual SValuePtr peekMemory(const SValuePtr &address, const SValuePtr &dflt,
-                                 RiscOperators *addrOps, RiscOperators *valOps) override;
+    SValuePtr peekMemory(const SValuePtr &address, const SValuePtr &dflt,
+                         RiscOperators *addrOps, RiscOperators *valOps) override;
 
     SValuePtr readLocal(size_t index) const override;
     void writeLocal(size_t index, const SValuePtr &value) override;
@@ -130,8 +133,13 @@ public:
     void pushOperand(const SValuePtr &value) override;
 
 public:
-    virtual void hash(Combinatorics::Hasher&, RiscOperators *addrOps, RiscOperators *valOps) const override;
-    virtual void print(std::ostream&, Formatter&) const override;
+    void hash(Combinatorics::Hasher&, RiscOperators* addrOps, RiscOperators* valOps) const override;
+    void print(std::ostream&, Formatter&) const override;
+
+    void analysisClass(ByteCode::Class::Ptr&);
+    ByteCode::Class::Ptr analysisClass();
+
+    void initializeFrame(RiscOperatorsPtr& ops, std::string& className, std::string& desc, uint16_t access, uint16_t maxLocals);
 
 private:
     /** Invalidate a range of local-variable slots.

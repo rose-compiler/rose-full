@@ -550,35 +550,35 @@ private:
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 public:
     /** Predicate for matching a concrete engine factory by command-line parser result and specimen. */
-    virtual bool matchFactory(const Sawyer::CommandLine::ParserResult &result, const std::vector<std::string> &specimen) const override;
-    virtual EnginePtr instanceFromFactory(const Settings&) override;
-    virtual void reset() override;
+    bool matchFactory(const Sawyer::CommandLine::ParserResult &result, const std::vector<std::string> &specimen) const override;
+    EnginePtr instanceFromFactory(const Settings&) override;
+    void reset() override;
 
     using Engine::frontend;
     SgAsmBlock* frontend(const std::vector<std::string> &args,
                          const std::string &purpose, const std::string &description) override;
 
     using Engine::parseContainers;
-    virtual SgAsmInterpretation* parseContainers(const std::vector<std::string> &fileNames) override;
+    SgAsmInterpretation* parseContainers(const std::vector<std::string> &fileNames) override;
 
     using Engine::loadSpecimens;
-    virtual MemoryMapPtr loadSpecimens(const std::vector<std::string> &fileNames = std::vector<std::string>()) override;
+    MemoryMapPtr loadSpecimens(const std::vector<std::string> &fileNames = std::vector<std::string>()) override;
 
     using Engine::partition;
-    virtual PartitionerPtr partition(const std::vector<std::string> &fileNames = std::vector<std::string>()) override;
+    PartitionerPtr partition(const std::vector<std::string> &fileNames = std::vector<std::string>()) override;
 
     using Engine::buildAst;
-    virtual SgAsmBlock* buildAst(const std::vector<std::string> &fileNames = std::vector<std::string>()) override;
+    SgAsmBlock* buildAst(const std::vector<std::string> &fileNames = std::vector<std::string>()) override;
 
-    virtual std::list<Sawyer::CommandLine::SwitchGroup> commandLineSwitches() override;
-    virtual std::pair<std::string, std::string> specimenNameDocumentation() override;
-    virtual bool isNonContainer(const std::string&) override;
-    virtual bool areContainersParsed() const override;
-    virtual PartitionerPtr createPartitioner() override;
-    virtual void runPartitionerInit(const PartitionerPtr&) override;
-    virtual void runPartitionerRecursive(const PartitionerPtr&) override;
-    virtual void runPartitionerFinal(const PartitionerPtr&) override;
-    virtual SgProject* roseFrontendReplacement(const std::vector<boost::filesystem::path> &fileNames) override;
+    std::list<Sawyer::CommandLine::SwitchGroup> commandLineSwitches() override;
+    std::pair<std::string, std::string> specimenNameDocumentation() override;
+    bool isNonContainer(const std::string&) override;
+    bool areContainersParsed() const override;
+    PartitionerPtr createPartitioner() override;
+    void runPartitionerInit(const PartitionerPtr&) override;
+    void runPartitionerRecursive(const PartitionerPtr&) override;
+    void runPartitionerFinal(const PartitionerPtr&) override;
+    SgProject* roseFrontendReplacement(const std::vector<boost::filesystem::path> &fileNames) override;
 };
 
 } // namespace

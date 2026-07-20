@@ -72,6 +72,13 @@ EngineJvm::instance(const Settings &settings) {
 }
 
 EngineJvm::Ptr
+EngineJvm::promote(const Engine::Ptr &x) {
+    EngineJvm::Ptr retval = as<EngineJvm>(x);
+    ASSERT_not_null(retval);
+    return retval;
+}
+
+EngineJvm::Ptr
 EngineJvm::factory() {
     return Ptr(new EngineJvm(Settings()));
 }
@@ -313,7 +320,7 @@ EngineJvm::parseContainers(const std::vector<std::string> &specimen) {
 
         // Process through ROSE's frontend()
         if (!classFiles.empty()) {
-            SgProject *project = roseFrontendReplacement(classFiles);
+            SgProject* project = roseFrontendReplacement(classFiles);
             ASSERT_not_null(project);
 
             std::vector<SgAsmInterpretation*> interps = SageInterface::querySubTree<SgAsmInterpretation>(project);
@@ -879,6 +886,30 @@ EngineJvm::runPartitionerRecursive(const Partitioner::Ptr &partitioner) {
     SgAsmGenericHeaderList *interpHeaders = interpretation()->get_headers();
     ASSERT_not_null(interpHeaders);
 
+    // Create the symbolic execution state
+    //
+    Architecture::Base::ConstPtr arch = partitioner->architecture();
+    SmtSolver::Ptr solver = SmtSolver::instance("none");
+    RegisterDictionary::Ptr regdict = arch->registerDictionary();
+
+    BaseSemantics::SValue::Ptr protoval = InstructionSemantics::SymbolicSemantics::SValue::instance();
+
+    BaseSemantics::RegisterState::Ptr rstate = BaseSemantics::RegisterStateGeneric::instance(protoval, regdict);
+    BaseSemantics::RegisterState::Ptr istate = BaseSemantics::RegisterStateGeneric::instance(protoval, regdict);
+    istate->purpose(BaseSemantics::AddressSpace::Purpose::INTERRUPTS);
+
+    BaseSemantics::MemoryState::Ptr mstate = InstructionSemantics::SymbolicSemantics::MemoryListState::instance(protoval, protoval);
+
+    BaseSemantics::FrameState::Ptr fstate = BaseSemantics::FrameState::instance(protoval);
+    fstate->purpose(BaseSemantics::AddressSpace::Purpose::FRAMES);
+
+    auto state = BaseSemantics::State::instance(rstate, mstate, istate, fstate);
+    ASSERT_require(state);
+    ASSERT_require(state->hasFrameState());
+
+    // Make the symbolic execution state available
+    state_ = state;
+
     // Attach empty functions as targets for invoke of "java/" or bootstrap_method functions (reserved names)
     auto rit = functions_.rbegin();
     while (rit != functions_.rend()) {
@@ -887,9 +918,11 @@ EngineJvm::runPartitionerRecursive(const Partitioner::Ptr &partitioner) {
         if (ByteCode::JvmContainer::isJvmSystemReserved(name)) {
             auto function = Partitioner2::Function::instance(va, name);
             auto block = Partitioner2::BasicBlock::instance(va, partitioner);
+
             function->insertBasicBlock(va);
             partitioner->attachBasicBlock(block);
             partitioner->attachFunction(function);
+
             rit++;
         }
         else {
@@ -907,14 +940,13 @@ EngineJvm::runPartitionerRecursive(const Partitioner::Ptr &partitioner) {
         ByteCode::Namespace::Ptr ns = ByteCode::Namespace::instance();
         ByteCode::JvmClass::Ptr jvmClass = ByteCode::JvmClass::instance(ns, isSgAsmJvmFileHeader(header));
 
+        // Make the ByteCode analysis class available
+        analysisClass_ = jvmClass;
+
         // Start discovering instructions and forming them into basic blocks and functions
         SAWYER_MESG(where) <<"discovering and populating functions\n";
-#if DONT_USE_OPS
+
         jvmClass->partition(partitioner, functions_);
-#else
-        auto ops = BS::RiscOperators::Ptr{nullptr};
-        jvmClass->partition(partitioner, ops, functions_);
-#endif
 
         if (DEBUG_WITH_DUMP) {
             jvmClass->dump();
@@ -1091,6 +1123,7 @@ EngineJvm::buildAst(const std::vector<std::string> &fileNames) {
 #endif
 
   // explicit JvmClass(std::shared_ptr<Namespace> ns, SgAsmJvmFileHeader* jfh);
+//TODO: Integrate with analysisClass()
   Rose::BinaryAnalysis::ByteCode::JvmClass* jvmClass = new ByteCode::JvmClass(/*namespace:TODO*/nullptr,header);
 
 #ifdef DEBUG_ON
@@ -1137,14 +1170,6 @@ EngineJvm::buildAst(const std::vector<std::string> &fileNames) {
     cout << "-----------\n";
 #endif
 
-//TODO:: delete?
-#if 0
-    Disassembler::Base::Ptr disassembler = obtainDisassembler();
-    ASSERT_not_null(disassembler);
-
-    method->decode(disassembler);
-#endif
-
 #ifdef DEBUG_ON
     for (auto insn : method->instructions()->get_instructions()) {
       cout << "   : " << insn->get_anyKind() << ": " << insn->get_mnemonic() << ": '"
@@ -1165,9 +1190,6 @@ EngineJvm::buildAst(const std::vector<std::string> &fileNames) {
   }
   cout << "-----------\n\n";
 #endif
-
-//TODO:: Run the partitioner?
-  //jvmClass->partition();
 
   // Dump diagnostics from the partition
 #ifdef DEBUG_ON
@@ -1227,6 +1249,14 @@ EngineJvm::isaName(const std::string &s) {
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //                                      Settings and Properties
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+Architecture::BaseConstPtr
+EngineJvm::obtainArchitecture() {
+    if (!architecture_) {
+        architecture_ = Architecture::findByName("jvm").orThrow();
+    }
+    return architecture_;
+}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //                                      JVM Module

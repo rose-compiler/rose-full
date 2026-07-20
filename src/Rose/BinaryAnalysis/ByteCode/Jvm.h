@@ -68,7 +68,7 @@ class JvmMethod final : public Method {
     /** Allocating constructor. */
     static Ptr instance(SgAsmJvmFileHeader*, SgAsmJvmMethod*, Address);
 
-    JvmMethod::Ptr promote(const Sawyer::SharedPointer<Method>& from);
+    static JvmMethod::Ptr promote(const Sawyer::SharedPointer<Method>& from);
 
     std::string name() const override;
     bool isSystemReserved(const std::string &name) const override;
@@ -137,7 +137,7 @@ class JvmClass final : public Class {
     /** Allocating constructor. */
     static Ptr instance(NamespacePtr& ns, SgAsmJvmFileHeader* jfh);
 
-    JvmClass::Ptr promote(const Sawyer::SharedPointer<Class>& from);
+    static JvmClass::Ptr promote(const Sawyer::SharedPointer<Class>& from);
 
     /** The string found at the given index into the constant pool. */
     static std::string name(uint16_t index, const SgAsmJvmConstantPool*);

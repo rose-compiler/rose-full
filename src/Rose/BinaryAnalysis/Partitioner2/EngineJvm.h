@@ -26,7 +26,6 @@ public:
     /** Shared ownership pointer. */
     using Ptr = EngineJvmPtr;
 
-private:
     using Super = Engine;
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -47,6 +46,7 @@ private:
                                             // Zipper.find(className)
 
     static constexpr Address vaDefaultIncrement{4*1024};
+
     Address nextFunctionVa_;
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -78,12 +78,14 @@ public:
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 public:
     /** Predicate for matching a concrete engine factory by command-line parser result and specimen. */
-    virtual bool matchFactory(const Sawyer::CommandLine::ParserResult &result, const std::vector<std::string> &specimen) const override;
+    bool matchFactory(const Sawyer::CommandLine::ParserResult &result, const std::vector<std::string> &specimen) const override;
 
-    virtual EnginePtr instanceFromFactory(const Settings&) override;
+    EnginePtr instanceFromFactory(const Settings&) override;
 
-    virtual std::list<Sawyer::CommandLine::SwitchGroup> commandLineSwitches() override;
-    virtual std::pair<std::string, std::string> specimenNameDocumentation() override;
+    std::list<Sawyer::CommandLine::SwitchGroup> commandLineSwitches() override;
+    std::pair<std::string, std::string> specimenNameDocumentation() override;
+
+    static Ptr promote(const Engine::Ptr&);
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     //                                  The very top-level use case
@@ -304,6 +306,7 @@ public:
     virtual void runPartitionerRecursive(const PartitionerPtr&) override;
     virtual void runPartitionerFinal(const PartitionerPtr&) override;
 
+
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     // Partitioner mid-level functions
     //
@@ -382,6 +385,8 @@ public:
 
     /** Replacement for ::frontend for Jvm files only */
     SgProject* roseFrontendReplacement(const std::vector<std::string> &fileNames);
+
+    Architecture::BaseConstPtr obtainArchitecture() override;
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     //                                  Internal stuff

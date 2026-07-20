@@ -550,8 +550,11 @@ Engine::Ptr
 Engine::forge(const std::vector<std::string> &specimen) {
     const auto factories = registeredFactories();
     for (const Engine::Ptr &factory: boost::adaptors::reverse(factories)) {
-      if (factory->matchFactory(Sawyer::CommandLine::ParserResult{}, specimen))
-            return factory->instanceFromFactory(Settings());
+        if (factory->matchFactory(Sawyer::CommandLine::ParserResult{}, specimen)) {
+            Engine::Ptr engine = factory->instanceFromFactory(Settings());
+            engine->specimen(specimen);
+            return engine;
+        }
     }
     return {};
 }
@@ -870,8 +873,9 @@ Engine::loadSpecimens(const std::string &fileName) {
 
 Architecture::Base::ConstPtr
 Engine::architecture() {
-    if (!architecture_)
+    if (!architecture_) {
         obtainArchitecture();
+    }
     ASSERT_not_null(architecture_);
     return architecture_;
 }

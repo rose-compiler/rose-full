@@ -121,9 +121,8 @@ Class::strings() {
     return strings_;
 }
 
-void Class::partition(const PartitionerPtr &partitioner, BS::RiscOperatorsPtr &ops,
-                      std::map<std::string,Address> &discoveredFunctions) const
-{
+void
+Class::partition(const PartitionerPtr &partitioner, std::map<std::string,Address> &discoveredFunctions) const {
     const size_t nBits = 64;
 
     for (auto method : methods()) {
@@ -205,17 +204,16 @@ void Class::partition(const PartitionerPtr &partitioner, BS::RiscOperatorsPtr &o
                     // Attach old block only if its address differs from the new instruction's
                     partitioner->attachBasicBlock(block);
                 }
-#if USE_OPS
-                block = Partitioner2::BasicBlock::instance(va, partitioner, ops);
-#else
                 block = Partitioner2::BasicBlock::instance(va, partitioner);
-#endif
+
                 function->insertBasicBlock(va);
                 method->append(block);
                 needNewBlock = false;
             }
 
             if (block->address() == function->address() && function->address() != seenVa) {
+//TODO: Save this for initializing frames
+#if 0
                 // Create and push the this pointer for a new frame
                 // TODO: This should be done by initializeFrame
                 // CIL needs ops to work with frames
@@ -233,6 +231,7 @@ void Class::partition(const PartitionerPtr &partitioner, BS::RiscOperatorsPtr &o
 
                     ops->writeLocal(0, this_);
                 }
+#endif
             }
 
             // Warning: this instruction can't be linked into ROSE's AST (parent must be null)
@@ -264,11 +263,8 @@ void Class::partition(const PartitionerPtr &partitioner, BS::RiscOperatorsPtr &o
                         if (method->isSystemReserved(callee)) {
                             Address reservedVa = Container::nextSystemReservedVa();
                             auto reservedFunction = Partitioner2::Function::instance(reservedVa, callee);
-#if USE_OPS
-                            auto reservedBlock = Partitioner2::BasicBlock::instance(reservedVa, partitioner, ops);
-#else
                             auto reservedBlock = Partitioner2::BasicBlock::instance(reservedVa, partitioner);
-#endif
+
                             reservedFunction->insertBasicBlock(reservedVa);
                             partitioner->attachBasicBlock(reservedBlock);
                             partitioner->attachFunction(reservedFunction);
@@ -297,11 +293,7 @@ void Class::partition(const PartitionerPtr &partitioner, BS::RiscOperatorsPtr &o
 
         // If this is an interface an empty block will need to be created
         if (block == nullptr) {
-#if USE_OPS
-            block = Partitioner2::BasicBlock::instance(va, partitioner, ops);
-#else
             block = Partitioner2::BasicBlock::instance(va, partitioner);
-#endif
             function->insertBasicBlock(va);
             method->append(block);
         }
@@ -411,10 +403,9 @@ Namespace::append(Class::Ptr ptr) {
 }
 
 void
-Namespace::partition(const PartitionerPtr& partitioner, BS::RiscOperatorsPtr& ops,
-                     std::map<std::string,Address> &discoveredFunctions) const {
+Namespace::partition(const PartitionerPtr& partitioner, std::map<std::string,Address> &discoveredFunctions) const {
     for (auto cls: classes()) {
-        cls->partition(partitioner, ops, discoveredFunctions);
+        cls->partition(partitioner, discoveredFunctions);
     }
 }
 
@@ -440,7 +431,7 @@ Container::namespaces() const {
 }
 
 void
-Container::partition(const PartitionerPtr& partitioner, BS::RiscOperatorsPtr& ops) const {
+Container::partition(const PartitionerPtr& partitioner) const {
     // Both Cil and Jvm need call return edges to be added by Partitioner::attachBasicBlock()
     partitioner->autoAddCallReturnEdges(true);
 
@@ -448,7 +439,7 @@ Container::partition(const PartitionerPtr& partitioner, BS::RiscOperatorsPtr& op
     std::map<std::string,Address> discoveredFunctions{};
 
     for (auto nmSpace: namespaces_) {
-        nmSpace->partition(partitioner, ops, discoveredFunctions);
+        nmSpace->partition(partitioner, discoveredFunctions);
     }
 
     // Attach empty functions as targets for invoke of system functions
@@ -460,11 +451,8 @@ Container::partition(const PartitionerPtr& partitioner, BS::RiscOperatorsPtr& op
         if (isSystemReserved(name)) {
             if (!partitioner->placeholderExists(va)) {
                 auto function = Partitioner2::Function::instance(va, name);
-#if USE_OPS
-                auto block = Partitioner2::BasicBlock::instance(va, partitioner, ops);
-#else
                 auto block = Partitioner2::BasicBlock::instance(va, partitioner);
-#endif
+
                 function->insertBasicBlock(va);
                 partitioner->attachBasicBlock(block);
                 partitioner->attachFunction(function);

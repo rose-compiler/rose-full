@@ -1570,6 +1570,33 @@ void
 EngineBinary::runPartitionerRecursive(const Partitioner::Ptr &partitioner) {
     Sawyer::Message::Stream where(mlog[WHERE]);
 
+    // Create the symbolic execution state
+    //
+    Architecture::Base::ConstPtr arch = partitioner->architecture();
+    SmtSolver::Ptr solver = SmtSolver::instance("none");
+    RegisterDictionary::Ptr regdict = arch->registerDictionary();
+
+    BaseSemantics::SValue::Ptr protoval = InstructionSemantics::SymbolicSemantics::SValue::instance();
+
+    BaseSemantics::RegisterState::Ptr rstate = BaseSemantics::RegisterStateGeneric::instance(protoval, regdict);
+    BaseSemantics::RegisterState::Ptr istate = BaseSemantics::RegisterStateGeneric::instance(protoval, regdict);
+    istate->purpose(BaseSemantics::AddressSpace::Purpose::INTERRUPTS);
+
+    BaseSemantics::MemoryState::Ptr mstate = InstructionSemantics::SymbolicSemantics::MemoryListState::instance(protoval, protoval);
+
+    BaseSemantics::FrameState::Ptr fstate = BaseSemantics::FrameState::instance(protoval);
+    fstate->purpose(BaseSemantics::AddressSpace::Purpose::FRAMES);
+
+    auto state = BaseSemantics::State::instance(rstate, mstate, istate, fstate);
+    ASSERT_require(state);
+    ASSERT_require(state->hasFrameState());
+
+    auto ops = InstructionSemantics::SymbolicSemantics::RiscOperators::instanceFromState(state, solver);
+    InstructionSemantics::BaseSemantics::RiscOperatorsPtr baseOps = ops;
+
+    // Make the semantics machine state available
+    state_ = state;
+
     // Decode and partition any CIL byte code (sections with name "CLR Runtime Header")
     SAWYER_MESG(where) <<"decoding and partitioning CIL byte code\n";
     bool foundCilSection = partitionCilSections(partitioner);
@@ -1697,12 +1724,19 @@ EngineBinary::partitionCilSections(const Partitioner::Ptr &partitioner) {
       settings().partitioner.doingPostAnalysis = false;
 
       ByteCode::CilContainer cilContainer{mdr};
-#if DONT_USE_OPS
       cilContainer.partition(partitioner);
-#else
-      BS::RiscOperatorsPtr nullOps{nullptr};
-      cilContainer.partition(partitioner, nullOps);
-#endif
+
+      // Make the ByteCode analysis class available
+
+      auto nss = cilContainer.namespaces();
+      ASSERT_require(nss.size() > 0);
+
+      auto ns = nss[0];
+      auto cls = ns->classes();
+      ASSERT_require(cls.size() > 0);
+
+      analysisClass_ = cls[0];
+
       return true;
     }
 

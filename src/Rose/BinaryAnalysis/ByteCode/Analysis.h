@@ -3,20 +3,25 @@
 #include <featureTests.h>
 #ifdef ROSE_ENABLE_BINARY_ANALYSIS
 
+//erasmus
+#if 1
 #include <Rose/BinaryAnalysis/Disassembler/BasicTypes.h>
 #include <Rose/BinaryAnalysis/Partitioner2/BasicTypes.h>
+#endif
 
+//erasmus
+#if 0
 // For operators
 #include <Rose/BinaryAnalysis/InstructionSemantics/SymbolicSemantics.h>
+#endif
 
 class SgAsmInstructionList;
-
-namespace P2 = Rose::BinaryAnalysis::Partitioner2;
-namespace BS = Rose::BinaryAnalysis::InstructionSemantics::BaseSemantics;
 
 namespace Rose {
 namespace BinaryAnalysis {
 namespace ByteCode {
+
+namespace P2 = Partitioner2;
 
 using BasicBlockPtr = P2::BasicBlockPtr;
 using PartitionerPtr = P2::PartitionerPtr;
@@ -153,6 +158,7 @@ class Class: public Sawyer::SharedObject,
   public:
     /** Shared ownership pointers. */
     using Ptr = Sawyer::SharedPointer<Class>;
+    using NamespacePtr = Sawyer::SharedPointer<Namespace>; // forward declaration
 
     virtual ~Class();
 
@@ -171,9 +177,8 @@ class Class: public Sawyer::SharedObject,
     const std::vector<Attribute::Ptr>& attributes() const;
     const std::vector<Interface::Ptr>& interfaces() const;
 
-    virtual void partition(const PartitionerPtr &partitioner, BS::RiscOperatorsPtr &ops,
+    virtual void partition(const PartitionerPtr &partitioner,
                            std::map<std::string,Address> &discoveredFunctions) const;
-
     virtual void digraph() const;
     virtual void dump() = 0;
 
@@ -209,7 +214,7 @@ class Namespace: public Sawyer::SharedObject,
     static Ptr instance();
 
     virtual std::string name() const;
-    virtual void partition(const PartitionerPtr &partitioner, BS::RiscOperatorsPtr &ops,
+    virtual void partition(const PartitionerPtr &partitioner,
                            std::map<std::string,Address> &discoveredFunctions) const;
 
     void append(Class::Ptr ptr);
@@ -239,7 +244,7 @@ class Container: public Sawyer::SharedObject,
   public:
     virtual std::string name() const = 0;
     virtual bool isSystemReserved(const std::string &name) const = 0;
-    virtual void partition(const PartitionerPtr &partitioner, BS::RiscOperatorsPtr &ops) const;
+    virtual void partition(const PartitionerPtr &partitioner) const;
 
     const std::vector<Namespace::Ptr>& namespaces() const;
 

@@ -5,6 +5,7 @@
 
 #include <Rose/BasicTypes.h>
 #include <Rose/BinaryAnalysis/Architecture/BasicTypes.h>
+#include <Rose/BinaryAnalysis/ByteCode/Analysis.h>
 #include <Rose/BinaryAnalysis/Partitioner2/Exception.h>
 #include <Rose/BinaryAnalysis/Partitioner2/Modules.h>
 
@@ -356,12 +357,15 @@ private:
     std::string name_;                                  // factory name
     Settings settings_;                                 // Settings for the partitioner.
     SgAsmInterpretation *interp_;                       // interpretation set by loadSpecimen
-    Architecture::BaseConstPtr architecture_;           // architecture-specific information
     MemoryMapPtr map_;                                  // memory map initialized by load()
     BasicBlockWorkList::Ptr basicBlockWorkList_;        // what blocks to work on next
     CodeConstants::Ptr codeFunctionPointers_;           // generates constants that are found in instruction ASTs
     ProgressPtr progress_;                              // optional progress reporting
     std::vector<std::string> specimen_;                 // list of additional command line arguments (often file names)
+protected:
+    ByteCode::Class::Ptr analysisClass_;                // the ByteCode analysis class used for partitioning
+    Architecture::BaseConstPtr architecture_;           // architecture-specific information
+    InstructionSemantics::BaseSemantics::StatePtr state_; // the semantics machine state
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     //                                  Construction and destruction
@@ -1016,6 +1020,26 @@ public:
      * @{ */
     const std::vector<std::string>& specimen() const /*final*/;
     virtual void specimen(const std::vector<std::string>&);
+    /** @} */
+
+    /** Property: state.
+     *
+     *  The semantic machine state.
+     *
+     * @{ */
+    InstructionSemantics::BaseSemantics::StatePtr state() {
+        return state_;
+    }
+    /** @} */
+
+    /** Property: ByteCode class used for partitioning.
+     *
+     *  After partitioning this class makes the partitioning results available for analysis.
+     *
+     * @{ */
+    ByteCode::Class::Ptr analysisClass() {
+        return analysisClass_;
+    }
     /** @} */
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
