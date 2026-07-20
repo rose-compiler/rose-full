@@ -9,9 +9,8 @@ using namespace std;
 
 DebugLog DebugOperatorDescriptor("-debugannot");
 ReplaceParams::
-ReplaceParams ( const ParameterDeclaration& decl, const AstInterface::AstNodeList& args,
-                Map2Object<AstInterface*,AstNodePtr,AstNodePtr>* codegen)
-{
+ReplaceParams ( AstInterface& fa, 
+      const ParameterDeclaration& decl, const AstInterface::AstNodeList& args) {
   if (decl.get_params().size() < args.size()) {
     std::cerr << "Error: mismatching numbers of parameters and arguments in annotation." 
             << decl.get_params().size() << " vs " << args.size() << "\n";
@@ -23,7 +22,7 @@ ReplaceParams ( const ParameterDeclaration& decl, const AstInterface::AstNodeLis
        p1 != args.end(); ++p1, ++index) {
     AstNodePtr curAst = *p1;
     string curpar = decl.get_params()[index];
-    SymbolicAstWrap curarg(curAst, codegen);
+    SymbolicVal curarg = SymbolicValGenerator::GetSymbolicVal(fa, curAst);
     parmap[curpar] = curarg;
     partypemap[curpar] = decl.get_param_types()[index];
     DebugOperatorDescriptor([&curpar, &curarg](){ return "Operator parameter " + curpar + "->" + curarg.toString(); });
@@ -43,9 +42,9 @@ SymbolicVal ReplaceParams::operator()( const SymbolicVal& v)
   return cur;
 }
 
-SymbolicAstWrap ReplaceParams:: find( const string& varname)
+SymbolicVal ReplaceParams:: find( const string& varname)
 {
-  map<string,SymbolicAstWrap>::const_iterator p = parmap.find(varname);
+  map<string,SymbolicVal>::const_iterator p = parmap.find(varname);
   if (p != parmap.end()) {
     return (*p).second;
   }
@@ -56,8 +55,8 @@ SymbolicAstWrap ReplaceParams:: find( const string& varname)
 void ReplaceParams:: VisitVar( const SymbolicVar &var)
 {
   string varname = var.GetVarName();
-  SymbolicAstWrap ast = find(varname);
-  if (ast.get_ast() != AST_NULL)
+  auto ast = find(varname);
+  if (!ast.IsNIL())
     cur = ast;
 }
 

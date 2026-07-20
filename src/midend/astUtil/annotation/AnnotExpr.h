@@ -54,7 +54,7 @@ class SymbolicDotExp : public SymbolicFunction
   virtual AstNodePtr CodeGen( AstInterface& fa) const;
   virtual SymbolicValImpl* Clone() const
          { return new SymbolicDotExp(*this); }
-  virtual SymbolicFunction* cloneFunction(const Arguments& args) const
+  virtual SymbolicVal cloneFunction(const Arguments& args) const
          { return new SymbolicDotExp(args); }
 };
 
@@ -69,7 +69,7 @@ class SymbolicFunctionPtrCall : public SymbolicFunction
   virtual AstNodePtr CodeGen( AstInterface& fa) const;
   virtual SymbolicValImpl* Clone() const
          { return new SymbolicFunctionPtrCall(*this); }
-  virtual SymbolicFunction* cloneFunction(const Arguments& args) const
+  virtual SymbolicVal cloneFunction(const Arguments& args) const
          { return new SymbolicFunctionPtrCall(args); }
 };
 
@@ -77,7 +77,7 @@ class SymbolicExtendVar : public SymbolicFunction
 {
   SymbolicValImpl* Clone() const
    { return new SymbolicExtendVar(*this); }
-  virtual SymbolicFunction* cloneFunction(const Arguments& v) const
+  virtual SymbolicVal cloneFunction(const Arguments& v) const
          { return new SymbolicExtendVar( v); }
 
   public:

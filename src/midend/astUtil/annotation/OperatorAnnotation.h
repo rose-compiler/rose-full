@@ -45,8 +45,7 @@ class OperatorAnnotCollection :
   }
   template <class CollectObject>
   bool CollectAnnotation(AstInterface& fa, const AstNodePtr& fc,
-                CollectObject* collect_f,
-                Map2Object<AstInterface*, AstNodePtr, AstNodePtr>* astcodegen = 0) {
+                CollectObject* collect_f) {
     DebugLog debugAnnot("-debugannot");
     AstInterface::AstNodeList args;
     OperatorDeclaration op(fa, fc, &args);
@@ -60,7 +59,7 @@ class OperatorAnnotCollection :
     if (annot != 0) {
        debugAnnot([&op](){return "Found recognized operation annotation:" + op.ToString(); });
        if (collect_f != 0) {
-          annot->collect(fa, args, *collect_f, astcodegen);
+          annot->collect(fa, args, *collect_f);
        }
        return true;
     }
@@ -68,8 +67,7 @@ class OperatorAnnotCollection :
   }
   bool known_operator( AstInterface& fa, 
                        const AstNodePtr& exp, AstInterface::AstNodeList* argp=0, 
-                       Descriptor* desc= 0, bool replpar = false,
-                       Map2Object<AstInterface*, AstNodePtr, AstNodePtr>* astcodegen =0) 
+                       Descriptor* desc= 0, bool replpar = false)
   {
      DebugLog debugAnnot("-debugannot");
      AstInterface::AstNodeList args;
@@ -84,7 +82,7 @@ class OperatorAnnotCollection :
      if (desc != 0) {
          *desc = *original_descriptor;
          if (replpar) {
-           ReplaceParams repl = desc->GenReplaceParams( args, astcodegen);
+           ReplaceParams repl = desc->GenReplaceParams(fa, args);
            desc->replace_val( repl);
          }
      }

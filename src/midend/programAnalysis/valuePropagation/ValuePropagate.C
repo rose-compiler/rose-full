@@ -149,7 +149,7 @@ class CollectKnownValue
                                AstInterface::TraversalVisitType)
    {
        HasValueMapReplace valrepl( fa, valmap, false);
-       if (ValueAnnotation::get_inst()->is_value_restrict_op( fa, s, &append, &valrepl, &astcodegen)) 
+       if (ValueAnnotation::get_inst()->is_value_restrict_op( fa, s, &append, &valrepl)) 
              return true;
        AstNodePtr lhs, rhs;
        AstInterface::AstNodeList vars, args;

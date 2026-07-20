@@ -248,7 +248,7 @@ class CollectReadRefWrap : public CollectObject<AstInterface::AstNodePtr>
                       const AstNodePtr& _stmt,
                       CollectObject* c)
     : collect(c), func(f), stmt(_stmt), fa(_fa) {}
-  bool operator() ( const AstInterface::AstNodePtr& ref)
+  bool operator() ( const AstInterface::AstNodePtr& ref) override
    {
       AstInterface::AstNodeList args;
       AstInterface::AstNodePtr callee;
@@ -307,7 +307,7 @@ class CollectModRefWrap : public CollectReadRefWrap
                       CollectObject* read,
                       CollectObject* m)
     : CollectReadRefWrap(_fa, f, _stmt, read), mod(m) {}
-  bool operator() ( const AstInterface::AstNodePtr& ref)
+  bool operator() ( const AstInterface::AstNodePtr& ref) override
    {
       AstNodeList args;
       if (fa.IsFunctionCall(ref, 0,&args) || fa.IsArrayAccess(ref, 0, &args)) {
@@ -317,8 +317,10 @@ class CollectModRefWrap : public CollectReadRefWrap
                read(*p);
         }
       }
-      if (mod != 0)
-        (*mod)(AstNodePtrImpl(ref).get_ptr(), stmt);
+      if (mod != 0) {
+        DebugLocalInfoCollect([&ref]{ return "collecting modification:" + AstInterface::AstToString(ref); });
+        (*mod)(ref, stmt);
+      }
       return true;
    }
 };

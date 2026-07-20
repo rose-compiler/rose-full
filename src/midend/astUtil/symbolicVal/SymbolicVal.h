@@ -206,7 +206,7 @@ class SymbolicVal : public CountRefHandle <SymbolicValImpl>
    }
    return false;
   }
-  bool isFunction(std::string& name, std:: vector<SymbolicVal>* argp=0) const;
+  bool isFunction(AstInterface::OperatorEnum* op =0, std::string* name=0, std:: vector<SymbolicVal>* argp=0) const;
 
   SymbolicValType GetValType() const 
       { return (ConstPtr()== 0)? VAL_BASE : ConstRef().GetValType(); }
@@ -249,6 +249,7 @@ class SymbolicFunction : public SymbolicValImpl
   virtual void Visit( SymbolicVisitor *v) const { v->VisitFunction(*this); }
   bool operator == (const SymbolicFunction& that) const;
   SymbolicVal GetOp() const { return op; }
+  virtual OpType GetAstOpType() const { return t; }
   const Arguments& get_args() const { return args; }
   SymbolicVal get_arg(int index) const { return args[index]; }
   const_iterator args_begin() const { return args.begin(); }
@@ -260,16 +261,18 @@ class SymbolicFunction : public SymbolicValImpl
       { return SymbolicVal(); }
   virtual bool GetConstOpd(int&, int&) const { return false; }
   SymbolicValImpl* Clone() const { return new SymbolicFunction(*this); }
-  virtual SymbolicFunction* cloneFunction(const Arguments& args) const
-     { return  new SymbolicFunction(t, op,args); }
+  virtual SymbolicVal cloneFunction(const Arguments& args) const;
 };
 
 inline bool 
-SymbolicVal:: isFunction(std::string& name, std:: vector<SymbolicVal>* argp) const
+SymbolicVal:: isFunction(AstInterface::OperatorEnum* op, std::string* name, std:: vector<SymbolicVal>* argp) const
 {
    if (ConstPtr() != 0 && ConstRef().GetValType() == VAL_FUNCTION) {
      const SymbolicFunction& c = static_cast<const SymbolicFunction&>(ConstRef());
-     name = c.GetOp().toString();
+     if (op != 0)
+        *op = c.GetAstOpType();
+     if (name != 0) 
+        *name = c.GetOp().toString();
      if (argp != 0)
        *argp = c.get_args();
      return true;
@@ -291,7 +294,7 @@ class SymbolicPow : public SymbolicFunction
   virtual bool GetConstOpd(int &val1, int &val2) const 
             { return last_arg().isConstInt(val1, val2); }
   SymbolicValImpl* Clone() const { return new SymbolicPow(*this); }
-  virtual SymbolicFunction* cloneFunction(const Arguments& args) const
+  virtual SymbolicVal cloneFunction(const Arguments& args) const
      { SymbolicFunction* r =  new SymbolicPow(args); return r; }
 };
 
@@ -301,6 +304,8 @@ class SymbolicValGenerator
 {
  public:
  static SymbolicVal GetSymbolicVal( AstInterface &fa, const AstNodePtr& exp);
+ static SymbolicVal GetSymbolicVal(AstInterface::OperatorEnum op, 
+                                  const std:: vector<SymbolicVal>& args);
  static SymbolicVal GetSymbolicVal( const std::string& sig);
  static SymbolicVal get_null() { return SymbolicVal(); }
  static SymbolicVal get_unknown() { return new SymbolicValImpl(); }
@@ -309,6 +314,9 @@ class SymbolicValGenerator
         SymbolicVal* lb =0, SymbolicVal* ub=0, SymbolicVal* step=0, AstNodePtr* body=0);
 };
 
+inline SymbolicVal SymbolicFunction::cloneFunction(const std::vector<SymbolicVal>& args)  const
+  { return SymbolicValGenerator::GetSymbolicVal(t, args); }
+SymbolicVal ApplyFunction();
 SymbolicVal ApplyBinOP( SymOpType t, const SymbolicVal &v1,
                         const SymbolicVal &v2);
 SymbolicVal ApplyUnaryOP(SymOpType t, const SymbolicVal &v);

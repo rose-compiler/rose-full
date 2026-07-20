@@ -85,8 +85,7 @@ class ValueAnnotation
   bool known_type( AstInterface& fa, const AstNodePtr& exp, HasValueDescriptor* d = 0);
   bool is_value_restrict_op( AstInterface& fa, const AstNodePtr& exp, 
                     Collect2Object< AstNodePtr, HasValueDescriptor>* desc = 0,
-                    MapObject<SymbolicVal, SymbolicVal>* valMap = 0,
-                    Map2Object<AstInterface*, AstNodePtr, AstNodePtr> *codegen = 0);
+                    MapObject<SymbolicVal, SymbolicVal>* valMap = 0);
   bool is_access_value( CPPAstInterface& fa, const AstNodePtr& exp,
                         AstNodePtr* obj=0, std::string* name = 0,
                         AstInterface::AstNodeList* args=0,

@@ -43,8 +43,8 @@ AliasAnnotAnal(AstInterface& fa,
     DebugOperatorAnnotation([](){ return "AliasAnnotationAnalysis: Parameter and argument sizes are different. Return false."; });
     return false;
   }
-  ReplaceParams paramMap( desc.get_param_decl(), args);
-  paramMap.add("result", result);
+  ReplaceParams paramMap( fa, desc.get_param_decl(), args);
+  paramMap.add(fa, "result", result);
   int index = 0;
   for (OperatorAliasDescriptor::const_iterator p1 = desc.begin();
        p1 != desc.end(); ++p1, ++index) {
@@ -52,7 +52,7 @@ AliasAnnotAnal(AstInterface& fa,
     for (NameGroup::const_iterator p2 = cur.begin();
          p2 != cur.end(); ++p2) {
       std::string varname = *p2;
-      AstNodePtr arg = paramMap.find(varname).get_ast();
+      AstNodePtr arg = paramMap.find(varname).CodeGen(fa);
       if (arg != AST_NULL) {
         collectalias( std::pair<AstNodePtr, int>(arg, index));
       }

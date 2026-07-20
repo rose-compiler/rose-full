@@ -325,6 +325,89 @@ IsFortranLoop(AstInterface& fa, const AstNodePtr& s, SymbolicVar* ivar ,
   return true;
 }
 
+SymbolicVal SymbolicValGenerator::
+GetSymbolicVal(AstInterface::OperatorEnum opr, 
+                                  const std:: vector<SymbolicVal>& args) {
+    switch (opr) {
+    case AstInterface::BOP_TIMES:
+         return args[0] * args[1];
+    case AstInterface::BOP_PLUS:
+         return args[0] + args[1];
+    case AstInterface::BOP_MINUS:
+         return args[0] - args[1];
+    case AstInterface::BOP_MOD:
+         return new SymbolicFunction(opr, "%", args[0], args[1]);
+    case AstInterface::BOP_DOT_ACCESS:
+        return new SymbolicFunction( opr, ".", args[0],args[1]);
+    case AstInterface::BOP_ARROW_ACCESS:
+        return new SymbolicFunction( opr, "->", args[0],args[1]);
+    case AstInterface::BOP_DIVIDE:
+        return new SymbolicFunction( opr, "/", args[0],args[1]);
+    case AstInterface::BOP_EQ:
+        return new SymbolicFunction( opr, "==", args[0],args[1]);
+    case AstInterface::BOP_LE:
+        return new SymbolicFunction( opr, "<=", args[0],args[1]);
+    case AstInterface::BOP_LT:
+        return new SymbolicFunction( opr, "<", args[0],args[1]);
+    case AstInterface::BOP_NE:
+        return new SymbolicFunction( opr, "!=", args[0],args[1]);
+    case AstInterface::BOP_GT:
+        return new SymbolicFunction( opr, ">", args[0],args[1]);
+    case AstInterface::BOP_GE:
+        return new SymbolicFunction( opr, ">=", args[0],args[1]);
+    case AstInterface::BOP_AND:
+        return new SymbolicFunction( opr, "&&", args[0],args[1]);
+    case AstInterface::BOP_OR:
+        return new SymbolicFunction( opr, "||", args[0],args[1]);
+    case AstInterface::BOP_BIT_RSHIFT:
+        return new SymbolicFunction( opr, ">>", args[0],args[1]);
+    case AstInterface::BOP_BIT_LSHIFT:
+        return new SymbolicFunction( opr, "<<", args[0],args[1]);
+    case AstInterface::BOP_BIT_AND:
+        return new SymbolicFunction( opr, "&", args[0],args[1]);
+    case AstInterface::BOP_BIT_OR:
+        return new SymbolicFunction( opr, "|", args[0],args[1]);
+    case AstInterface::UOP_MINUS:
+        return (-1) * args[0];
+    case AstInterface::UOP_ADDR: {
+        std::vector<SymbolicVal> narg;
+        if (args[0].isFunction(&opr, 0, &narg) && opr == AstInterface::UOP_DEREF) {
+             return narg[0];
+        }
+        return new SymbolicFunction( opr, "&", args[0]);
+      }
+    case AstInterface::UOP_DEREF: {
+        std::vector<SymbolicVal> narg;
+        if (args[0].isFunction(&opr,0,&narg) && opr == AstInterface::UOP_ADDR) {
+             return narg[0];
+        }
+        return new SymbolicFunction( opr, "*", args[0]);
+      }
+    case AstInterface::UOP_ALLOCATE:
+        return new SymbolicFunction( opr, "new", args[0]);
+    case AstInterface::UOP_NOT:
+        return new SymbolicFunction( opr, "!", args[0]);
+    case AstInterface::UOP_CAST_C:
+    case AstInterface::UOP_CAST_REINTERP:
+    case AstInterface::UOP_CAST_STATIC:
+    case AstInterface::UOP_CAST_DYNAMIC:
+    case AstInterface::UOP_CAST_CONST:
+        return args[0];
+    case AstInterface::UOP_DECR1:
+    case AstInterface::UOP_DECR1_POST:
+        return new SymbolicFunction( opr, "--", args[0]);
+    case AstInterface::UOP_INCR1:
+    case AstInterface::UOP_INCR1_POST:
+        return new SymbolicFunction( opr, "++", args[0]);
+    default:
+     {
+         cerr<<"Error in SymbolicValGenerator::GetSymbolicVal(): unhandled type of binary operator "<< AstInterface::toString(opr) <<endl;
+        ROSE_ABORT();
+     }
+     }
+    return SymbolicVal();
+}
+
 SymbolicVal SymbolicValGenerator ::
 GetSymbolicVal( AstInterface &fa, const AstNodePtr& exp)
 {
@@ -340,80 +423,11 @@ GetSymbolicVal( AstInterface &fa, const AstNodePtr& exp)
   }
   else if (fa.IsBinaryOp(exp, &opr, &s1, &s2)) {
      SymbolicVal v1 = GetSymbolicVal( fa, s1 ), v2 = GetSymbolicVal(fa, s2);
-     switch (opr) {
-     case AstInterface::BOP_TIMES:
-         return v1 * v2;
-     case AstInterface::BOP_PLUS:
-         return v1 + v2;
-     case AstInterface::BOP_MINUS:
-         return v1 - v2;
-     case AstInterface::BOP_MOD:
-         return new SymbolicFunction(opr, "%", v1, v2);
-     case AstInterface::BOP_DOT_ACCESS:
-     case AstInterface::BOP_ARROW_ACCESS:
-         return new SymbolicAstWrap(exp);
-     case AstInterface::BOP_DIVIDE:
-        return new SymbolicFunction( opr, "/", v1,v2);
-     case AstInterface::BOP_EQ:
-        return new SymbolicFunction( opr, "==", v1,v2);
-     case AstInterface::BOP_LE:
-        return new SymbolicFunction( opr, "<=", v1,v2);
-     case AstInterface::BOP_LT:
-        return new SymbolicFunction( opr, "<", v1,v2);
-     case AstInterface::BOP_NE:
-        return new SymbolicFunction( opr, "!=", v1,v2);
-     case AstInterface::BOP_GT:
-        return new SymbolicFunction( opr, ">", v1,v2);
-     case AstInterface::BOP_GE:
-        return new SymbolicFunction( opr, ">=", v1,v2);
-     case AstInterface::BOP_AND:
-        return new SymbolicFunction( opr, "&&", v1,v2);
-     case AstInterface::BOP_OR:
-        return new SymbolicFunction( opr, "||", v1,v2);
-     case AstInterface::BOP_BIT_RSHIFT:
-        return new SymbolicFunction( opr, ">>", v1,v2);
-     case AstInterface::BOP_BIT_LSHIFT:
-        return new SymbolicFunction( opr, "<<", v1,v2);
-     case AstInterface::BOP_BIT_AND:
-        return new SymbolicFunction( opr, "&", v1,v2);
-     case AstInterface::BOP_BIT_OR:
-        return new SymbolicFunction( opr, "|", v1,v2);
-     default:
-     {
-         cerr<<"Error in SymbolicValGenerator::GetSymbolicVal(): unhandled type of binary operator "<< AstInterface::toString(opr) <<endl;
-        ROSE_ABORT();
-     }
-     }
+     return GetSymbolicVal(opr, {v1, v2}); 
   }
   else if (fa.IsUnaryOp(exp, &opr, &s1)) {
-    SymbolicVal v = GetSymbolicVal( fa, s1);
-    switch (opr) {
-    case AstInterface::UOP_MINUS:
-        return (-1) * v;
-    case AstInterface::UOP_ADDR:
-        return new SymbolicFunction( opr, "&", v);
-    case AstInterface::UOP_DEREF:
-        return new SymbolicFunction( opr, "*", v);
-    case AstInterface::UOP_ALLOCATE:
-        return new SymbolicFunction( opr, "new", v);
-    case AstInterface::UOP_NOT:
-        return new SymbolicFunction( opr, "!", v);
-    case AstInterface::UOP_CAST_C:
-    case AstInterface::UOP_CAST_REINTERP:
-    case AstInterface::UOP_CAST_STATIC:
-    case AstInterface::UOP_CAST_DYNAMIC:
-    case AstInterface::UOP_CAST_CONST:
-        return v;
-    case AstInterface::UOP_DECR1:
-    case AstInterface::UOP_DECR1_POST:
-        return new SymbolicFunction( opr, "--", v);
-    case AstInterface::UOP_INCR1:
-    case AstInterface::UOP_INCR1_POST:
-        return new SymbolicFunction( opr, "++", v);
-    default:
-       std::cerr << "Cannot handle " << AstInterface::AstToString(exp) << ":" << opr << "\n";
-       ROSE_ABORT();
-     }
+     SymbolicVal v1 = GetSymbolicVal( fa, s1);
+     return GetSymbolicVal(opr, {v1}); 
   }
   else if (fa.IsFunctionCall(exp, &s1, &l) || fa.IsArrayAccess(exp, &s1, &l)) {
      bool ismin = fa.IsMin(s1), ismax = fa.IsMax(s1);
