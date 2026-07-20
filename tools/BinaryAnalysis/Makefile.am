@@ -213,6 +213,13 @@ bat_scan_magic_LDFLAGS = $(ROSE_RPATHS)
 bat_scan_magic_LDADD = libbatSupport.la $(ROSE_LIBS)
 tests += bat-scan-magic.passed
 
+bin_PROGRAMS += bat-semantics
+bat_semantics_SOURCES = bat-semantics.C
+bat_semantics_CPPFLAGS = $(ROSE_INCLUDES)
+bat_semantics_LDFLAGS = $(ROSE_RPATHS)
+bat_semantics_LDADD = libbatSupport.la $(ROSE_LIBS)
+tests += bat-semantics.passed
+
 bin_PROGRAMS += bat-similar-functions
 bat_similar_functions_SOURCES = bat-similar-functions.C
 bat_similar_functions_CPPFLAGS = $(ROSE_INCLUDES)
