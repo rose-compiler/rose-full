@@ -50,7 +50,7 @@ if(ENABLE_CPP)
       COMMAND ${FLEX_EXECUTABLE} -t ${CMAKE_CURRENT_SOURCE_DIR}/omplexer.ll > ${CMAKE_CURRENT_BINARY_DIR}/omp-lex.yy.C
       DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/omplexer.ll)
   else()
-    #Flex is not avaiable so use the pre generated files
+    #Flex is not available so use the pre generated files
     file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/lex.yy.C.pre
          DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
     file(RENAME ${CMAKE_CURRENT_BINARY_DIR}/lex.yy.C.pre ${CMAKE_CURRENT_BINARY_DIR}/lex.yy.C)
@@ -69,7 +69,7 @@ if(ENABLE_CPP)
       COMMAND ${CMAKE_COMMAND} -E rename ${CMAKE_CURRENT_BINARY_DIR}/ompparser.c ${CMAKE_CURRENT_BINARY_DIR}/ompparser.C
       DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/ompparser.yy)
   else() 
-    #Bison unavaialbe so use pre generated files
+    #Bison unavailable so use pre generated files
     file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/ompparser.C.pre ${CMAKE_CURRENT_SOURCE_DIR}/ompparser.h.pre
          DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
     file(RENAME ${CMAKE_CURRENT_BINARY_DIR}/ompparser.C.pre ${CMAKE_CURRENT_BINARY_DIR}/ompparser.C)

@@ -21,14 +21,27 @@ if(ENABLE_JAVA)
     DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/JavaParser.java
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 
-  add_custom_command(
-    OUTPUT  ${CMAKE_CURRENT_BINARY_DIR}/JavaParser.h
-    COMMAND ${Java_JAVAH_EXECUTABLE} -jni
-	    -classpath
-	    "${CMAKE_CURRENT_SOURCE_DIR}/ecj-3.8.2.jar${sep}."
-	    -d ${CMAKE_CURRENT_BINARY_DIR} JavaParser
-    DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/JavaParser.class
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+  #AS (07/22/26): javah is deprecated in more recent java versions, so use javac for those cases
+  if(Java_JAVAH_EXECUTABLE)
+    add_custom_command(
+      OUTPUT  ${CMAKE_CURRENT_BINARY_DIR}/JavaParser.h
+      COMMAND ${Java_JAVAH_EXECUTABLE} -jni
+        -classpath
+        "${CMAKE_CURRENT_SOURCE_DIR}/ecj-3.8.2.jar${sep}."
+        -d ${CMAKE_CURRENT_BINARY_DIR} JavaParser
+      DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/JavaParser.class
+      WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+  else()
+    add_custom_command(
+      OUTPUT  ${CMAKE_CURRENT_BINARY_DIR}/JavaParser.h
+      COMMAND ${Java_JAVAC_EXECUTABLE}
+        -h ${CMAKE_CURRENT_BINARY_DIR}
+        -classpath
+        "${CMAKE_CURRENT_SOURCE_DIR}/ecj-3.8.2.jar${sep}."
+        -d ${CMAKE_CURRENT_BINARY_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/JavaParser.java
+      DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/JavaParser.class
+      WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+  endif()
 
   add_custom_command(
     OUTPUT  ${CMAKE_CURRENT_BINARY_DIR}/JavaTraversal.class
@@ -39,14 +52,26 @@ if(ENABLE_JAVA)
     DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/JavaTraversal.java
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 
-  add_custom_command(
-    OUTPUT  ${CMAKE_CURRENT_BINARY_DIR}/JavaTraversal.h
-    COMMAND ${Java_JAVAH_EXECUTABLE} -jni
-	    -classpath
-	    "${CMAKE_CURRENT_SOURCE_DIR}/ecj-3.8.2.jar${sep}."
-	    -d ${CMAKE_CURRENT_BINARY_DIR} JavaTraversal
-    DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/JavaTraversal.class
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+  if(Java_JAVAH_EXECUTABLE)
+    add_custom_command(
+      OUTPUT  ${CMAKE_CURRENT_BINARY_DIR}/JavaTraversal.h
+      COMMAND ${Java_JAVAH_EXECUTABLE} -jni
+        -classpath
+        "${CMAKE_CURRENT_SOURCE_DIR}/ecj-3.8.2.jar${sep}."
+        -d ${CMAKE_CURRENT_BINARY_DIR} JavaTraversal
+      DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/JavaTraversal.class
+      WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+  else()
+    add_custom_command(
+      OUTPUT  ${CMAKE_CURRENT_BINARY_DIR}/JavaTraversal.h
+      COMMAND ${Java_JAVAC_EXECUTABLE}
+        -h ${CMAKE_CURRENT_BINARY_DIR}
+        -classpath
+        "${CMAKE_CURRENT_SOURCE_DIR}/ecj-3.8.2.jar${sep}."
+        -d ${CMAKE_CURRENT_BINARY_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/JavaTraversal.java
+      DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/JavaTraversal.class
+      WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+  endif()
 
   # This is needed when distcheck compiles the code, I don't know why.
   add_custom_command(

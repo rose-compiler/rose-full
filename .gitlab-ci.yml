@@ -228,8 +228,9 @@ Clang-Mac:
 Memory-Poisoning:
     extends: .develop-base
 
-Check-Warnings:
-    extends: .develop-base
+#AS (07/22/26): Disabling this for the upgrade from gcc8->gcc10
+#Check-Warnings:
+#    extends: .develop-base
 
 #jobs for nightly merging and status testing --------------------------------------------------------------------------------------------------------------------
 .status-base:
@@ -434,33 +435,38 @@ ACATS-Libadalang:
     timeout: 12h
 
 RHEL8-Status:
-    extends: .release-base 
+    extends: .release-base
 
 RHEL9-Status:
-    extends: .release-base 
+    extends: .release-base
 
 Status-Post-Processing:
-    extends: .release-base 
+    extends: .release-base
     needs:
       - job: RHEL8-Status
       - job: RHEL9-Status
 
-Coverage-Analysis:
+Coverage-Analysis-nonsmoke:
     extends: .release-base 
     timeout: 16h
 
+Coverage-Analysis-other:
+    extends: .release-base
+    timeout: 12h
+
 Coverage-Analysis-Ada:
-    extends: .release-base 
+    extends: .release-base
     timeout: 6h
 
 Coverage-Analysis-Libadalang:
-    extends: .release-base 
+    extends: .release-base
     timeout: 6h
 
 Coverage-Analysis-Combine:
-    extends: .release-base 
+    extends: .release-base
     needs:
-      - job: Coverage-Analysis
+      - job: Coverage-Analysis-nonsmoke
+      - job: Coverage-Analysis-other
       - job: Coverage-Analysis-Ada
       - job: Coverage-Analysis-Libadalang
 
