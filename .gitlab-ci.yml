@@ -378,23 +378,23 @@ RMC2-Install:
     extends: .release-base
     
 OMP-Runtime:
-    extends: .release-base 
+    extends: .release-base
     
 GPU:
-    extends: .release-base 
+    extends: .release-base
     
 Plumhall-CVS:
-    extends: .release-base 
+    extends: .release-base
     script:
         - ./$TEST_DIRECTORY/release_launcher.sh $CI_JOB_NAME 16 #Second arg is EXPECTED_FAILS
     
 Plumhall-XVS:
-    extends: .release-base 
+    extends: .release-base
     script:
         - ./$TEST_DIRECTORY/release_launcher.sh $CI_JOB_NAME 4010 #Second arg is EXPECTED_SUCCESS
 
 SAPOH-initialize:
-    extends: .release-base 
+    extends: .release-base
 
 SAPOH-ubi9-cmake-cxx-binaries:
     extends: .release-base
@@ -404,7 +404,7 @@ SAPOH-ubi9-cmake-cxx-binaries:
       - job: SAPOH-initialize
 
 SAPOH-reporting:
-    extends: .release-base 
+    extends: .release-base
     needs:
       - job: SAPOH-ubi9-cmake-cxx-binaries
     
@@ -446,13 +446,14 @@ Status-Post-Processing:
       - job: RHEL8-Status
       - job: RHEL9-Status
 
-Coverage-Analysis-nonsmoke:
-    extends: .release-base 
-    timeout: 16h
-
-Coverage-Analysis-other:
+Coverage-Analysis:
     extends: .release-base
-    timeout: 12h
+    parallel:
+        matrix:
+            - VERSION:
+                - nonsmoke
+                - other
+    timeout: 16h
 
 Coverage-Analysis-Ada:
     extends: .release-base
@@ -465,8 +466,7 @@ Coverage-Analysis-Libadalang:
 Coverage-Analysis-Combine:
     extends: .release-base
     needs:
-      - job: Coverage-Analysis-nonsmoke
-      - job: Coverage-Analysis-other
+      - job: Coverage-Analysis
       - job: Coverage-Analysis-Ada
       - job: Coverage-Analysis-Libadalang
 
