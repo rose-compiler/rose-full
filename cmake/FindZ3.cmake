@@ -117,6 +117,8 @@ macro(find_z3)
         message(STATUS "  Z3_INCLUDE_DIRS = ${_Z3_INCLUDE_DIR}")
         message(STATUS "  Z3_VERSION_H    = ${ROSE_HAVE_Z3_VERSION_H}")
         message(STATUS "  Link target     = z3::libz3")
+      else()
+        message(STATUS "Found Z3: ${Z3_EXECUTABLE}")
       endif()
 
     else()
