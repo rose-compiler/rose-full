@@ -29,6 +29,7 @@ add_dependencies(roseBinaryAnalysisInstructionSemantics rosetta_generated)
 install(FILES
   BaseSemantics.h
   ConcreteSemantics.h
+  ConcreteSemantics.tpp
   DataFlowSemantics.h
   DispatcherAarch32.h
   DispatcherAarch64.h
@@ -47,6 +48,7 @@ install(FILES
   SourceAstSemantics.h
   StaticSemantics.h
   SymbolicSemantics.h
+  SymbolicSemantics.tpp
   TestSemantics.h
   TaintSemantics.h
   TraceSemantics.h

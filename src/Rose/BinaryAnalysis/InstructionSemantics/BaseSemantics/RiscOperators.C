@@ -414,19 +414,55 @@ RiscOperators::fpEffectiveExponent(const SValue::Ptr &a, SgAsmFloatType *aType) 
     return retval;
 }
 
+ValueKind
+RiscOperators::floatKind(SgAsmFloatType *fpType) const {
+    ASSERT_not_null(fpType);
+
+    if (fpType == SageBuilderAsm::buildIeee754Binary32()) {
+        return ValueKind::Float32;
+    }
+
+    if (fpType == SageBuilderAsm::buildIeee754Binary64()) {
+        return ValueKind::Float64;
+    }
+
+    throw NotImplemented("unsupported floating-point type",
+                         currentInstruction());
+}
+
+SValue::Ptr
+RiscOperators::fpAdd(const SValue::Ptr&, const SValue::Ptr&) {
+    throw NotImplemented("fpAdd is not implemented", currentInstruction());
+}
+
 SValue::Ptr
 RiscOperators::fpAdd(const SValue::Ptr&, const SValue::Ptr&, SgAsmFloatType*) {
     throw NotImplemented("fpAdd is not implemented", currentInstruction());
 }
 
 SValue::Ptr
-RiscOperators::fpSubtract(const SValue::Ptr&, const SValue::Ptr&, SgAsmFloatType*) {
+RiscOperators::fpSubtract(const SValue::Ptr&, const SValue::Ptr&) {
     throw NotImplemented("fpSubtract is not implemented", currentInstruction());
+}
+
+SValue::Ptr
+RiscOperators::fpSubtract(const SValue::Ptr &, const SValue::Ptr &, SgAsmFloatType*) {
+    throw NotImplemented("fpSubtract is not implemented", currentInstruction());
+}
+
+SValue::Ptr
+RiscOperators::fpMultiply(const SValue::Ptr&, const SValue::Ptr&) {
+    throw NotImplemented("fpMultiply is not implemented", currentInstruction());
 }
 
 SValue::Ptr
 RiscOperators::fpMultiply(const SValue::Ptr&, const SValue::Ptr&, SgAsmFloatType*) {
     throw NotImplemented("fpMultiply is not implemented", currentInstruction());
+}
+
+SValue::Ptr
+RiscOperators::fpDivide(const SValue::Ptr&, const SValue::Ptr&) {
+    throw NotImplemented("fpDivide is not implemented", currentInstruction());
 }
 
 SValue::Ptr

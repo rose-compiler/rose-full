@@ -8,6 +8,7 @@
 #include <Rose/BinaryAnalysis/HotPatch.h>
 #include <Rose/BinaryAnalysis/SmtSolver.h>
 #include <Combinatorics.h>
+#include <SageBuilderAsm.h>
 
 #include <boost/enable_shared_from_this.hpp>
 
@@ -719,23 +720,27 @@ public:
 
     /** Add two floating-point values.
      *
-     *  Adds two floating-point values that have the same type and returns the sum in the same type. */
+     *  Adds two floating-point values and returns the sum.  All values have the same type and kind. */
+    virtual SValuePtr fpAdd(const SValuePtr &a, const SValuePtr &b);
     virtual SValuePtr fpAdd(const SValuePtr &a, const SValuePtr &b, SgAsmFloatType *fpType);
 
     /** Subtract one floating-point value from another.
      *
-     *  Subtracts @p b from @p a and returns the difference. All three floating-point values have the same type.  The default
+     *  Subtracts @p b from @p a and returns the difference. All values have the same type and kind.  The default
      *  implementation is in terms of negate and add. */
+    virtual SValuePtr fpSubtract(const SValuePtr &a, const SValuePtr &b);
     virtual SValuePtr fpSubtract(const SValuePtr &a, const SValuePtr &b, SgAsmFloatType *fpType);
 
     /** Multiply two floating-point values.
      *
-     *  Multiplies two floating-point values and returns the product. All three values have the same type. */
+     *  Multiplies two floating-point values and returns the product. All values have the same type and kind. */
+    virtual SValuePtr fpMultiply(const SValuePtr &a, const SValuePtr &b);
     virtual SValuePtr fpMultiply(const SValuePtr &a, const SValuePtr &b, SgAsmFloatType *fpType);
 
     /** Divide one floating-point value by another.
      *
-     *  Computes @p a divided by @p b and returns the result. All three floating-point values have the same type. */
+     *  Computes @p a divided by @p b and returns the result. All values have the same type and kind. */
+    virtual SValuePtr fpDivide(const SValuePtr &a, const SValuePtr &b);
     virtual SValuePtr fpDivide(const SValuePtr &a, const SValuePtr &b, SgAsmFloatType *fpType);
 
     /** Square root.
@@ -928,6 +933,19 @@ public:
      *
      */
     virtual void pushOperand(const SValuePtr &value);
+
+protected:
+    /** Converts a floating-point AST type to its corresponding semantic value kind.
+     *
+     *  This protected helper supports legacy floating-point interfaces that receive an
+     *  explicit type argument. Interfaces whose operands carry @ref ValueKind metadata
+     *  should use that metadata directly.
+     *
+     *  The argument must be non-null. Returns @ref ValueKind::Float32 for IEEE-754 binary32
+     *  and @ref ValueKind::Float64 for IEEE-754 binary64. Throws
+     *  @ref BaseSemantics::NotImplemented for other floating-point formats.
+     */
+    ValueKind floatKind(SgAsmFloatType *fpType) const;
 };
 
 std::ostream& operator<<(std::ostream&, const RiscOperators&);

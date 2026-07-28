@@ -10,7 +10,6 @@
 
 #include <SgAsmFloatType.h>
 #include <SgAsmInstruction.h>
-
 #include <SageBuilderAsm.h>
 
 #include <boost/algorithm/string/trim.hpp>
@@ -1295,6 +1294,20 @@ RiscOperators::fpEffectiveExponent(const BaseSemantics::SValue::Ptr &a, SgAsmFlo
 }
 
 BaseSemantics::SValue::Ptr
+RiscOperators::fpAdd(const BaseSemantics::SValue::Ptr &a, const BaseSemantics::SValue::Ptr &b) {
+    before("fpAdd", a, b);
+    try {
+        return check_width(after(subdomain_->fpAdd(a, b)), a->nBits());
+    } catch (const BaseSemantics::Exception &e) {
+        after(e);
+        throw;
+    } catch (...) {
+        after_exception();
+        throw;
+    }
+}
+
+BaseSemantics::SValue::Ptr
 RiscOperators::fpAdd(const BaseSemantics::SValue::Ptr &a, const BaseSemantics::SValue::Ptr &b, SgAsmFloatType *abt) {
     before("fpAdd", a, b, abt);
     try {
@@ -1309,10 +1322,24 @@ RiscOperators::fpAdd(const BaseSemantics::SValue::Ptr &a, const BaseSemantics::S
 }
 
 BaseSemantics::SValue::Ptr
-RiscOperators::fpSubtract(const BaseSemantics::SValue::Ptr &a, const BaseSemantics::SValue::Ptr &b, SgAsmFloatType *abt) {
-    before("fpSubtract", a, b, abt);
+RiscOperators::fpSubtract(const BaseSemantics::SValue::Ptr &a, const BaseSemantics::SValue::Ptr &b) {
+    before("fpSubtract", a, b);
     try {
-        return check_width(after(subdomain_->fpSubtract(a, b, abt)), abt->get_nBits());
+        return check_width(after(subdomain_->fpSubtract(a, b)), a->nBits());
+    } catch (const BaseSemantics::Exception &e) {
+        after(e);
+        throw;
+    } catch (...) {
+        after_exception();
+        throw;
+    }
+}
+
+BaseSemantics::SValue::Ptr
+RiscOperators::fpMultiply(const BaseSemantics::SValue::Ptr &a, const BaseSemantics::SValue::Ptr &b) {
+    before("fpMultiply", a, b);
+    try {
+        return check_width(after(subdomain_->fpMultiply(a, b)), a->nBits());
     } catch (const BaseSemantics::Exception &e) {
         after(e);
         throw;
@@ -1327,6 +1354,20 @@ RiscOperators::fpMultiply(const BaseSemantics::SValue::Ptr &a, const BaseSemanti
     before("fpMultiply", a, b, abt);
     try {
         return check_width(after(subdomain_->fpMultiply(a, b, abt)), abt->get_nBits());
+    } catch (const BaseSemantics::Exception &e) {
+        after(e);
+        throw;
+    } catch (...) {
+        after_exception();
+        throw;
+    }
+}
+
+BaseSemantics::SValue::Ptr
+RiscOperators::fpDivide(const BaseSemantics::SValue::Ptr &a, const BaseSemantics::SValue::Ptr &b) {
+    before("fpDivide", a, b);
+    try {
+        return check_width(after(subdomain_->fpDivide(a, b)), a->nBits());
     } catch (const BaseSemantics::Exception &e) {
         after(e);
         throw;

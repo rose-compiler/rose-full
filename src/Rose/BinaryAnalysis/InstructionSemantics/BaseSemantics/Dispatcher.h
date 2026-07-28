@@ -66,6 +66,10 @@ public:
     virtual int8_t  asS1(const SgAsmExpression* expr);
     virtual uint8_t asU1(const SgAsmExpression* expr);
 
+    // Bit pattern for floats and doubles
+    static uint32_t floatBits(float);
+    static uint64_t floatBits(double);
+
 #ifdef ROSE_ENABLE_BOOST_SERIALIZATION
 private:
     friend class boost::serialization::access;

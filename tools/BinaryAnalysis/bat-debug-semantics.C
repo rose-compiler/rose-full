@@ -139,6 +139,7 @@ static MemoryMap::Ptr
 parseBytes(StringIterator string, StringIterator end) {
     std::vector<uint8_t> bytes;
     Sawyer::Optional<Address> va;
+
     for (/*void*/; string != end; ++string) {
         if (!string->empty() && '=' == (*string)[0]) {
             if (va) {

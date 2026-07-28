@@ -876,22 +876,27 @@ RiscOperators::writeMemory(RegisterDescriptor segreg, const BaseSemantics::SValu
 double
 RiscOperators::exprToDouble(const BaseSemantics::SValue::Ptr &a, SgAsmFloatType *aType) {
     ASSERT_require(a->isConcrete());
+
     if (aType == SageBuilderAsm::buildIeee754Binary64()) {
-        ASSERT_require(sizeof(double) == sizeof(int64_t));
-        union {
-            double fp;
-            int64_t i;
-        } u;
-        u.i = a->toUnsigned().get();
-        return u.fp;
+        ASSERT_require(a->nBits() == 64);
+        ASSERT_require(sizeof(double) == sizeof(uint64_t));
+
+        const uint64_t bits = a->toUnsigned().get();
+
+        double value;
+        std::memcpy(&value, &bits, sizeof value);
+        return value;
+
     } else if (aType == SageBuilderAsm::buildIeee754Binary32()) {
-        ASSERT_require(sizeof(float) == sizeof(int32_t));
-        union {
-            float fp;
-            int32_t i;
-        } u;
-        u.i = a->toUnsigned().get();
-        return u.fp;
+        ASSERT_require(a->nBits() == 32);
+        ASSERT_require(sizeof(float) == sizeof(uint32_t));
+
+        const uint32_t bits = static_cast<uint32_t>(a->toUnsigned().get());
+
+        float value;
+        std::memcpy(&value, &bits, sizeof value);
+        return value; // promoted to double
+
     } else {
         throw BaseSemantics::NotImplemented("exprToDouble type not supported", currentInstruction());
     }
@@ -900,21 +905,21 @@ RiscOperators::exprToDouble(const BaseSemantics::SValue::Ptr &a, SgAsmFloatType 
 BaseSemantics::SValue::Ptr
 RiscOperators::doubleToExpr(double d, SgAsmFloatType *retType) {
     if (retType == SageBuilderAsm::buildIeee754Binary64()) {
-        ASSERT_require(sizeof(double) == sizeof(int64_t));
-        union {
-            double fp;
-            int64_t i;
-        } u;
-        u.fp = d;
-        return svalueNumber(64, u.i);
+        static_assert(sizeof(double) == sizeof(uint64_t), "unexpected double representation");
+
+        uint64_t bits;
+        std::memcpy(&bits, &d, sizeof bits);
+        return svalueNumber(64, bits);
+
     } else if (retType == SageBuilderAsm::buildIeee754Binary32()) {
-        ASSERT_require(sizeof(float) == sizeof(int32_t));
-        union {
-            float fp;
-            int32_t i;
-        } u;
-        u.fp = d;
-        return svalueNumber(32, u.i);
+        static_assert(sizeof(float) == sizeof(uint32_t), "unexpected float representation");
+
+        const float f = static_cast<float>(d);
+
+        uint32_t bits;
+        std::memcpy(&bits, &f, sizeof bits);
+        return svalueNumber(32, bits);
+
     } else {
         throw BaseSemantics::NotImplemented("doubleToExpr type not supported", currentInstruction());
     }
@@ -938,28 +943,52 @@ RiscOperators::fpToInteger(const BaseSemantics::SValue::Ptr &a, SgAsmFloatType *
     return number_(nBits, ai);
 }
 
-BaseSemantics::SValue::Ptr
-RiscOperators::fpAdd(const BaseSemantics::SValue::Ptr &a, const BaseSemantics::SValue::Ptr &b, SgAsmFloatType *fpType) {
-    double ad = exprToDouble(a, fpType);
-    double bd = exprToDouble(b, fpType);
-    double result = ad + bd;
-    return doubleToExpr(result, fpType);
+BaseSemantics::SValuePtr
+RiscOperators::fpAdd(const BaseSemantics::SValuePtr &lhs,
+                     const BaseSemantics::SValuePtr &rhs) {
+    ASSERT_not_null(lhs);
+    ASSERT_not_null(rhs);
+    ASSERT_require2(lhs->isConcrete() && rhs->isConcrete(), "only concrete values");
+
+    return fpBinaryOp(lhs, rhs, [](auto a, auto b) {
+        return a + b;
+    });
 }
 
-BaseSemantics::SValue::Ptr
-RiscOperators::fpSubtract(const BaseSemantics::SValue::Ptr &a, const BaseSemantics::SValue::Ptr &b, SgAsmFloatType *fpType) {
-    double ad = exprToDouble(a, fpType);
-    double bd = exprToDouble(b, fpType);
-    double result = ad - bd;
-    return doubleToExpr(result, fpType);
+BaseSemantics::SValuePtr
+RiscOperators::fpSubtract(const BaseSemantics::SValuePtr &lhs,
+                          const BaseSemantics::SValuePtr &rhs) {
+    ASSERT_not_null(lhs);
+    ASSERT_not_null(rhs);
+    ASSERT_require2(lhs->isConcrete() && rhs->isConcrete(), "only concrete values");
+
+    return fpBinaryOp(lhs, rhs, [](auto a, auto b) {
+        return a - b;
+    });
 }
 
-BaseSemantics::SValue::Ptr
-RiscOperators::fpMultiply(const BaseSemantics::SValue::Ptr &a, const BaseSemantics::SValue::Ptr &b, SgAsmFloatType *fpType) {
-    double ad = exprToDouble(a, fpType);
-    double bd = exprToDouble(b, fpType);
-    double result = ad * bd;
-    return doubleToExpr(result, fpType);
+BaseSemantics::SValuePtr
+RiscOperators::fpMultiply(const BaseSemantics::SValuePtr &lhs,
+                          const BaseSemantics::SValuePtr &rhs) {
+    ASSERT_not_null(lhs);
+    ASSERT_not_null(rhs);
+    ASSERT_require2(lhs->isConcrete() && rhs->isConcrete(), "only concrete values");
+
+    return fpBinaryOp(lhs, rhs, [](auto a, auto b) {
+        return a*b;
+    });
+}
+
+BaseSemantics::SValuePtr
+RiscOperators::fpDivide(const BaseSemantics::SValuePtr &lhs,
+                        const BaseSemantics::SValuePtr &rhs) {
+    ASSERT_not_null(lhs);
+    ASSERT_not_null(rhs);
+    ASSERT_require2(lhs->isConcrete() && rhs->isConcrete(), "only concrete values");
+
+    return fpBinaryOp(lhs, rhs, [](auto a, auto b) {
+            return a/b;
+    });
 }
 
 BaseSemantics::SValue::Ptr

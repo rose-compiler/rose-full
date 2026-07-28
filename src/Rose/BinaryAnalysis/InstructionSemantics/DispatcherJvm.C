@@ -204,8 +204,6 @@ namespace JvmSemantics {
     SValue::Ptr arrayLoad(Ops ops, const char *kind, SValue::Ptr arrayref, SValue::Ptr index);
     void        arrayStore(Ops ops, const char *kind, SValue::Ptr arrayref, SValue::Ptr index, SValue::Ptr value);
 
-    SValue::Ptr mul(Ops ops, SValue::Ptr a, SValue::Ptr b);
-    SValue::Ptr div(Ops ops, SValue::Ptr a, SValue::Ptr b);
     SValue::Ptr rem(Ops ops, SValue::Ptr a, SValue::Ptr b);
     SValue::Ptr convert(Ops ops, const char *op, SValue::Ptr a);
 
@@ -391,14 +389,6 @@ namespace JvmSemantics {
 
      // 3. Perform the memory write using RiscOperators
         ops->writeMemory(RegisterDescriptor(), addr, value, cond);
-    }
-
-    SValue::Ptr mul(Ops ops, SValue::Ptr a, SValue::Ptr b) {
-        return ops->signedMultiply(a, b);
-    }
-
-    SValue::Ptr div(Ops ops, SValue::Ptr a, SValue::Ptr b) {
-        return ops->signedDivide(a, b);
     }
 
     SValue::Ptr rem(Ops ops, SValue::Ptr a, SValue::Ptr b) {
@@ -1179,9 +1169,10 @@ struct IP_d2l: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_dadd: P {
-    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
+    void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ASSERT_require2(false, "dadd unimplemented");
+        doBinaryOp(ops, ValueKind::Float64,
+             [ops](auto lhs, auto rhs) { return ops->fpAdd(lhs, rhs); });
     }
 };
 
@@ -1258,9 +1249,14 @@ struct IP_dcmpg: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_dconst_0: P {
-    void p(D d, Ops ops, I insn, Args args) {
+    void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ops->pushOperand(d->makeConstant("d", 0, 64));
+
+        uint64_t bits = Dispatcher::floatBits(0.0);
+        auto sval = ops->number_(64, bits);
+        sval->kind(ValueKind::Float64);
+
+        ops->pushOperand(sval);
     }
 };
 
@@ -1270,9 +1266,14 @@ struct IP_dconst_0: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_dconst_1: P {
-    void p(D d, Ops ops, I insn, Args args) {
+    void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ops->pushOperand(d->makeConstant("d", 1, 64));
+
+        uint64_t bits = Dispatcher::floatBits(1.0);
+        auto sval = ops->number_(64, bits);
+        sval->kind(ValueKind::Float64);
+
+        ops->pushOperand(sval);
     }
 };
 
@@ -1286,9 +1287,8 @@ struct IP_dconst_1: P {
 struct IP_ddiv: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr v2 = ops->popOperand();
-        SValue::Ptr v1 = ops->popOperand();
-        ops->pushOperand(JvmSemantics::div(ops, v1, v2));
+        doBinaryOp(ops, ValueKind::Float64,
+             [ops](auto lhs, auto rhs) { return ops->fpDivide(lhs, rhs); });
     }
 };
 
@@ -1370,9 +1370,8 @@ struct IP_dload_3: P {
 struct IP_dmul: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr v2 = ops->popOperand();
-        SValue::Ptr v1 = ops->popOperand();
-        ops->pushOperand(JvmSemantics::mul(ops, v1, v2));
+        doBinaryOp(ops, ValueKind::Float64,
+             [ops](auto lhs, auto rhs) { return ops->fpMultiply(lhs, rhs); });
     }
 };
 
@@ -1424,7 +1423,10 @@ struct IP_dreturn: P {
 struct IP_dstore: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 1);
-        ops->writeLocal(asU1(args[0]), ops->popOperand());
+        auto sval = ops->popOperand();
+        ASSERT_require2(sval->kind() == ValueKind::Float64, "top of stack must be Float64");
+
+        ops->writeLocal(asU1(args[0]), sval);
     }
 };
 
@@ -1438,7 +1440,10 @@ struct IP_dstore: P {
 struct IP_dstore_0: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ops->writeLocal(0, ops->popOperand());
+        auto sval = ops->popOperand();
+        ASSERT_require2(sval->kind() == ValueKind::Float64, "top of stack must be Float64");
+
+        ops->writeLocal(0, sval);
     }
 };
 
@@ -1452,7 +1457,10 @@ struct IP_dstore_0: P {
 struct IP_dstore_1: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ops->writeLocal(1, ops->popOperand());
+        auto sval = ops->popOperand();
+        ASSERT_require2(sval->kind() == ValueKind::Float64, "top of stack must be Float64");
+
+        ops->writeLocal(1, sval);
     }
 };
 
@@ -1466,7 +1474,10 @@ struct IP_dstore_1: P {
 struct IP_dstore_2: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ops->writeLocal(2, ops->popOperand());
+        auto sval = ops->popOperand();
+        ASSERT_require2(sval->kind() == ValueKind::Float64, "top of stack must be Float64");
+
+        ops->writeLocal(2, sval);
     }
 };
 
@@ -1480,7 +1491,10 @@ struct IP_dstore_2: P {
 struct IP_dstore_3: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ops->writeLocal(3, ops->popOperand());
+        auto sval = ops->popOperand();
+        ASSERT_require2(sval->kind() == ValueKind::Float64, "top of stack must be Float64");
+
+        ops->writeLocal(3, sval);
     }
 };
 
@@ -1490,9 +1504,10 @@ struct IP_dstore_3: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_dsub: P {
-    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
+    void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ASSERT_require2(false, "dsub unimplemented");
+        doBinaryOp(ops, ValueKind::Float64,
+             [ops](auto lhs, auto rhs) { return ops->fpSubtract(lhs, rhs); });
     }
 };
 
@@ -1733,9 +1748,10 @@ struct IP_f2l: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_fadd: P {
-    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
+    void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ASSERT_require2(false, "fadd unimplemented");
+        doBinaryOp(ops, ValueKind::Float32,
+             [ops](auto lhs, auto rhs) { return ops->fpAdd(lhs, rhs); });
     }
 };
 
@@ -1799,9 +1815,14 @@ struct IP_fcmpg: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_fconst_0: P {
-    void p(D d, Ops ops, I insn, Args args) {
+    void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ops->pushOperand(d->makeConstant("f", 0, 32));
+
+        uint32_t bits = Dispatcher::floatBits(0.0f);
+        auto sval = ops->number_(32, bits);
+        sval->kind(ValueKind::Float32);
+
+        ops->pushOperand(sval);
     }
 };
 
@@ -1811,9 +1832,14 @@ struct IP_fconst_0: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_fconst_1: P {
-    void p(D d, Ops ops, I insn, Args args) {
+    void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ops->pushOperand(d->makeConstant("f", 1, 32));
+
+        uint32_t bits = Dispatcher::floatBits(1.0f);
+        auto sval = ops->number_(32, bits);
+        sval->kind(ValueKind::Float32);
+
+        ops->pushOperand(sval);
     }
 };
 
@@ -1823,9 +1849,14 @@ struct IP_fconst_1: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_fconst_2: P {
-    void p(D d, Ops ops, I insn, Args args) {
+    void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ops->pushOperand(d->makeConstant("f", 2, 32));
+
+        uint32_t bits = Dispatcher::floatBits(2.0f);
+        auto sval = ops->number_(32, bits);
+        sval->kind(ValueKind::Float32);
+
+        ops->pushOperand(sval);
     }
 };
 
@@ -1839,9 +1870,8 @@ struct IP_fconst_2: P {
 struct IP_fdiv: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr v2 = ops->popOperand();
-        SValue::Ptr v1 = ops->popOperand();
-        ops->pushOperand(JvmSemantics::div(ops, v1, v2));
+        doBinaryOp(ops, ValueKind::Float32,
+             [ops](auto lhs, auto rhs) { return ops->fpDivide(lhs, rhs); });
     }
 };
 
@@ -1923,9 +1953,8 @@ struct IP_fload_3: P {
 struct IP_fmul: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr v2 = ops->popOperand();
-        SValue::Ptr v1 = ops->popOperand();
-        ops->pushOperand(JvmSemantics::mul(ops, v1, v2));
+        doBinaryOp(ops, ValueKind::Float32,
+             [ops](auto lhs, auto rhs) { return ops->fpMultiply(lhs, rhs); });
     }
 };
 
@@ -1977,7 +2006,10 @@ struct IP_freturn: P {
 struct IP_fstore: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 1);
-        ops->writeLocal(asU1(args[0]), ops->popOperand());
+        auto sval = ops->popOperand();
+        ASSERT_require2(sval->kind() == ValueKind::Float32, "top of stack must be Float32");
+
+        ops->writeLocal(asU1(args[0]), sval);
     }
 };
 
@@ -1991,7 +2023,10 @@ struct IP_fstore: P {
 struct IP_fstore_0: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ops->writeLocal(0, ops->popOperand());
+        auto sval = ops->popOperand();
+        ASSERT_require2(sval->kind() == ValueKind::Float32, "top of stack must be Float32");
+
+        ops->writeLocal(0, sval);
     }
 };
 
@@ -2005,7 +2040,10 @@ struct IP_fstore_0: P {
 struct IP_fstore_1: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ops->writeLocal(1, ops->popOperand());
+        auto sval = ops->popOperand();
+        ASSERT_require2(sval->kind() == ValueKind::Float32, "top of stack must be Float32");
+
+        ops->writeLocal(1, sval);
     }
 };
 
@@ -2019,7 +2057,10 @@ struct IP_fstore_1: P {
 struct IP_fstore_2: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ops->writeLocal(2, ops->popOperand());
+        auto sval = ops->popOperand();
+        ASSERT_require2(sval->kind() == ValueKind::Float32, "top of stack must be Float32");
+
+        ops->writeLocal(2, sval);
     }
 };
 
@@ -2033,7 +2074,10 @@ struct IP_fstore_2: P {
 struct IP_fstore_3: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ops->writeLocal(3, ops->popOperand());
+        auto sval = ops->popOperand();
+        ASSERT_require2(sval->kind() == ValueKind::Float32, "top of stack must be Float32");
+
+        ops->writeLocal(3, sval);
     }
 };
 
@@ -2043,9 +2087,10 @@ struct IP_fstore_3: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_fsub: P {
-    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
+    void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ASSERT_require2(false, "fsub unimplemented");
+        doBinaryOp(ops, ValueKind::Float32,
+             [ops](auto lhs, auto rhs) { return ops->fpSubtract(lhs, rhs); });
     }
 };
 
@@ -2823,7 +2868,10 @@ struct IP_ishr: P {
 struct IP_istore: P {
     void p(D d, Ops ops, I insn, Args args) {
         assert_args(insn, args, 1);
-        ops->writeLocal(d->asU1(args[0]), ops->popOperand());
+        auto sval = ops->popOperand();
+        ASSERT_require2(sval->kind() == ValueKind::Integer32, "top of stack must be Integer32");
+
+        ops->writeLocal(d->asU1(args[0]), sval);
     }
 };
 
@@ -2837,7 +2885,10 @@ struct IP_istore: P {
 struct IP_istore_0: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ops->writeLocal(0, ops->popOperand());
+        auto sval = ops->popOperand();
+        ASSERT_require2(sval->kind() == ValueKind::Integer32, "top of stack must be Integer32");
+
+        ops->writeLocal(0, sval);
     }
 };
 
@@ -2851,7 +2902,10 @@ struct IP_istore_0: P {
 struct IP_istore_1: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ops->writeLocal(1, ops->popOperand());
+        auto sval = ops->popOperand();
+        ASSERT_require2(sval->kind() == ValueKind::Integer32, "top of stack must be Integer32");
+
+        ops->writeLocal(1, sval);
     }
 };
 
@@ -2865,7 +2919,10 @@ struct IP_istore_1: P {
 struct IP_istore_2: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ops->writeLocal(2, ops->popOperand());
+        auto sval = ops->popOperand();
+        ASSERT_require2(sval->kind() == ValueKind::Integer32, "top of stack must be Integer32");
+
+        ops->writeLocal(2, sval);
     }
 };
 
@@ -2879,7 +2936,10 @@ struct IP_istore_2: P {
 struct IP_istore_3: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ops->writeLocal(3, ops->popOperand());
+        auto sval = ops->popOperand();
+        ASSERT_require2(sval->kind() == ValueKind::Integer32, "top of stack must be Integer32");
+
+        ops->writeLocal(3, sval);
     }
 };
 
@@ -3287,9 +3347,18 @@ struct IP_lor: P {
         // Run-time Exceptions:
         //   ArithmeticException if the divisor is zero.
 struct IP_lrem: P {
-    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
+    void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ASSERT_require2(false, "lrem unimplemented");
+
+        auto divisor = ops->peekOperand();
+        if (divisor->isConcrete() && divisor->toUnsigned().get() == 0) {
+            // Eventually: model java/lang/ArithmeticException.
+            ASSERT_require2(false, "lrem division by zero");
+        }
+
+        // Otherwise calculate the signed modulo.
+        doBinaryOp(ops, ValueKind::Integer64,
+             [ops](auto lhs, auto rhs) { return ops->signedModulo(lhs, rhs); });
     }
 };
 
@@ -3353,7 +3422,10 @@ struct IP_lshr: P {
 struct IP_lstore: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 1);
-        ops->writeLocal(asU1(args[0]), ops->popOperand());
+        auto sval = ops->popOperand();
+        ASSERT_require2(sval->kind() == ValueKind::Integer64, "top of stack must be Integer64");
+
+        ops->writeLocal(asU1(args[0]), sval);
     }
 };
 
@@ -3367,7 +3439,10 @@ struct IP_lstore: P {
 struct IP_lstore_0: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ops->writeLocal(0, ops->popOperand());
+        auto sval = ops->popOperand();
+        ASSERT_require2(sval->kind() == ValueKind::Integer64, "top of stack must be Integer64");
+
+        ops->writeLocal(0, sval);
     }
 };
 
@@ -3381,7 +3456,10 @@ struct IP_lstore_0: P {
 struct IP_lstore_1: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ops->writeLocal(1, ops->popOperand());
+        auto sval = ops->popOperand();
+        ASSERT_require2(sval->kind() == ValueKind::Integer64, "top of stack must be Integer64");
+
+        ops->writeLocal(1, sval);
     }
 };
 
@@ -3395,7 +3473,10 @@ struct IP_lstore_1: P {
 struct IP_lstore_2: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ops->writeLocal(2, ops->popOperand());
+        auto sval = ops->popOperand();
+        ASSERT_require2(sval->kind() == ValueKind::Integer64, "top of stack must be Integer64");
+
+        ops->writeLocal(2, sval);
     }
 };
 
@@ -3409,7 +3490,10 @@ struct IP_lstore_2: P {
 struct IP_lstore_3: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ops->writeLocal(3, ops->popOperand());
+        auto sval = ops->popOperand();
+        ASSERT_require2(sval->kind() == ValueKind::Integer64, "top of stack must be Integer64");
+
+        ops->writeLocal(3, sval);
     }
 };
 
@@ -3863,10 +3947,20 @@ DispatcherJvm::initializeDispatchTable() {
     // Binary operators
     iprocSet(0x60,  new Jvm::IP_iadd);
     iprocSet(0x61,  new Jvm::IP_ladd);
+    iprocSet(0x62,  new Jvm::IP_fadd);
+    iprocSet(0x63,  new Jvm::IP_dadd);
     iprocSet(0x64,  new Jvm::IP_isub);
     iprocSet(0x65,  new Jvm::IP_lsub);
+    iprocSet(0x66,  new Jvm::IP_fsub);
+    iprocSet(0x67,  new Jvm::IP_dsub);
+
+    iprocSet(0x6a,  new Jvm::IP_fmul);
+    iprocSet(0x6b,  new Jvm::IP_dmul);
+    iprocSet(0x6e,  new Jvm::IP_fdiv);
+    iprocSet(0x6f,  new Jvm::IP_ddiv);
 
     iprocSet(0x70,  new Jvm::IP_irem);
+    iprocSet(0x71,  new Jvm::IP_lrem);
 
     // Unary(ish) operators
     iprocSet(0x74,  new Jvm::IP_ineg);

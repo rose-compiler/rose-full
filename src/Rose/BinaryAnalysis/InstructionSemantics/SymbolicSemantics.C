@@ -1616,6 +1616,58 @@ RiscOperators::sgTypeToSymbolicType(SgAsmType *sgType) {
     }
 }
 
+BaseSemantics::SValuePtr
+RiscOperators::fpAdd(const BaseSemantics::SValuePtr &lhs,
+                     const BaseSemantics::SValuePtr &rhs) {
+    ASSERT_not_null(lhs);
+    ASSERT_not_null(rhs);
+    ASSERT_require2(lhs->isConcrete() && rhs->isConcrete(),
+                    "symbolic floating-point addition is not implemented");
+
+    return fpBinaryOp(lhs, rhs, [](auto a, auto b) {
+        return a + b;
+    });
+}
+
+BaseSemantics::SValuePtr
+RiscOperators::fpSubtract(const BaseSemantics::SValuePtr &lhs,
+                          const BaseSemantics::SValuePtr &rhs) {
+    ASSERT_not_null(lhs);
+    ASSERT_not_null(rhs);
+    ASSERT_require2(lhs->isConcrete() && rhs->isConcrete(),
+                    "symbolic floating-point subtraction is not implemented");
+
+    return fpBinaryOp(lhs, rhs, [](auto a, auto b) {
+        return a - b;
+    });
+}
+
+BaseSemantics::SValuePtr
+RiscOperators::fpMultiply(const BaseSemantics::SValuePtr &lhs,
+                          const BaseSemantics::SValuePtr &rhs) {
+    ASSERT_not_null(lhs);
+    ASSERT_not_null(rhs);
+    ASSERT_require2(lhs->isConcrete() && rhs->isConcrete(),
+                    "symbolic floating-point multiplication is not implemented");
+
+    return fpBinaryOp(lhs, rhs, [](auto a, auto b) {
+        return a*b;
+    });
+}
+
+BaseSemantics::SValuePtr
+RiscOperators::fpDivide(const BaseSemantics::SValuePtr &lhs,
+                        const BaseSemantics::SValuePtr &rhs) {
+    ASSERT_not_null(lhs);
+    ASSERT_not_null(rhs);
+    ASSERT_require2(lhs->isConcrete() && rhs->isConcrete(),
+                    "symbolic floating-point division is not implemented");
+
+    return fpBinaryOp(lhs, rhs, [](auto a, auto b) {
+            return a/b;
+    });
+}
+
 BaseSemantics::SValue::Ptr
 RiscOperators::fpConvert(const BaseSemantics::SValue::Ptr &a_, SgAsmFloatType *aType, SgAsmFloatType *retType) {
     SValue::Ptr a = SValue::promote(a_);

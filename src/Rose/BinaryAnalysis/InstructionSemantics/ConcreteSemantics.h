@@ -71,14 +71,14 @@ public:
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     // Virtual allocating constructors
 public:
-    virtual BaseSemantics::SValuePtr undefined_(size_t nbits) const override;
-    virtual BaseSemantics::SValuePtr unspecified_(size_t nbits) const override;
-    virtual BaseSemantics::SValuePtr bottom_(size_t nbits) const override;
-    virtual BaseSemantics::SValuePtr number_(size_t nbits, uint64_t value) const override;
-    virtual BaseSemantics::SValuePtr boolean_(bool value) const override;
-    virtual BaseSemantics::SValuePtr copy(size_t new_width=0) const override;
+    BaseSemantics::SValuePtr undefined_(size_t nbits) const override;
+    BaseSemantics::SValuePtr unspecified_(size_t nbits) const override;
+    BaseSemantics::SValuePtr bottom_(size_t nbits) const override;
+    BaseSemantics::SValuePtr number_(size_t nbits, uint64_t value) const override;
+    BaseSemantics::SValuePtr boolean_(bool value) const override;
+    BaseSemantics::SValuePtr copy(size_t new_width=0) const override;
 
-    virtual Sawyer::Optional<BaseSemantics::SValuePtr>
+    Sawyer::Optional<BaseSemantics::SValuePtr>
     createOptionalMerge(const BaseSemantics::SValuePtr &other, const BaseSemantics::MergerPtr&,
                         const SmtSolverPtr&) const override;
 
@@ -91,32 +91,32 @@ public:
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     // Override virtual methods...
 public:
-    virtual void hash(Combinatorics::Hasher&) const override;
-    virtual bool isBottom() const override;
-    virtual void print(std::ostream&, BaseSemantics::Formatter&) const override;
+    void hash(Combinatorics::Hasher&) const override;
+    bool isBottom() const override;
+    void print(std::ostream&, BaseSemantics::Formatter&) const override;
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     // Override legacy virtual methods. These snake_case names may eventually go away, but for now they're the ones you should
     // override. Be sure to use "override" in your own code in order to be notified when we finally remove these.
 public:
     // See mayEqual
-    virtual bool may_equal(const BaseSemantics::SValuePtr &other,
-                           const SmtSolverPtr &solver = SmtSolverPtr()) const override;
+    bool may_equal(const BaseSemantics::SValuePtr &other,
+                   const SmtSolverPtr &solver = SmtSolverPtr()) const override;
 
     // See mustEqual
-    virtual bool must_equal(const BaseSemantics::SValuePtr &other,
-                            const SmtSolverPtr &solver = SmtSolverPtr()) const override;
+    bool must_equal(const BaseSemantics::SValuePtr &other,
+                    const SmtSolverPtr &solver = SmtSolverPtr()) const override;
 
     // See nBits
-    virtual void set_width(size_t nbits) override;
+    void set_width(size_t nbits) override;
 
     // See isConcrete
-    virtual bool is_number() const override {
+    bool is_number() const override {
         return true;
     }
 
     // See toUnsigned and toSigned
-    virtual uint64_t get_number() const override;
+    uint64_t get_number() const override;
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     // Additional methods first declared in this class...
@@ -188,15 +188,15 @@ public:
      *
      *  Creates a memory state having specified prototypical value, which should be of type ConcreteSemantics::SValue or
      *  subclasses. */
-    virtual BaseSemantics::MemoryStatePtr create(const BaseSemantics::SValuePtr &addrProtoval,
-                                                 const BaseSemantics::SValuePtr &valProtoval) const override;
+    BaseSemantics::MemoryStatePtr create(const BaseSemantics::SValuePtr &addrProtoval,
+                                         const BaseSemantics::SValuePtr &valProtoval) const override;
 
     /** Virtual copy constructor.
      *
      *  Creates a new deep copy of this memory state. For efficiency purposes, the data buffers are not copied immediately but
      *  rather marked as copy-on-write.  However, the newly constructed memory map will have its own segments, which hold the
      *  segment names, access permissions, etc. */
-    virtual BaseSemantics::AddressSpacePtr clone() const override;
+    BaseSemantics::AddressSpacePtr clone() const override;
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     // Dynamic pointer casts
@@ -208,26 +208,26 @@ public:
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     // Methods we inherited
 public:
-    virtual void clear() override;
+    void clear() override;
 
-    virtual void hash(Combinatorics::Hasher&, BaseSemantics::RiscOperators *addrOps,
-                      BaseSemantics::RiscOperators *valOps) const override;
+    void hash(Combinatorics::Hasher&, BaseSemantics::RiscOperators *addrOps,
+              BaseSemantics::RiscOperators *valOps) const override;
 
-    virtual void print(std::ostream&, Formatter&) const override;
+    void print(std::ostream&, Formatter&) const override;
 
-    virtual BaseSemantics::SValuePtr readMemory(const BaseSemantics::SValuePtr &addr, const BaseSemantics::SValuePtr &dflt,
-                                                BaseSemantics::RiscOperators *addrOps,
-                                                BaseSemantics::RiscOperators *valOps) override;
+    BaseSemantics::SValuePtr readMemory(const BaseSemantics::SValuePtr &addr, const BaseSemantics::SValuePtr &dflt,
+                                        BaseSemantics::RiscOperators *addrOps,
+                                        BaseSemantics::RiscOperators *valOps) override;
 
-    virtual BaseSemantics::SValuePtr peekMemory(const BaseSemantics::SValuePtr &addr, const BaseSemantics::SValuePtr &dflt,
-                                                BaseSemantics::RiscOperators *addrOps,
-                                                BaseSemantics::RiscOperators *valOps) override;
+    BaseSemantics::SValuePtr peekMemory(const BaseSemantics::SValuePtr &addr, const BaseSemantics::SValuePtr &dflt,
+                                        BaseSemantics::RiscOperators *addrOps,
+                                        BaseSemantics::RiscOperators *valOps) override;
 
-    virtual void writeMemory(const BaseSemantics::SValuePtr &addr, const BaseSemantics::SValuePtr &value,
-                             BaseSemantics::RiscOperators *addrOps, BaseSemantics::RiscOperators *valOps) override;
+    void writeMemory(const BaseSemantics::SValuePtr &addr, const BaseSemantics::SValuePtr &value,
+                     BaseSemantics::RiscOperators *addrOps, BaseSemantics::RiscOperators *valOps) override;
 
-    virtual bool merge(const BaseSemantics::AddressSpacePtr &other, BaseSemantics::RiscOperators *addrOps,
-                       BaseSemantics::RiscOperators *valOps) override;
+    bool merge(const BaseSemantics::AddressSpacePtr &other, BaseSemantics::RiscOperators *addrOps,
+               BaseSemantics::RiscOperators *valOps) override;
 
 protected:
     BaseSemantics::SValuePtr readOrPeekMemory(const BaseSemantics::SValuePtr &addr,
@@ -341,11 +341,11 @@ public:
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     // Virtual constructors
 public:
-    virtual BaseSemantics::RiscOperatorsPtr create(const BaseSemantics::SValuePtr &protoval,
-                                                   const SmtSolverPtr &solver = SmtSolverPtr()) const override;
+    BaseSemantics::RiscOperatorsPtr create(const BaseSemantics::SValuePtr &protoval,
+                                           const SmtSolverPtr &solver = SmtSolverPtr()) const override;
 
-    virtual BaseSemantics::RiscOperatorsPtr create(const BaseSemantics::StatePtr&,
-                                                   const SmtSolverPtr &solver = SmtSolverPtr()) const override;
+    BaseSemantics::RiscOperatorsPtr create(const BaseSemantics::StatePtr&,
+                                           const SmtSolverPtr &solver = SmtSolverPtr()) const override;
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     // Dynamic pointer casts
@@ -366,79 +366,83 @@ protected:
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     // Override methods from base class.  These are the RISC operators that are invoked by a Dispatcher.
 public:
-    virtual void interrupt(int majr, int minr) override;
-    virtual BaseSemantics::SValuePtr and_(const BaseSemantics::SValuePtr &a_,
+    void interrupt(int majr, int minr) override;
+    BaseSemantics::SValuePtr and_(const BaseSemantics::SValuePtr &a_,
+                                  const BaseSemantics::SValuePtr &b_) override;
+    BaseSemantics::SValuePtr or_(const BaseSemantics::SValuePtr &a_,
+                                 const BaseSemantics::SValuePtr &b_) override;
+    BaseSemantics::SValuePtr xor_(const BaseSemantics::SValuePtr &a_,
+                                  const BaseSemantics::SValuePtr &b_) override;
+    BaseSemantics::SValuePtr invert(const BaseSemantics::SValuePtr &a_) override;
+    BaseSemantics::SValuePtr extract(const BaseSemantics::SValuePtr &a_,
+                                     size_t begin_bit, size_t end_bit) override;
+    BaseSemantics::SValuePtr concat(const BaseSemantics::SValuePtr &a_,
+                                    const BaseSemantics::SValuePtr &b_) override;
+    BaseSemantics::SValuePtr leastSignificantSetBit(const BaseSemantics::SValuePtr &a_) override;
+    BaseSemantics::SValuePtr mostSignificantSetBit(const BaseSemantics::SValuePtr &a_) override;
+    BaseSemantics::SValuePtr rotateLeft(const BaseSemantics::SValuePtr &a_,
+                                        const BaseSemantics::SValuePtr &sa_) override;
+    BaseSemantics::SValuePtr rotateRight(const BaseSemantics::SValuePtr &a_,
+                                         const BaseSemantics::SValuePtr &sa_) override;
+    BaseSemantics::SValuePtr shiftLeft(const BaseSemantics::SValuePtr &a_,
+                                       const BaseSemantics::SValuePtr &sa_) override;
+    BaseSemantics::SValuePtr shiftRight(const BaseSemantics::SValuePtr &a_,
+                                        const BaseSemantics::SValuePtr &sa_) override;
+    BaseSemantics::SValuePtr shiftRightArithmetic(const BaseSemantics::SValuePtr &a_,
+                                                  const BaseSemantics::SValuePtr &sa_) override;
+    BaseSemantics::SValuePtr equalToZero(const BaseSemantics::SValuePtr &a_) override;
+    BaseSemantics::SValuePtr iteWithStatus(const BaseSemantics::SValuePtr &sel_,
+                                           const BaseSemantics::SValuePtr &a_,
+                                           const BaseSemantics::SValuePtr &b_,
+                                           IteStatus&) override;
+    BaseSemantics::SValuePtr unsignedExtend(const BaseSemantics::SValuePtr &a_, size_t new_width) override;
+    BaseSemantics::SValuePtr signExtend(const BaseSemantics::SValuePtr &a_, size_t new_width) override;
+    BaseSemantics::SValuePtr add(const BaseSemantics::SValuePtr &a_,
+                                 const BaseSemantics::SValuePtr &b_) override;
+    BaseSemantics::SValuePtr addWithCarries(const BaseSemantics::SValuePtr &a_,
+                                            const BaseSemantics::SValuePtr &b_,
+                                            const BaseSemantics::SValuePtr &c_,
+                                            BaseSemantics::SValuePtr &carry_out/*out*/) override;
+    BaseSemantics::SValuePtr negate(const BaseSemantics::SValuePtr &a_) override;
+    BaseSemantics::SValuePtr signedDivide(const BaseSemantics::SValuePtr &a_,
                                           const BaseSemantics::SValuePtr &b_) override;
-    virtual BaseSemantics::SValuePtr or_(const BaseSemantics::SValuePtr &a_,
-                                         const BaseSemantics::SValuePtr &b_) override;
-    virtual BaseSemantics::SValuePtr xor_(const BaseSemantics::SValuePtr &a_,
+    BaseSemantics::SValuePtr signedModulo(const BaseSemantics::SValuePtr &a_,
                                           const BaseSemantics::SValuePtr &b_) override;
-    virtual BaseSemantics::SValuePtr invert(const BaseSemantics::SValuePtr &a_) override;
-    virtual BaseSemantics::SValuePtr extract(const BaseSemantics::SValuePtr &a_,
-                                             size_t begin_bit, size_t end_bit) override;
-    virtual BaseSemantics::SValuePtr concat(const BaseSemantics::SValuePtr &a_,
+    BaseSemantics::SValuePtr signedMultiply(const BaseSemantics::SValuePtr &a_,
                                             const BaseSemantics::SValuePtr &b_) override;
-    virtual BaseSemantics::SValuePtr leastSignificantSetBit(const BaseSemantics::SValuePtr &a_) override;
-    virtual BaseSemantics::SValuePtr mostSignificantSetBit(const BaseSemantics::SValuePtr &a_) override;
-    virtual BaseSemantics::SValuePtr rotateLeft(const BaseSemantics::SValuePtr &a_,
-                                                const BaseSemantics::SValuePtr &sa_) override;
-    virtual BaseSemantics::SValuePtr rotateRight(const BaseSemantics::SValuePtr &a_,
-                                                 const BaseSemantics::SValuePtr &sa_) override;
-    virtual BaseSemantics::SValuePtr shiftLeft(const BaseSemantics::SValuePtr &a_,
-                                               const BaseSemantics::SValuePtr &sa_) override;
-    virtual BaseSemantics::SValuePtr shiftRight(const BaseSemantics::SValuePtr &a_,
-                                                const BaseSemantics::SValuePtr &sa_) override;
-    virtual BaseSemantics::SValuePtr shiftRightArithmetic(const BaseSemantics::SValuePtr &a_,
-                                                          const BaseSemantics::SValuePtr &sa_) override;
-    virtual BaseSemantics::SValuePtr equalToZero(const BaseSemantics::SValuePtr &a_) override;
-    virtual BaseSemantics::SValuePtr iteWithStatus(const BaseSemantics::SValuePtr &sel_,
-                                                   const BaseSemantics::SValuePtr &a_,
-                                                   const BaseSemantics::SValuePtr &b_,
-                                                   IteStatus&) override;
-    virtual BaseSemantics::SValuePtr unsignedExtend(const BaseSemantics::SValuePtr &a_, size_t new_width) override;
-    virtual BaseSemantics::SValuePtr signExtend(const BaseSemantics::SValuePtr &a_, size_t new_width) override;
-    virtual BaseSemantics::SValuePtr add(const BaseSemantics::SValuePtr &a_,
-                                         const BaseSemantics::SValuePtr &b_) override;
-    virtual BaseSemantics::SValuePtr addWithCarries(const BaseSemantics::SValuePtr &a_,
-                                                    const BaseSemantics::SValuePtr &b_,
-                                                    const BaseSemantics::SValuePtr &c_,
-                                                    BaseSemantics::SValuePtr &carry_out/*out*/) override;
-    virtual BaseSemantics::SValuePtr negate(const BaseSemantics::SValuePtr &a_) override;
-    virtual BaseSemantics::SValuePtr signedDivide(const BaseSemantics::SValuePtr &a_,
-                                                  const BaseSemantics::SValuePtr &b_) override;
-    virtual BaseSemantics::SValuePtr signedModulo(const BaseSemantics::SValuePtr &a_,
-                                                  const BaseSemantics::SValuePtr &b_) override;
-    virtual BaseSemantics::SValuePtr signedMultiply(const BaseSemantics::SValuePtr &a_,
-                                                    const BaseSemantics::SValuePtr &b_) override;
-    virtual BaseSemantics::SValuePtr unsignedDivide(const BaseSemantics::SValuePtr &a_,
-                                                    const BaseSemantics::SValuePtr &b_) override;
-    virtual BaseSemantics::SValuePtr unsignedModulo(const BaseSemantics::SValuePtr &a_,
-                                                    const BaseSemantics::SValuePtr &b_) override;
-    virtual BaseSemantics::SValuePtr unsignedMultiply(const BaseSemantics::SValuePtr &a_,
-                                                      const BaseSemantics::SValuePtr &b_) override;
+    BaseSemantics::SValuePtr unsignedDivide(const BaseSemantics::SValuePtr &a_,
+                                            const BaseSemantics::SValuePtr &b_) override;
+    BaseSemantics::SValuePtr unsignedModulo(const BaseSemantics::SValuePtr &a_,
+                                            const BaseSemantics::SValuePtr &b_) override;
+    BaseSemantics::SValuePtr unsignedMultiply(const BaseSemantics::SValuePtr &a_,
+                                              const BaseSemantics::SValuePtr &b_) override;
 
-    virtual BaseSemantics::SValuePtr fpFromInteger(const BaseSemantics::SValuePtr &intValue, SgAsmFloatType*) override;
-    virtual BaseSemantics::SValuePtr fpToInteger(const BaseSemantics::SValuePtr &fpValue, SgAsmFloatType *fpType,
-                                                 const BaseSemantics::SValuePtr &dflt) override;
-    virtual BaseSemantics::SValuePtr fpAdd(const BaseSemantics::SValuePtr &a, const BaseSemantics::SValuePtr &b,
-                                           SgAsmFloatType*) override;
-    virtual BaseSemantics::SValuePtr fpSubtract(const BaseSemantics::SValuePtr &a, const BaseSemantics::SValuePtr &b,
-                                                SgAsmFloatType*) override;
-    virtual BaseSemantics::SValuePtr fpMultiply(const BaseSemantics::SValuePtr &a, const BaseSemantics::SValuePtr &b,
-                                                SgAsmFloatType*) override;
-    virtual BaseSemantics::SValuePtr fpRoundTowardZero(const BaseSemantics::SValuePtr &a, SgAsmFloatType*) override;
+    BaseSemantics::SValuePtr fpFromInteger(const BaseSemantics::SValuePtr &intValue, SgAsmFloatType*) override;
+    BaseSemantics::SValuePtr fpToInteger(const BaseSemantics::SValuePtr &fpValue, SgAsmFloatType *fpType,
+                                         const BaseSemantics::SValuePtr &dflt) override;
 
-    virtual BaseSemantics::SValuePtr readMemory(RegisterDescriptor segreg,
-                                                const BaseSemantics::SValuePtr &addr,
-                                                const BaseSemantics::SValuePtr &dflt,
-                                                const BaseSemantics::SValuePtr &cond) override;
-    virtual BaseSemantics::SValuePtr peekMemory(RegisterDescriptor segreg,
-                                                const BaseSemantics::SValuePtr &addr,
-                                                const BaseSemantics::SValuePtr &dflt) override;
-    virtual void writeMemory(RegisterDescriptor segreg,
-                             const BaseSemantics::SValuePtr &addr,
-                             const BaseSemantics::SValuePtr &data,
-                             const BaseSemantics::SValuePtr &cond) override;
+    template<class FloatOp>
+    BaseSemantics::SValuePtr
+    fpBinaryOp(const BaseSemantics::SValuePtr &a, const BaseSemantics::SValuePtr &b, FloatOp operation);
+
+    BaseSemantics::SValuePtr fpAdd(const BaseSemantics::SValuePtr &, const BaseSemantics::SValuePtr &) override;
+    BaseSemantics::SValuePtr fpSubtract(const BaseSemantics::SValuePtr &, const BaseSemantics::SValuePtr &) override;
+    BaseSemantics::SValuePtr fpMultiply(const BaseSemantics::SValuePtr &, const BaseSemantics::SValuePtr &) override;
+    BaseSemantics::SValuePtr fpDivide(const BaseSemantics::SValuePtr &, const BaseSemantics::SValuePtr &) override;
+
+    BaseSemantics::SValuePtr fpRoundTowardZero(const BaseSemantics::SValuePtr &a, SgAsmFloatType*) override;
+
+    BaseSemantics::SValuePtr readMemory(RegisterDescriptor segreg,
+                                        const BaseSemantics::SValuePtr &addr,
+                                        const BaseSemantics::SValuePtr &dflt,
+                                        const BaseSemantics::SValuePtr &cond) override;
+    BaseSemantics::SValuePtr peekMemory(RegisterDescriptor segreg,
+                                        const BaseSemantics::SValuePtr &addr,
+                                        const BaseSemantics::SValuePtr &dflt) override;
+    void writeMemory(RegisterDescriptor segreg,
+                     const BaseSemantics::SValuePtr &addr,
+                     const BaseSemantics::SValuePtr &data,
+                     const BaseSemantics::SValuePtr &cond) override;
 
 protected:
     // handles readMemory and peekMemory
@@ -456,6 +460,8 @@ protected:
 } // namespace
 } // namespace
 } // namespace
+
+#include <Rose/BinaryAnalysis/InstructionSemantics/ConcreteSemantics.tpp>
 
 #endif
 #endif
