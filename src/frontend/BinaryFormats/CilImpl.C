@@ -3424,8 +3424,8 @@ parseFatHeader( Rose::BinaryAnalysis::Address base_va,
 
   const std::uint16_t  flags    = Rose::BinaryAnalysis::ByteOrder::leToHost(*reinterpret_cast<uint16_t*>(buf+0));
   const std::uint16_t  maxStack = Rose::BinaryAnalysis::ByteOrder::leToHost(*reinterpret_cast<uint16_t*>(buf+2));
-  const std::uint16_t  codeSize = Rose::BinaryAnalysis::ByteOrder::leToHost(*reinterpret_cast<uint32_t*>(buf+4));
-  const std::uint16_t  localIni = Rose::BinaryAnalysis::ByteOrder::leToHost(*reinterpret_cast<uint32_t*>(buf+8));
+  const std::uint32_t  codeSize = Rose::BinaryAnalysis::ByteOrder::leToHost(*reinterpret_cast<uint32_t*>(buf+4));
+  const std::uint32_t  localIni = Rose::BinaryAnalysis::ByteOrder::leToHost(*reinterpret_cast<uint32_t*>(buf+8));
   const MethodHeader   res{ flags, maxStack, codeSize, localIni };
 
   ASSERT_require(!res.tiny());
@@ -3476,7 +3476,6 @@ void validationLastCilInstruction(const std::vector<SgAsmStatement*>& lst)
             << std::endl;
   }
 }
-
 std::tuple<SgAsmBlock*, SgAsmCilMethodDef::BodyState>
 disassemble( rb::Address base_va, 
              SgAsmCilMethodDef::BodyState bdyState, 
@@ -3486,12 +3485,11 @@ disassemble( rb::Address base_va,
            )
 {
   using Rose::BinaryAnalysis::MemoryMap;
-
   Rose::BinaryAnalysis::Address addr = 0;
   const std::size_t             sz = buf.size();
   SgAsmBlock* const             blk = sb::buildBasicBlock(std::vector<SgAsmInstruction*>{});
   ASSERT_not_null(blk);
-  
+
   SgAsmStatementPtrList&        lst = blk->get_statementList();
   auto                          disasm = arch->newInstructionDecoder();
 
@@ -3502,13 +3500,18 @@ disassemble( rb::Address base_va,
 
   while (addr < sz) 
   {
-    SgAsmInstruction* instr = disasm->disassembleOne(map, base_va + addr);
-    ASSERT_not_null(instr);
+    SgAsmInstruction* insn = disasm->disassembleOne(map, base_va + addr);
+    ASSERT_not_null(insn);
 
-    lst.push_back(instr);
-    addr += instr->get_size();
+    //~ mlog[WARN]
+      //~ << std::setw(6) << std::setfill('0') << std::hex << addr << std::dec
+      //~ << " " << insn->get_mnemonic() 
+      //~ << std::endl;
 
-    if (disasm->architecture()->isUnknown(instr)) 
+    lst.push_back(insn);
+    addr += insn->get_size();
+
+    if (disasm->architecture()->isUnknown(insn))
     {
       // Pad block with noops because something went wrong
       // TODO: don't pad with noops, pad by expanding current unknown instruction
@@ -3521,12 +3524,12 @@ disassemble( rb::Address base_va,
       SgUnsignedCharList rawBytes(1,'\0');
       while (addr < sz) 
       {
-        SgAsmCilInstruction* insn = new SgAsmCilInstruction(base_va+addr, *disasm->architecture()->registrationId(),
+        SgAsmCilInstruction* insn2 = new SgAsmCilInstruction(base_va+addr, *disasm->architecture()->registrationId(),
                                                             Rose::BinaryAnalysis::CilInstructionKind::Cil_nop);
-        insn->set_rawBytes(rawBytes);
-        ASSERT_require(insn->get_rawBytes().size() == 1);
-        lst.push_back(insn);
-        addr += insn->get_size();
+        insn2->set_rawBytes(rawBytes);
+        ASSERT_require(insn2->get_rawBytes().size() == 1);
+        lst.push_back(insn2);
+        addr += insn2->get_size();
       }
     }
   }
@@ -3534,7 +3537,9 @@ disassemble( rb::Address base_va,
   if (addr > sz) 
   {
     mlog[ERROR] 
-        << "instruction address exceeds size of instruction block\n";
+        << "instruction address exceeds size of instruction block"
+        << "\n   // |addr| " << sizeof(addr) << "  codelen=" << buf.size()
+        << std::endl;
     
     updateBodyState(bdyState, SgAsmCilMethodDef::BDY_INVALID_INSTRUCTION_LENGTH);    
   }
@@ -3599,7 +3604,8 @@ enum struct ImplementationInfo
 // \}
 
 std::tuple<SgAsmCilExceptionData*, SgAsmCilMethodDef::BodyState>
-exceptionData( std::uint32_t f,
+exceptionData( bool compliant,
+               std::uint32_t f,
                std::uint32_t to,
                std::uint32_t tl,
                std::uint32_t ho,
@@ -3609,6 +3615,7 @@ exceptionData( std::uint32_t f,
 {
   SgAsmCilExceptionData* res = new SgAsmCilExceptionData;
 
+  res->set_standardConforming(compliant);
   res->set_flags(f);
   res->set_tryOffset(to);
   res->set_tryLength(tl);
@@ -3616,49 +3623,39 @@ exceptionData( std::uint32_t f,
   res->set_handlerLength(hl);
   res->set_classTokenOrFilterOffset(tokOrOfs);
 
-  return { res, SgAsmCilMethodDef::BDY_NOT_PROCESSED };
+  return { res, 
+           compliant ? SgAsmCilMethodDef::BDY_NOT_PROCESSED 
+                     : SgAsmCilMethodDef::BDY_INVALID_CLAUSE_LENGTH 
+         };
 }
 
 SgAsmCilMethodData*
-methodData( std::uint64_t kind,
-            std::uint32_t dataSize,
-            std::vector<SgAsmCilExceptionData*> clauses
-          )
+methodData(std::uint32_t rawHeader, std::vector<SgAsmCilExceptionData*> clauses)
 {
   SgAsmCilMethodData* res = new SgAsmCilMethodData;
-
-  res->set_kind(kind);
-  res->set_dataSize(dataSize);
+  
   res->get_Clauses().swap(clauses);
+  res->set_rawHeader(rawHeader);  
   
   // set parent pointers
   for (SgAsmCilExceptionData* clause : clauses) 
-    clause->set_parent(res);
+    clause->set_parent(res);    
 
   return res;
 }
 
 std::tuple<SgAsmCilExceptionData*, SgAsmCilMethodDef::BodyState>
-parseFatEHClause(SgAsmPEFileHeader& fhdr, Rose::BinaryAnalysis::Address sectionRva)
+parseFatEHClause(SgAsmPEFileHeader& fhdr, Rose::BinaryAnalysis::Address sectionRva, std::uint8_t bytesToParse)
 {
   using Rose::BinaryAnalysis::ByteOrder::leToHost;
 
   static constexpr std::uint8_t SECLEN = 24;
 
-  std::uint8_t buf[SECLEN];
-  std::size_t  nread = fhdr.get_loaderMap()->readQuick(buf, sectionRva, SECLEN);
+  std::uint8_t buf[SECLEN] = {};
+  std::size_t  nread = fhdr.get_loaderMap()->readQuick(buf, sectionRva, bytesToParse);
   
-  if (nread != SECLEN)
-  {
-    mlog[ERROR] << "parseFatEHClause: read " << SECLEN 
-                            << " @" << std::hex << sectionRva << std::dec
-                            << " got " << nread
-                            << std::endl;
-
-    return { nullptr, SgAsmCilMethodDef::BDY_INVALID_CLAUSE_LENGTH };
-  }
-
-  return exceptionData( leToHost(*reinterpret_cast<const std::uint32_t*>(buf + 0)),
+  return exceptionData( nread == SECLEN,
+                        leToHost(*reinterpret_cast<const std::uint32_t*>(buf + 0)),
                         leToHost(*reinterpret_cast<const std::uint32_t*>(buf + 4)),
                         leToHost(*reinterpret_cast<const std::uint32_t*>(buf + 8)),
                         leToHost(*reinterpret_cast<const std::uint32_t*>(buf + 12)),
@@ -3668,25 +3665,17 @@ parseFatEHClause(SgAsmPEFileHeader& fhdr, Rose::BinaryAnalysis::Address sectionR
 }
 
 std::tuple<SgAsmCilExceptionData*, SgAsmCilMethodDef::BodyState>
-parseTinyEHClause(SgAsmPEFileHeader& fhdr, Rose::BinaryAnalysis::Address sectionRva)
+parseTinyEHClause(SgAsmPEFileHeader& fhdr, Rose::BinaryAnalysis::Address sectionRva, std::uint8_t bytesToParse)
 {
   using Rose::BinaryAnalysis::ByteOrder::leToHost;
 
   static constexpr std::uint8_t SECLEN = 12;
 
-  std::uint8_t buf[SECLEN];
-  std::size_t  nread = fhdr.get_loaderMap()->readQuick(buf, sectionRva, SECLEN);
+  std::uint8_t buf[SECLEN] = {};
+  std::size_t  nread = fhdr.get_loaderMap()->readQuick(buf, sectionRva, bytesToParse);
 
-  if (nread != SECLEN)
-  {
-    mlog[ERROR] << "parseTinyEHClause: read " << SECLEN 
-                            << " @" << std::hex << sectionRva << std::dec
-                            << " got " << nread
-                            << std::endl;
-    return { nullptr, SgAsmCilMethodDef::BDY_INVALID_CLAUSE_LENGTH };
-  }
-
-  return exceptionData( leToHost(*reinterpret_cast<const std::uint16_t*>(buf + 0)),
+  return exceptionData( nread == SECLEN,
+                        leToHost(*reinterpret_cast<const std::uint16_t*>(buf + 0)),
                         leToHost(*reinterpret_cast<const std::uint16_t*>(buf + 2)),
                         leToHost(*reinterpret_cast<const std::uint8_t*> (buf + 4)),
                         leToHost(*reinterpret_cast<const std::uint16_t*>(buf + 5)),
@@ -3696,30 +3685,47 @@ parseTinyEHClause(SgAsmPEFileHeader& fhdr, Rose::BinaryAnalysis::Address section
 }
 
 using ParseClauseReturn = std::tuple<SgAsmCilExceptionData*, SgAsmCilMethodDef::BodyState>;
-using ParseClauseFn = std::function<ParseClauseReturn(SgAsmPEFileHeader&, Rose::BinaryAnalysis::Address)>;
+using ParseClauseFn = std::function<ParseClauseReturn(SgAsmPEFileHeader&, Rose::BinaryAnalysis::Address, std::uint8_t)>;
 
 std::tuple<std::vector<SgAsmCilExceptionData*>, SgAsmCilMethodDef::BodyState>
 parseEHClauses(SgAsmPEFileHeader& fhdr, Rose::BinaryAnalysis::Address sectionRva, std::size_t len, std::size_t elemLen,
-               ParseClauseFn parseClause)
+               ParseClauseFn parseClause, const char* headerKind)
 {
   std::vector<SgAsmCilExceptionData*> res;
+  bool const                          lenHasExpectedValue = (len % elemLen) == 0;
   
-  if ((len % elemLen) != 0)
-    return { res, SgAsmCilMethodDef::BDY_INVALID_CLAUSE_LENGTH };
-  
+  // Some compilers seem to set invalid section lengths 
+  // (most likely they forget to add 4 bytes for the header).
+  // Instead of giving up, we continue processing such files by:
+  //     just reading len bytes and set the remaining data to 0.
+  // other options include:
+  //     (1) assuming that the compiler should have added 4 to len, or
+  //     (2) not processing the last exception handler [inconsistent with other tools].
+  if (!lenHasExpectedValue)
+  {
+    mlog[WARN] << "parseEHClauses: invalid segment length " 
+                << len << " % " << elemLen << "[" << headerKind << "] != 0." 
+                << "\n  will use 0 padding for missing data in SgAsmCilExceptionData."
+                << std::endl;
+  }                
+                
   SgAsmCilMethodDef::BodyState bodyState = SgAsmCilMethodDef::BDY_NOT_PROCESSED;
 
-  for (std::size_t i = len / elemLen; i != 0; --i)
+  for (std::size_t ofs = 0; ofs < len; ofs+=elemLen)
   {
     SgAsmCilExceptionData* clause = nullptr;
     
-    std::tie(clause, bodyState) = parseClause(fhdr, sectionRva);
+    // in the last loop iteration, do not read more than len bytes 
+    //   when processing non-standard exception handler clauses.
+    if (ofs + elemLen > len) 
+      elemLen = len-ofs;
     
-    if (bodyState != SgAsmCilMethodDef::BDY_NOT_PROCESSED)
-      break;
+    std::tie(clause, bodyState) = parseClause(fhdr, sectionRva+ofs, elemLen);
     
     res.emplace_back(clause);
-    sectionRva += elemLen;
+    
+    if (bodyState != SgAsmCilMethodDef::BDY_NOT_PROCESSED)
+      break;    
   }
 
   return { std::move(res), bodyState };
@@ -3774,11 +3780,12 @@ void unparseEHClauses( const std::vector<SgAsmCilExceptionData*>& clauses,
 std::tuple<SgAsmCilMethodData*, Rose::BinaryAnalysis::Address, SgAsmCilMethodDef::BodyState>
 parseSection(SgAsmPEFileHeader& fhdr, Rose::BinaryAnalysis::Address sectionRva)
 {
+  static constexpr std::uint8_t FAT_FLAG = SgAsmCilMethodData::CorILMethod_Sect_FatFormat;
   if ((sectionRva % 4) != 0) 
     return { nullptr, 0, SgAsmCilMethodDef::BDY_INVALID_SECTION_ALIGN };
 
-  std::uint8_t   kind /* = uninitialized */;
-  std::size_t    nread1   = fhdr.get_loaderMap()->readQuick(&kind, sectionRva, 1);
+  std::vector<std::uint8_t> rawHeaderBytes(4, 0);
+  std::size_t    nread1   = fhdr.get_loaderMap()->readQuick(&rawHeaderBytes.at(0), sectionRva, 1);
   if (nread1 != 1)
   {
     mlog[ERROR] << "parseSection: expected 1 byte "
@@ -3790,8 +3797,9 @@ parseSection(SgAsmPEFileHeader& fhdr, Rose::BinaryAnalysis::Address sectionRva)
   }
 
   // buffer for 3 bytes
-  std::uint8_t   buf[4]   = {};
-  std::size_t    nread3   = fhdr.get_loaderMap()->readQuick(buf, sectionRva+1, 3);
+  std::uint8_t   kind     = rawHeaderBytes.at(0);
+  bool const     fat      = (kind & FAT_FLAG) == FAT_FLAG;
+  std::size_t    nread3   = fhdr.get_loaderMap()->readQuick(&rawHeaderBytes.at(1), sectionRva+1, 3);
   if (nread3 != 3)
   {
     mlog[ERROR] << "parseSection: expected 3 bytes "
@@ -3802,25 +3810,43 @@ parseSection(SgAsmPEFileHeader& fhdr, Rose::BinaryAnalysis::Address sectionRva)
     return { nullptr, 0, SgAsmCilMethodDef::BDY_INVALID_SECTION_HEADER };
   }
   
-  std::uint8_t   fatFlag  = SgAsmCilMethodData::CorILMethod_Sect_FatFormat;
-  const bool     fat      = (kind & fatFlag) == fatFlag;
-  if (!fat && ((buf[1] != 0) || (buf[2] != 0)))
+  std::uint32_t  buf0 = rawHeaderBytes.at(1);
+  std::uint32_t  buf1 = rawHeaderBytes.at(2);
+  std::uint32_t  buf2 = rawHeaderBytes.at(3);
+  bool const     headerIsInvalid = (!fat && ((buf1 != 0) || (buf2 != 0)));
+
+  if (headerIsInvalid)
   {
-    mlog[ERROR] << "parseSection: invalid section header"
-                            << std::endl;
+    mlog[INFO]
+        << "tiny section header require uv xy 00 00 byte sequence, instead got:" 
+        << std::hex
+        << " " << std::setw(2) << std::setfill('0') << std::uint32_t(kind) 
+        << " " << std::setw(2) << std::setfill('0') << buf0 
+        << " " << std::setw(2) << std::setfill('0') << buf1 
+        << " " << std::setw(2) << std::setfill('0') << buf2 
+        << std::dec                              
+        << std::endl;
     
-    return { nullptr, 0, SgAsmCilMethodDef::BDY_INVALID_SECTION_HEADER };
+    // set the buf1/2 = 0, so length can be computed correctly
+    // (other tools also process non-standard binaries)
+    buf1 = buf2 = 0;
   }
   
-  std::uint32_t  dataSize = buf[0] + (std::uint32_t(buf[1]) << 8) + (std::uint32_t(buf[2]) << 16);
-  
+  std::uint32_t const                 dataSize = buf0 + (buf1 << 8) + (buf2 << 16);  
+  std::uint32_t const                 rawHeader = kind + (dataSize << 8);
   std::vector<SgAsmCilExceptionData*> clauses;
   SgAsmCilMethodDef::BodyState        bodyState;
   
-  std::tie(clauses, bodyState) = fat ? parseEHClauses(fhdr, sectionRva+4, dataSize-4, 24, parseFatEHClause)
-                                     : parseEHClauses(fhdr, sectionRva+4, dataSize-4, 12, parseTinyEHClause);
-
-  return { methodData(kind, dataSize, std::move(clauses)), sectionRva + dataSize, bodyState };
+  // \todo SUPPORT_NON_STANDARD_DATASIZE
+  //       tolerate non-standard data sizes.
+  //       according to ii.25.4.5, 
+  //          dataSize = (n * sizeof(fat|tiny)) + 4, where n is number of exception clauses
+  //       some compiler use a datasize that is 4 bytes short.
+  //       see note SUPPORT_NON_STANDARD_DATASIZE in parseEHClauses for resolution strategies.
+  std::tie(clauses, bodyState) = fat ? parseEHClauses(fhdr, sectionRva+4, dataSize-4, 24, parseFatEHClause, "FAT")
+                                     : parseEHClauses(fhdr, sectionRva+4, dataSize-4, 12, parseTinyEHClause, "tiny");
+                                     
+  return { methodData(rawHeader, std::move(clauses)), sectionRva + dataSize, bodyState };
 }
 
 void unparseSection(const SgAsmCilMethodData& section, std::vector<std::uint8_t>& code)
@@ -3879,7 +3905,8 @@ void decodeMetadata(Rose::BinaryAnalysis::Address base_va, SgAsmCilMetadataHeap*
     return;                  
   }
   
-  int methodctr = 0;
+  std::size_t numNatives = 0;
+  int         methodCtr  = 0;
 
   // decode methods
   for (SgAsmCilMethodDef* m : mtbl->get_elements())
@@ -3887,7 +3914,7 @@ void decodeMetadata(Rose::BinaryAnalysis::Address base_va, SgAsmCilMetadataHeap*
     ASSERT_not_null(m);
     ASSERT_require(m->get_bodyState() == SgAsmCilMethodDef::BDY_NOT_PROCESSED);
 
-    ++methodctr;
+    ++methodCtr;
     rb::Address rva = static_cast<std::uint32_t>(m->get_RVA());
     
     if (rva == 0) 
@@ -3895,12 +3922,11 @@ void decodeMetadata(Rose::BinaryAnalysis::Address base_va, SgAsmCilMetadataHeap*
       m->set_bodyState(SgAsmCilMethodDef::BDY_NOT_AVAILABLE);
       continue;
     }
-
     // TODO: The header shall only be parsed for CIL methods
     //       Native methods do not have CIL like header information,
     //         so just disassmble from the rva, once we have
     //         mapped out the CIL code sections.
-    
+
     // parse header
     std::uint8_t   mh0;
     std::size_t    nread = fhdr->get_loaderMap()->readQuick(&mh0, base_va + rva, 1);
@@ -3908,7 +3934,7 @@ void decodeMetadata(Rose::BinaryAnalysis::Address base_va, SgAsmCilMetadataHeap*
     if (nread != 1)
     {
       mlog[ERROR] 
-            << "unable to parse method #" << methodctr << " " << m->get_Name_string()
+            << "unable to parse method #" << methodCtr << " " << m->get_Name_string()
             << "\n  unable to read header byte."
             << std::endl; 
 
@@ -3923,7 +3949,7 @@ void decodeMetadata(Rose::BinaryAnalysis::Address base_va, SgAsmCilMetadataHeap*
     if ((isTiny | isFat) == 0)
     {
       mlog[ERROR] 
-              << "unable to parse method #" << methodctr << " " << m->get_Name_string() 
+              << "unable to parse method #" << methodCtr << " " << m->get_Name_string() 
               << "\n  inconsistent tiny/fat header flags; @rva " << reinterpret_cast<void*>(rva)
               << "\n  formatflag = " << reinterpret_cast<void*>((mh0 & MethodHeader::FORMAT)) << " != "  
                 << reinterpret_cast<void*>(MethodHeader::TINY) << "[tiny] or " 
@@ -3954,16 +3980,16 @@ void decodeMetadata(Rose::BinaryAnalysis::Address base_va, SgAsmCilMetadataHeap*
 
     // parse code
     Rose::BinaryAnalysis::Address codeRVA = rva + mh.headerSize();
-    std::uint32_t  codeLen = mh.codeSize();
+    std::uint32_t             codeLen = mh.codeSize();
 
     std::vector<std::uint8_t> code(codeLen, 0);
-    const std::size_t    nreadCode = fhdr->get_loaderMap()->readQuick(code.data(), base_va + codeRVA, codeLen);
-    const bool           readCorrectly = (nreadCode == codeLen);
+    const std::size_t         nreadCode = fhdr->get_loaderMap()->readQuick(code.data(), base_va + codeRVA, codeLen);
+    const bool                readCorrectly = (nreadCode == codeLen);
     
     if (!readCorrectly)
     {
       mlog[ERROR] 
-              << "unable to read body of method #" << methodctr 
+              << "unable to read body of method #" << methodCtr 
               << "\n  expected to read " << codeLen << " bytes"
               << "\n  read " << nreadCode << " bytes"
               << std::endl;
@@ -3978,8 +4004,8 @@ void decodeMetadata(Rose::BinaryAnalysis::Address base_va, SgAsmCilMetadataHeap*
       // was: continue;
       //~ root->set_ErrorFree(false);
     }
-
-    SgAsmBlock* blk = nullptr;
+    
+    SgAsmBlock* blk = nullptr;    
 
     switch (m->get_ImplFlags() & CodeTypeMask::mask)
     {
@@ -3990,14 +4016,28 @@ void decodeMetadata(Rose::BinaryAnalysis::Address base_va, SgAsmCilMetadataHeap*
       }
 
       case CodeTypeMask::native: {
-        auto arch = rb::Architecture::findByHeader(fhdr).orThrow();
-        std::tie(blk,bodyState) = disassemble(base_va + codeRVA, bodyState, code, arch);
+        // \todo
+        //     to get all native code, we need to partition the binary as usual,
+        //     using the CIL native methods as known entry points.
+        if (numNatives == 0)
+        {
+          mlog[WARN] 
+                  << "Skipping disassembling native code referenced from CIL"
+                  << std::endl;                
+        }
+                
+        //~ auto arch = rb::Architecture::findByHeader(fhdr).orThrow();
+        //~ std::tie(blk,bodyState) = disassemble(base_va + codeRVA, bodyState, code, arch);
+        
+        ++numNatives;
         break;
       }
 
       case CodeTypeMask::runtime :
-        mlog[ERROR] << "Code is runtime provided. Please share specimen with ROSE developers." << code.size()
-                    << std::endl;
+        mlog[ERROR] 
+                << "Code is runtime provided. Please share specimen with ROSE developers." << code.size()
+                << std::endl;
+                
         bodyState = SgAsmCilMethodDef::BDY_RUNTIME_SUPPORTED;
         // looking for sample code
         break;
@@ -4011,35 +4051,30 @@ void decodeMetadata(Rose::BinaryAnalysis::Address base_va, SgAsmCilMetadataHeap*
     
     if (bodyState != SgAsmCilMethodDef::BDY_NOT_PROCESSED)
     {
-      mlog[ERROR] << "Body processing incomplete: " << m->get_Name_string() 
-                  << std::endl;
-
+      mlog[ERROR]
+              << "unable to decode body of method " << m->get_Name_string()
+              << std::endl;
       m->set_bodyState(bodyState);
       root->set_ErrorFree(false);
       continue;    
     }
     
+    ASSERT_require((base_va % 4) == 0);
     bool        hasMoreSections = m->get_hasMoreSections();
-    Rose::BinaryAnalysis::Address sectionRva = base_va + codeRVA + codeLen;
-
-  /*
-    << "################################## "
-              << m->get_Name_string()
-              << " more: " << hasMoreSections
-              << " tiny: " << isTiny
-              << " flags: " << mh.flags()
-              << " stack: " << mh.maxStackSize()
-              << " code: " << mh.codeSize()
-              << " lvst: " << mh.localVarSigTok()
-              << " / " << (mh.flags() & 0x8) << " / " << mh.moreSections()
-              << std::endl;
-  */
+    Rose::BinaryAnalysis::Address secRva     = codeRVA + codeLen;
+    Rose::BinaryAnalysis::Address sectionRva = base_va + secRva;
 
     while (hasMoreSections)
     {
       // extra sections start at next 4 bound boundary
       Rose::BinaryAnalysis::Address const   alignedSectionRva = (sectionRva + 3) & ~3;
       SgAsmCilMethodData* section = nullptr;
+      //~ mlog[WARN]
+        //~ << "parse: " << m->get_Name_string() 
+        //~ << " +s@ 0x" << std::setw(8) << std::setfill('0') << std::hex << (alignedSectionRva-base_va) << std::dec 
+        //~ << " m@ 0x" << std::setw(8) << std::setfill('0') << std::hex << rva << std::dec 
+        //~ << " base_va=" << std::setfill('0') << std::hex << base_va << std::dec 
+        //~ << std::endl;      
 
       std::tie(section, sectionRva, bodyState) = parseSection(*fhdr, alignedSectionRva);
       

@@ -38,6 +38,9 @@ private:
   
   [[using Rosebud: rosetta]]
   std::uint32_t classTokenOrFilterOffset = 0;
+
+  [[using Rosebud: rosetta]]
+  bool standardConforming = true;
   
 public:
   /**

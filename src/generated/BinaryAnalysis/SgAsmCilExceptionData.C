@@ -73,6 +73,17 @@ SgAsmCilExceptionData::set_classTokenOrFilterOffset(std::uint32_t const& x) {
     set_isModified(true);
 }
 
+bool const&
+SgAsmCilExceptionData::get_standardConforming() const {
+    return p_standardConforming;
+}
+
+void
+SgAsmCilExceptionData::set_standardConforming(bool const& x) {
+    this->p_standardConforming = x;
+    set_isModified(true);
+}
+
 SgAsmCilExceptionData::~SgAsmCilExceptionData() {
     destructorHelper();
 }
@@ -83,7 +94,8 @@ SgAsmCilExceptionData::SgAsmCilExceptionData()
     , p_tryLength(0)
     , p_handlerOffset(0)
     , p_handlerLength(0)
-    , p_classTokenOrFilterOffset(0) {}
+    , p_classTokenOrFilterOffset(0)
+    , p_standardConforming(true) {}
 
 void
 SgAsmCilExceptionData::initializeProperties() {
@@ -93,6 +105,7 @@ SgAsmCilExceptionData::initializeProperties() {
     p_handlerOffset = 0;
     p_handlerLength = 0;
     p_classTokenOrFilterOffset = 0;
+    p_standardConforming = true;
 }
 
 #endif // defined(ROSE_ENABLE_BINARY_ANALYSIS)

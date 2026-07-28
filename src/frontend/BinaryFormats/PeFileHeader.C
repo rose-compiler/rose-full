@@ -303,6 +303,7 @@ SgAsmPEFileHeader::parse()
         break;
       case 0x01c0:
       case 0x01c4: // ARM Thumb-2 little endian
+      case 0xaa64:
         set_isa(ISA_ARM_Family);
         break;
       case 0x01d3:

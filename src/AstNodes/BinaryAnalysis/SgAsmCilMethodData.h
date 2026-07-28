@@ -7,7 +7,7 @@
 class SgAsmCilMethodData : public SgAsmCilNode
 {
 public:
-  enum 
+  enum : std::uint8_t
   {
     CorILMethod_Sect_EHTable    = 0x01,
     CorILMethod_Sect_OptILTable = 0x02,
@@ -16,37 +16,39 @@ public:
   };
   
 private:
-  [[using Rosebud: rosetta]]
-  uint64_t kind = 0;
-  
-  [[using Rosebud: rosetta]]
-  std::uint32_t dataSize = 0;
+  //~ [[using Rosebud: rosetta]]
+  //~ std::uint32_t usedDataSize = 0; // this could be the dataSize as used in parsing
   
   [[using Rosebud: rosetta, accessors(get_Clauses), mutators(), large]]
-  std::vector<SgAsmCilExceptionData*> clauses;
+  std::vector<SgAsmCilExceptionData*> clauses = {};
+  
+  [[using Rosebud: rosetta]]
+  std::uint32_t rawHeader;
 
 public:
+  std::uint8_t get_kind() const
+  {
+    return p_rawHeader & 0xff;
+  }
+
   bool isEHTable() const
   {
-    return (p_kind & CorILMethod_Sect_EHTable) == CorILMethod_Sect_EHTable;
+    return (get_kind() & CorILMethod_Sect_EHTable) == CorILMethod_Sect_EHTable;
   }
   
   bool isOptILTable() const
   {
-    const bool res = (p_kind & CorILMethod_Sect_OptILTable) == CorILMethod_Sect_OptILTable;
-    
-    ASSERT_require(!res);
-    return res;
+    return (get_kind() & CorILMethod_Sect_OptILTable) == CorILMethod_Sect_OptILTable;
   }
   
   bool usesFatFormat() const
   {
-    return (p_kind & CorILMethod_Sect_FatFormat) == CorILMethod_Sect_FatFormat;
+    return (get_kind() & CorILMethod_Sect_FatFormat) == CorILMethod_Sect_FatFormat;
   }
   
   bool hasMoreSections() const
   {
-    return (p_kind & CorILMethod_Sect_MoreSects) == CorILMethod_Sect_MoreSects;
+    return (get_kind() & CorILMethod_Sect_MoreSects) == CorILMethod_Sect_MoreSects;
   }
 };
   

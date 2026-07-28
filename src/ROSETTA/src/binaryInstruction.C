@@ -35656,19 +35656,13 @@ class SgAsmCilMethodData: public SgAsmCilNode {
 
 #ifndef DOCUMENTATION
     AsmCilMethodData.setDataPrototype(
-        "uint64_t", "kind", "= 0",
+        "std::vector<SgAsmCilExceptionData*>", "clauses", "= {}",
         NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE, COPY_DATA);
 #endif // !DOCUMENTATION
 
 #ifndef DOCUMENTATION
     AsmCilMethodData.setDataPrototype(
-        "std::uint32_t", "dataSize", "= 0",
-        NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE, COPY_DATA);
-#endif // !DOCUMENTATION
-
-#ifndef DOCUMENTATION
-    AsmCilMethodData.setDataPrototype(
-        "std::vector<SgAsmCilExceptionData*>", "clauses", "",
+        "std::uint32_t", "rawHeader", "",
         NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE, COPY_DATA);
 #endif // !DOCUMENTATION
 
@@ -35684,14 +35678,13 @@ private:
     void serialize(S &s, const unsigned /*version*/) {
         debugSerializationBegin("SgAsmCilMethodData");
         s & BOOST_SERIALIZATION_BASE_OBJECT_NVP(SgAsmCilNode);
-        s & BOOST_SERIALIZATION_NVP(p_kind);
-        s & BOOST_SERIALIZATION_NVP(p_dataSize);
         s & BOOST_SERIALIZATION_NVP(p_clauses);
+        s & BOOST_SERIALIZATION_NVP(p_rawHeader);
         debugSerializationEnd("SgAsmCilMethodData");
     }
 #endif // ROSE_ENABLE_BOOST_SERIALIZATION
 public:
-  enum
+  enum : std::uint8_t
   {
     CorILMethod_Sect_EHTable    = 0x01,
     CorILMethod_Sect_OptILTable = 0x02,
@@ -35700,39 +35693,39 @@ public:
   };
 
 private:
-public:
-    uint64_t const& get_kind() const;
-    void set_kind(uint64_t const&);
-
-public:
-    std::uint32_t const& get_dataSize() const;
-    void set_dataSize(std::uint32_t const&);
-
+  //~ [[using Rosebud: rosetta]]
+  //~ std::uint32_t usedDataSize = 0; // this could be the dataSize as used in parsing
 public:
     std::vector<SgAsmCilExceptionData*> const& get_Clauses() const;
     std::vector<SgAsmCilExceptionData*>& get_Clauses();
+
 public:
+    std::uint32_t const& get_rawHeader() const;
+    void set_rawHeader(std::uint32_t const&);
+public:
+  std::uint8_t get_kind() const
+  {
+    return p_rawHeader & 0xff;
+  }
+
   bool isEHTable() const
   {
-    return (p_kind & CorILMethod_Sect_EHTable) == CorILMethod_Sect_EHTable;
+    return (get_kind() & CorILMethod_Sect_EHTable) == CorILMethod_Sect_EHTable;
   }
 
   bool isOptILTable() const
   {
-    const bool res = (p_kind & CorILMethod_Sect_OptILTable) == CorILMethod_Sect_OptILTable;
-
-    ASSERT_require(!res);
-    return res;
+    return (get_kind() & CorILMethod_Sect_OptILTable) == CorILMethod_Sect_OptILTable;
   }
 
   bool usesFatFormat() const
   {
-    return (p_kind & CorILMethod_Sect_FatFormat) == CorILMethod_Sect_FatFormat;
+    return (get_kind() & CorILMethod_Sect_FatFormat) == CorILMethod_Sect_FatFormat;
   }
 
   bool hasMoreSections() const
   {
-    return (p_kind & CorILMethod_Sect_MoreSects) == CorILMethod_Sect_MoreSects;
+    return (get_kind() & CorILMethod_Sect_MoreSects) == CorILMethod_Sect_MoreSects;
   }
 public:
     /** Destructor. */
@@ -39222,6 +39215,12 @@ class SgAsmCilExceptionData: public SgAsmCilNode {
         NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE, COPY_DATA);
 #endif // !DOCUMENTATION
 
+#ifndef DOCUMENTATION
+    AsmCilExceptionData.setDataPrototype(
+        "bool", "standardConforming", "= true",
+        NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE, COPY_DATA);
+#endif // !DOCUMENTATION
+
     DECLARE_OTHERS(AsmCilExceptionData);
 #if defined(SgAsmCilExceptionData_OTHERS) || defined(DOCUMENTATION)
 
@@ -39240,6 +39239,7 @@ private:
         s & BOOST_SERIALIZATION_NVP(p_handlerOffset);
         s & BOOST_SERIALIZATION_NVP(p_handlerLength);
         s & BOOST_SERIALIZATION_NVP(p_classTokenOrFilterOffset);
+        s & BOOST_SERIALIZATION_NVP(p_standardConforming);
         debugSerializationEnd("SgAsmCilExceptionData");
     }
 #endif // ROSE_ENABLE_BOOST_SERIALIZATION
@@ -39281,6 +39281,10 @@ public:
 public:
     std::uint32_t const& get_classTokenOrFilterOffset() const;
     void set_classTokenOrFilterOffset(std::uint32_t const&);
+
+public:
+    bool const& get_standardConforming() const;
+    void set_standardConforming(bool const&);
 public:
   /**
    * Convenience functions to query the flags property.

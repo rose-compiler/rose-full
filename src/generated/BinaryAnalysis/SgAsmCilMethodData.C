@@ -7,28 +7,6 @@
 #define ROSE_SgAsmCilMethodData_IMPL
 #include <SgAsmCilMethodData.h>
 
-uint64_t const&
-SgAsmCilMethodData::get_kind() const {
-    return p_kind;
-}
-
-void
-SgAsmCilMethodData::set_kind(uint64_t const& x) {
-    this->p_kind = x;
-    set_isModified(true);
-}
-
-std::uint32_t const&
-SgAsmCilMethodData::get_dataSize() const {
-    return p_dataSize;
-}
-
-void
-SgAsmCilMethodData::set_dataSize(std::uint32_t const& x) {
-    this->p_dataSize = x;
-    set_isModified(true);
-}
-
 std::vector<SgAsmCilExceptionData*> const&
 SgAsmCilMethodData::get_Clauses() const {
     return p_clauses;
@@ -39,18 +17,27 @@ SgAsmCilMethodData::get_Clauses() {
     return p_clauses;
 }
 
+std::uint32_t const&
+SgAsmCilMethodData::get_rawHeader() const {
+    return p_rawHeader;
+}
+
+void
+SgAsmCilMethodData::set_rawHeader(std::uint32_t const& x) {
+    this->p_rawHeader = x;
+    set_isModified(true);
+}
+
 SgAsmCilMethodData::~SgAsmCilMethodData() {
     destructorHelper();
 }
 
 SgAsmCilMethodData::SgAsmCilMethodData()
-    : p_kind(0)
-    , p_dataSize(0) {}
+    : p_clauses({}) {}
 
 void
 SgAsmCilMethodData::initializeProperties() {
-    p_kind = 0;
-    p_dataSize = 0;
+    p_clauses = {};
 }
 
 #endif // defined(ROSE_ENABLE_BINARY_ANALYSIS)

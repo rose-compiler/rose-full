@@ -457,6 +457,7 @@ Cil::disassembleOne(const MemoryMap::Ptr &map, Address va, AddressSet*)
         }
 
         case 0x45: { // Cil_switch: jump to one of n values
+           const std::int32_t MAX_NTARGETS = 2048;
            const std::int32_t minSwitchSize = 1 + sizeof(uint32_t);
            const uint32_t nTargets = ByteOrder::leToHost(*((uint32_t*)(rawBytes.data()+1)));
 
@@ -465,9 +466,12 @@ Cil::disassembleOne(const MemoryMap::Ptr &map, Address va, AddressSet*)
            // This maximum number of targets is purely arbitrary. Something is needed for error recovery,
            // for example, this was inserted because nTargets was wrong because of an error disassembling
            // another instruction. Now it fails gracefully with an unknown instruction.
-           if (nTargets > 1024) {
-             std::cerr << "!!!!---------------------------!!!!\n";
-             std::cerr << "Cil_switch instruction has nTargets too large=" << nTargets << "\n";
+           if (nTargets > MAX_NTARGETS) {
+             mlog[ERROR] << "Cil_switch instruction has nTargets (" << nTargets << ") > MAX_NTARGETS (" << MAX_NTARGETS << ")"
+                         << "\n   Note: MAX_NTARGETS is an arbitrary limit in ROSE and can be set in "
+                         << "src/Rose/BinaryAnalysis/Disassembler/Cil.C@" << __LINE__
+                         << std::endl;             
+                         
              insn = makeUnknownInstruction(va, rawBytes, minSwitchSize);
              break;
            }
