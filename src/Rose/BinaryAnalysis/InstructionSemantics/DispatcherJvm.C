@@ -2272,9 +2272,10 @@ struct IP_iaload: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_iand: P {
-    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
+    void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ASSERT_require2(false, "iand unimplemented");
+        doBinaryOp(ops, ValueKind::Integer32,
+             [ops](auto lhs, auto rhs) { return ops->and_(lhs, rhs); });
     }
 };
 
@@ -3101,10 +3102,10 @@ struct IP_laload: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_land: P {
-    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
+    void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ASSERT_require(false);
-        ASSERT_require2(false, "land unimplemented");
+        doBinaryOp(ops, ValueKind::Integer64,
+             [ops](auto lhs, auto rhs) { return ops->and_(lhs, rhs); });
     }
 };
 
@@ -3970,6 +3971,8 @@ DispatcherJvm::initializeDispatchTable() {
 
     iprocSet(0x7c,  new Jvm::IP_iushr);
     iprocSet(0x7d,  new Jvm::IP_lushr);
+    iprocSet(0x7e,  new Jvm::IP_iand);
+    iprocSet(0x7f,  new Jvm::IP_land);
 
     iprocSet(0x85,  new Jvm::IP_i2l);
 }
