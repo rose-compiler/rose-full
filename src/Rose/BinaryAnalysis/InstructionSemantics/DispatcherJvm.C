@@ -2993,9 +2993,10 @@ struct IP_iushr: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_ixor: P {
-    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
+    void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ASSERT_require2(false, "ixor unimplemented");
+        doBinaryOp(ops, ValueKind::Integer32,
+             [ops](auto lhs, auto rhs) { return ops->xor_(lhs, rhs); });
     }
 };
 
@@ -3553,9 +3554,10 @@ struct IP_lushr: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_lxor: P {
-    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
+    void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ASSERT_require2(false, "lxor unimplemented");
+        doBinaryOp(ops, ValueKind::Integer64,
+             [ops](auto lhs, auto rhs) { return ops->xor_(lhs, rhs); });
     }
 };
 
@@ -3988,6 +3990,8 @@ DispatcherJvm::initializeDispatchTable() {
 
     iprocSet(0x80,  new Jvm::IP_ior);
     iprocSet(0x81,  new Jvm::IP_lor);
+    iprocSet(0x82,  new Jvm::IP_ixor);
+    iprocSet(0x83,  new Jvm::IP_lxor);
 
     iprocSet(0x85,  new Jvm::IP_i2l);
 }
