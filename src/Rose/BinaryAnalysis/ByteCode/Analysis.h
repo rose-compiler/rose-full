@@ -7,6 +7,7 @@
 #if 1
 #include <Rose/BinaryAnalysis/Disassembler/BasicTypes.h>
 #include <Rose/BinaryAnalysis/Partitioner2/BasicTypes.h>
+#include <Rose/Progress.h>
 #endif
 
 class SgAsmInstructionList;
@@ -179,8 +180,8 @@ class Class: public Sawyer::SharedObject,
     const std::vector<Attribute::Ptr>& attributes() const;
     const std::vector<Interface::Ptr>& interfaces() const;
 
-    virtual void partition(const PartitionerPtr &partitioner,
-                           std::map<std::string,Address> &discoveredFunctions);
+    virtual void partition(const PartitionerPtr &partitioner, std::map<std::string,Address> &discoveredFunctions,
+                           const Progress::Ptr &progress = Progress::Ptr());
     virtual void digraph() const;
     virtual void dump() = 0;
 

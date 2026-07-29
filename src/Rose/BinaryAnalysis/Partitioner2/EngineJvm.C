@@ -11,6 +11,7 @@
 #include <Rose/BinaryAnalysis/Partitioner2/ModulesJvm.h>
 #include <Rose/BinaryAnalysis/Partitioner2/Partitioner.h>
 #include <Rose/CommandLine.h>
+#include <Rose/Progress.h>
 
 #include <SgAsmBlock.h>
 #include <SgAsmGenericFile.h>
@@ -147,10 +148,28 @@ EngineJvm::instanceFromFactory(const Settings &settings) {
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 void
-EngineJvm::updateLoaderProgress(const std::string &phase, size_t current, size_t total) const {
+EngineJvm::updateLoaderProgress(size_t current, size_t total) const {
     if (total > 0) {
         if (Progress::Ptr p = progress())
-            p->update(Progress::Report(phase, (double)current, (double)total));
+            p->update(Progress::Report("", (double)current, (double)total));
+    }
+}
+
+void
+EngineJvm::createClassProgressBar(ArchiveProgress &info, const std::string &name) const {
+    if (info.nClassFiles > 0 && !info.classProgressBar) {
+        info.classProgressBar.reset(new Sawyer::ProgressBar<size_t>(info.nClassFiles, mlog[MARCH], name));
+        info.classProgressBar->suffix(" classes");
+        info.classProgressBar->domain(0, info.nClassFiles);
+    }
+}
+
+void
+EngineJvm::createJarProgressBar(ArchiveProgress &info, const std::string &name) const {
+    if (info.nJarFiles > 0 && !info.jarProgressBar) {
+        info.jarProgressBar.reset(new Sawyer::ProgressBar<size_t>(info.nJarFiles, mlog[MARCH], name));
+        info.jarProgressBar->suffix(" jars");
+        info.jarProgressBar->domain(0, info.nJarFiles);
     }
 }
 
@@ -158,36 +177,65 @@ void
 EngineJvm::registerWarProgress(ModulesJvm::Zipper *zip) {
     ASSERT_not_null(zip);
 
-    ArchiveProgress info{ArchiveProgress::Kind::WAR};
+    ArchiveProgress info;
+    info.kind = ArchiveProgress::Kind::WAR;
     info.nClassFiles = countArchiveFiles(zip, isArchiveClassFile);
     info.nJarFiles = countArchiveFiles(zip, isArchiveJarFile);
-    archiveProgress_[zip] = info;
 
-    if (settings().engineJvm.loadAllJars)
-        updateLoaderProgress("jvm-war-jars", 0, info.nJarFiles);
-    if (settings().engineJvm.loadAllClasses)
-        updateLoaderProgress("jvm-war-classes", 0, info.nClassFiles);
+    archiveProgress_.emplace(zip, std::move(info));
 }
 
 void
 EngineJvm::registerJarProgress(ModulesJvm::Zipper *zip, ModulesJvm::Zipper *parentWar) {
     ASSERT_not_null(zip);
 
-    ArchiveProgress info{ArchiveProgress::Kind::JAR};
+    ArchiveProgress info;
+    info.kind = ArchiveProgress::Kind::JAR;
     info.parentWar = parentWar;
     info.nClassFiles = countArchiveFiles(zip, isArchiveClassFile);
-    archiveProgress_[zip] = info;
 
-    if (settings().engineJvm.loadAllClasses)
-        updateLoaderProgress("jvm-jar-classes", 0, info.nClassFiles);
+    archiveProgress_.emplace(zip, std::move(info));
 
-    if (parentWar && settings().engineJvm.loadAllClasses) {
+    if (parentWar) {
         auto parent = archiveProgress_.find(parentWar);
-        if (parent != archiveProgress_.end() && parent->second.kind == ArchiveProgress::Kind::WAR) {
-            parent->second.nClassFiles += info.nClassFiles;
-            updateLoaderProgress("jvm-war-classes", parent->second.nClassesHandled, parent->second.nClassFiles);
-        }
+        if (parent != archiveProgress_.end() && parent->second.kind == ArchiveProgress::Kind::WAR)
+            parent->second.childJars.push_back(zip);
     }
+}
+
+void
+EngineJvm::beginArchiveClassProgress(ModulesJvm::Zipper *zip) {
+    auto found = archiveProgress_.find(zip);
+    if (found == archiveProgress_.end())
+        return;
+
+    ArchiveProgress &info = found->second;
+    switch (info.kind) {
+        case ArchiveProgress::Kind::JAR:
+            createClassProgressBar(info, info.parentWar ? "jvm-load.war.jars.jar.classes" : "jvm-load.jar.classes");
+            break;
+
+        case ArchiveProgress::Kind::WAR:
+            createClassProgressBar(info, "jvm-load.war.classes");
+            break;
+    }
+
+    updateLoaderProgress(info.nClassesHandled, info.nClassFiles);
+    if (info.classProgressBar)
+        info.classProgressBar->value(info.nClassesHandled, info.nClassFiles);
+}
+
+void
+EngineJvm::beginWarJarProgress(ModulesJvm::Zipper *zip) {
+    auto found = archiveProgress_.find(zip);
+    if (found == archiveProgress_.end())
+        return;
+
+    ArchiveProgress &info = found->second;
+    createJarProgressBar(info, "jvm-load.war.jars");
+    updateLoaderProgress(info.nJarsHandled, info.nJarFiles);
+    if (info.jarProgressBar)
+        info.jarProgressBar->value(info.nJarsHandled, info.nJarFiles);
 }
 
 void
@@ -195,7 +243,12 @@ EngineJvm::noteWarJarHandled(ModulesJvm::Zipper *zip) {
     auto found = archiveProgress_.find(zip);
     if (found != archiveProgress_.end()) {
         ++found->second.nJarsHandled;
-        updateLoaderProgress("jvm-war-jars", found->second.nJarsHandled, found->second.nJarFiles);
+        updateLoaderProgress(found->second.nJarsHandled, found->second.nJarFiles);
+        if (found->second.jarProgressBar) {
+            found->second.jarProgressBar->value(found->second.nJarsHandled, found->second.nJarFiles);
+            if (found->second.nJarsHandled >= found->second.nJarFiles)
+                found->second.jarProgressBar.reset();
+        }
     }
 }
 
@@ -210,18 +263,21 @@ EngineJvm::noteArchiveClassHandled(ModulesJvm::Zipper *zip) {
 
     switch (info.kind) {
         case ArchiveProgress::Kind::JAR:
-            updateLoaderProgress("jvm-jar-classes", info.nClassesHandled, info.nClassFiles);
-            if (info.parentWar) {
-                auto parent = archiveProgress_.find(info.parentWar);
-                if (parent != archiveProgress_.end() && parent->second.kind == ArchiveProgress::Kind::WAR) {
-                    ++parent->second.nClassesHandled;
-                    updateLoaderProgress("jvm-war-classes", parent->second.nClassesHandled, parent->second.nClassFiles);
-                }
+            updateLoaderProgress(info.nClassesHandled, info.nClassFiles);
+            if (info.classProgressBar) {
+                info.classProgressBar->value(info.nClassesHandled, info.nClassFiles);
+                if (info.nClassesHandled >= info.nClassFiles)
+                    info.classProgressBar.reset();
             }
             break;
 
         case ArchiveProgress::Kind::WAR:
-            updateLoaderProgress("jvm-war-classes", info.nClassesHandled, info.nClassFiles);
+            updateLoaderProgress(info.nClassesHandled, info.nClassFiles);
+            if (info.classProgressBar) {
+                info.classProgressBar->value(info.nClassesHandled, info.nClassFiles);
+                if (info.nClassesHandled >= info.nClassFiles)
+                    info.classProgressBar.reset();
+            }
             break;
     }
 }
@@ -507,14 +563,43 @@ EngineJvm::loadWarFile(const std::string &filename) {
     // Load files contained in the war file
     for (auto file : zipWar->files()) {
         if (settings().engineJvm.loadAllJars && isArchiveJarFile(file)) {
-            if (loadJarFile(file.filename(), zipWar))
-                noteWarJarHandled(zipWar);
+            loadJarFile(file.filename(), zipWar);
         }
         // Class files in WAR will be loaded via normal mechanisms
         // The zipWar is already in jars_, so loadClassFile() will find them
     }
 
     return true;
+}
+
+Address
+EngineJvm::loadArchiveClassFiles(ModulesJvm::Zipper *zip, SgAsmGenericFileList* fileList, Address baseVa) {
+    ASSERT_not_null(zip);
+
+    for (auto file : zip->files()) {
+        if (isArchiveClassFile(file)) {
+            // Build className from file path for duplicate check
+            auto filePath = fs::path(file.filename());
+            auto classPath = filePath.parent_path() / filePath.stem();
+            std::string className = classPath.string();
+
+            // Normalize the className to match the format used by ByteCode::JvmClass::name()
+            const std::string warClassPrefix = "WEB-INF/classes/";
+            if (className.substr(0, warClassPrefix.length()) == warClassPrefix) {
+                className = className.substr(warClassPrefix.length());
+            }
+
+            // Skip if this class has already been loaded
+            // (prevents loading same class from both WAR and nested JARs)
+            if (classes_.find(className) == classes_.end()) {
+//TODO::add zip as a parameter to loadClassFile so faster to find
+                baseVa = loadClassFile(file.filename(), fileList, baseVa);
+            }
+            noteArchiveClassHandled(zip);
+        }
+    }
+
+    return baseVa;
 }
 
 bool
@@ -894,31 +979,49 @@ EngineJvm::roseFrontendReplacement(const std::vector<fs::path> &paths) {
 
     // Load all classes from encountered jar files, if requested
     if (settings().engineJvm.loadAllClasses) {
+        Progress::Ptr p = progress();
+        ProgressTask loadTask(p, "jvm-load");
+
         for (auto zip : jars_) {
-            for (auto file : zip->files()) {
-                if (isArchiveClassFile(file)) {
-                    // Build className from file path for duplicate check
-                    auto filePath = fs::path(file.filename());
-                    auto classPath = filePath.parent_path() / filePath.stem();
-                    std::string className = classPath.string();
+            auto found = archiveProgress_.find(zip);
+            if (found == archiveProgress_.end())
+                continue;
 
-                    // Normalize the className to match the format used by ByteCode::JvmClass::name()
-                    const std::string warClassPrefix = "WEB-INF/classes/";
-                    if (className.substr(0, warClassPrefix.length()) == warClassPrefix) {
-                        className = className.substr(warClassPrefix.length());
+            ArchiveProgress &info = found->second;
+            switch (info.kind) {
+                case ArchiveProgress::Kind::WAR: {
+                    ProgressTask warTask(p, "war");
+
+                    if (info.nClassFiles > 0) {
+                        ProgressTask classesTask(p, "classes");
+                        beginArchiveClassProgress(zip);
+                        baseVa = loadArchiveClassFiles(zip, fileList, baseVa);
                     }
 
-                    // Skip if this class has already been loaded
-                    // (prevents loading same class from both WAR and nested JARs)
-                    if (classes_.find(className) != classes_.end()) {
-                        noteArchiveClassHandled(zip);
-                        continue;
+                    if (settings().engineJvm.loadAllJars && info.nJarFiles > 0) {
+                        ProgressTask jarsTask(p, "jars");
+                        beginWarJarProgress(zip);
+                        for (ModulesJvm::Zipper *childJar: info.childJars) {
+                            {
+                                ProgressTask jarTask(p, "jar");
+                                ProgressTask classesTask(p, "classes");
+                                beginArchiveClassProgress(childJar);
+                                baseVa = loadArchiveClassFiles(childJar, fileList, baseVa);
+                            }
+                            noteWarJarHandled(zip);
+                        }
                     }
-
-//TODO::add zip as a parameter to loadClassFile so faster to find
-                    baseVa = loadClassFile(file.filename(), fileList, baseVa);
-                    noteArchiveClassHandled(zip);
+                    break;
                 }
+
+                case ArchiveProgress::Kind::JAR:
+                    if (!info.parentWar) {
+                        ProgressTask jarTask(p, "jar");
+                        ProgressTask classesTask(p, "classes");
+                        beginArchiveClassProgress(zip);
+                        baseVa = loadArchiveClassFiles(zip, fileList, baseVa);
+                    }
+                    break;
             }
         }
     }
@@ -1061,23 +1164,54 @@ EngineJvm::runPartitionerRecursive(const Partitioner::Ptr &partitioner) {
         }
     }
 
-    // Discover functions in the reverse order of headers because classes are loaded from derived to base
-    // and functions should be "discovered" from the base class to derived.  Then the Partitioner2::Function
-    // (e.g.) Base::<init> will be available for derived classes to call when they are created.
-    for (auto rit = interpHeaders->get_headers().rbegin(); rit != interpHeaders->get_headers().rend(); rit++) {
-        auto header = *rit;
+    {
+        Progress::Ptr p = partitioner->progress();
+        ProgressTask partitionTask(p, "partition");
+        ProgressTask headersTask(p, "headers");
+        const size_t nHeaders = interpHeaders->get_headers().size();
+        size_t nHeadersHandled = 0;
+        std::unique_ptr<Sawyer::ProgressBar<size_t>> headerProgress;
 
-        ByteCode::Namespace::Ptr ns = ByteCode::Namespace::instance();
-        ByteCode::JvmClass::Ptr jvmClass = ByteCode::JvmClass::instance(ns, isSgAsmJvmFileHeader(header));
+        if (nHeaders > 0) {
+            headerProgress.reset(new Sawyer::ProgressBar<size_t>(nHeaders, mlog[MARCH], "jvm-partition"));
+            headerProgress->suffix(" headers");
+            headerProgress->domain(0, nHeaders);
+        }
+        if (p) {
+            if (nHeaders > 0) {
+                p->update(Progress::Report("", 0.0, (double)nHeaders));
+            } else {
+                p->update(Progress::Report("", 1.0, 1.0));
+            }
+        }
 
-        // Make the ByteCode analysis class available
-        analysisClass_ = jvmClass;
+        // Discover functions in the reverse order of headers because classes are loaded from derived to base
+        // and functions should be "discovered" from the base class to derived.  Then the Partitioner2::Function
+        // (e.g.) Base::<init> will be available for derived classes to call when they are created.
+        for (auto rit = interpHeaders->get_headers().rbegin(); rit != interpHeaders->get_headers().rend(); rit++) {
+            auto header = *rit;
 
-        // Start discovering instructions and forming them into basic blocks and functions
-        SAWYER_MESG(where) <<"discovering and populating functions\n";
+            ByteCode::Namespace::Ptr ns = ByteCode::Namespace::instance();
+            ByteCode::JvmClass::Ptr jvmClass = ByteCode::JvmClass::instance(ns, isSgAsmJvmFileHeader(header));
 
-        jvmClass->partition(partitioner, functions_);
-   }
+            // Make the ByteCode analysis class available
+            analysisClass_ = jvmClass;
+
+            // Start discovering instructions and forming them into basic blocks and functions
+            SAWYER_MESG(where) <<"discovering and populating functions\n";
+
+            jvmClass->partition(partitioner, functions_, p);
+
+            ++nHeadersHandled;
+            if (p)
+                p->update(Progress::Report("", (double)nHeadersHandled, (double)nHeaders));
+            if (headerProgress) {
+                headerProgress->value(nHeadersHandled, nHeaders);
+                if (nHeadersHandled >= nHeaders)
+                    headerProgress.reset();
+            }
+        }
+    }
 }
 
 void

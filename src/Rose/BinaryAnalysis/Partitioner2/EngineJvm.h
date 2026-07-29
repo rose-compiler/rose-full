@@ -7,6 +7,11 @@
 #include <Rose/BinaryAnalysis/Partitioner2/Engine.h>
 #include <Rose/BinaryAnalysis/Partitioner2/ModulesJvm.h>
 
+#include <Sawyer/ProgressBar.h>
+
+#include <memory>
+#include <utility>
+
 namespace Rose {
 namespace BinaryAnalysis {
 namespace Partitioner2 {
@@ -41,6 +46,9 @@ private:
         size_t nClassesHandled = 0;
         size_t nJarFiles = 0;
         size_t nJarsHandled = 0;
+        std::vector<ModulesJvm::Zipper*> childJars;
+        std::unique_ptr<Sawyer::ProgressBar<size_t>> classProgressBar;
+        std::unique_ptr<Sawyer::ProgressBar<size_t>> jarProgressBar;
     };
 
     // Mapping of class names to virtual address
@@ -276,9 +284,14 @@ public:
 private:
     void registerWarProgress(ModulesJvm::Zipper*);
     void registerJarProgress(ModulesJvm::Zipper*, ModulesJvm::Zipper *parentWar = nullptr);
+    Address loadArchiveClassFiles(ModulesJvm::Zipper*, SgAsmGenericFileList*, Address);
+    void beginArchiveClassProgress(ModulesJvm::Zipper*);
+    void beginWarJarProgress(ModulesJvm::Zipper*);
     void noteWarJarHandled(ModulesJvm::Zipper*);
     void noteArchiveClassHandled(ModulesJvm::Zipper*);
-    void updateLoaderProgress(const std::string&, size_t current, size_t total) const;
+    void updateLoaderProgress(size_t current, size_t total) const;
+    void createClassProgressBar(ArchiveProgress&, const std::string&) const;
+    void createJarProgressBar(ArchiveProgress&, const std::string&) const;
 
 public:
     /** Partition instructions into basic blocks and functions.

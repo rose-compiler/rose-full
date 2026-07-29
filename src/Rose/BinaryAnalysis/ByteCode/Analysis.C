@@ -133,8 +133,20 @@ Class::strings() {
 }
 
 void
-Class::partition(const PartitionerPtr &partitioner, std::map<std::string,Address> &discoveredFunctions) {
+Class::partition(const PartitionerPtr &partitioner, std::map<std::string,Address> &discoveredFunctions,
+                 const Progress::Ptr &progress) {
     const size_t nBits = 64;
+    const size_t nMethods = methods().size();
+    size_t nMethodsHandled = 0;
+    ProgressTask methodsTask(progress, "methods");
+
+    if (progress) {
+        if (nMethods > 0) {
+            progress->update(Progress::Report("", 0.0, (double)nMethods));
+        } else {
+            progress->update(Progress::Report("", 1.0, 1.0));
+        }
+    }
 
     for (auto method : methods()) {
         Address va{0};
@@ -160,7 +172,12 @@ Class::partition(const PartitionerPtr &partitioner, std::map<std::string,Address
         }
 
         // Determine if this method/function has been seen before (e.g., ".ctor" of parent class)
-        if (partitioner->placeholderExists(va)) continue;
+        if (partitioner->placeholderExists(va)) {
+            ++nMethodsHandled;
+            if (progress)
+                progress->update(Progress::Report("", (double)nMethodsHandled, (double)nMethods));
+            continue;
+        }
 
         // Create the (Partitioner2) function
         std::string functionName = name() + typeSeparator() + method->name();
@@ -323,6 +340,10 @@ Class::partition(const PartitionerPtr &partitioner, std::map<std::string,Address
         // Attach function return block and function to the partitioner
         partitioner->attachBasicBlock(block);
         partitioner->attachFunction(function);
+
+        ++nMethodsHandled;
+        if (progress)
+            progress->update(Progress::Report("", (double)nMethodsHandled, (double)nMethods));
     }
 }
 
