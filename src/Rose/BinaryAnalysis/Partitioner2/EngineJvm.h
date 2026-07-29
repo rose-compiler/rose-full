@@ -32,6 +32,17 @@ public:
     // Data members
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 private:
+    struct ArchiveProgress {
+        enum class Kind { JAR, WAR };
+
+        Kind kind = Kind::JAR;
+        ModulesJvm::Zipper *parentWar = nullptr;
+        size_t nClassFiles = 0;
+        size_t nClassesHandled = 0;
+        size_t nJarFiles = 0;
+        size_t nJarsHandled = 0;
+    };
+
     // Mapping of class names to virtual address
     std::map<std::string, SgAsmGenericFile*> classes_;
 
@@ -44,6 +55,9 @@ private:
     // Listing of open jar files (maybe should be Zippers with
     std::vector<ModulesJvm::Zipper*> jars_; // Zipper owns SgAsmGenericFile*, ie, Zipper{gf}, yeah, will have buffer
                                             // Zipper.find(className)
+
+    // Progress totals for loaded zip containers.
+    std::map<ModulesJvm::Zipper*, ArchiveProgress> archiveProgress_;
 
     static constexpr Address vaDefaultIncrement{4*1024};
 
@@ -259,6 +273,14 @@ public:
      * @{ */
     void discoverFunctionCalls(SgAsmJvmMethod*, SgAsmJvmConstantPool*, std::map<std::string,Address> &, std::set<std::string> &);
 
+private:
+    void registerWarProgress(ModulesJvm::Zipper*);
+    void registerJarProgress(ModulesJvm::Zipper*, ModulesJvm::Zipper *parentWar = nullptr);
+    void noteWarJarHandled(ModulesJvm::Zipper*);
+    void noteArchiveClassHandled(ModulesJvm::Zipper*);
+    void updateLoaderProgress(const std::string&, size_t current, size_t total) const;
+
+public:
     /** Partition instructions into basic blocks and functions.
      *
      *  Disassembles and organizes instructions into basic blocks and functions with these steps:

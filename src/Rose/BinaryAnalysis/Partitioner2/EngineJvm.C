@@ -44,6 +44,28 @@ namespace Rose {
 namespace BinaryAnalysis {
 namespace Partitioner2 {
 
+static bool
+isArchiveClassFile(const ModulesJvm::FileStat &file) {
+    return CommandlineProcessing::isJavaClassFile(file.filename());
+}
+
+static bool
+isArchiveJarFile(const ModulesJvm::FileStat &file) {
+    return CommandlineProcessing::isJavaJarFile(file.filename());
+}
+
+static size_t
+countArchiveFiles(const ModulesJvm::Zipper *zip, bool (*predicate)(const ModulesJvm::FileStat&)) {
+    ASSERT_not_null(zip);
+
+    size_t nFiles = 0;
+    for (const ModulesJvm::FileStat &file: zip->files()) {
+        if (predicate(file))
+            ++nFiles;
+    }
+    return nFiles;
+}
+
 EngineJvm::EngineJvm(const Settings &settings)
     : Engine("JVM", settings), nextFunctionVa_{static_cast<Address>(-1)} {
 }
@@ -123,6 +145,86 @@ EngineJvm::instanceFromFactory(const Settings &settings) {
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //                                      Utility functions
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+void
+EngineJvm::updateLoaderProgress(const std::string &phase, size_t current, size_t total) const {
+    if (total > 0) {
+        if (Progress::Ptr p = progress())
+            p->update(Progress::Report(phase, (double)current, (double)total));
+    }
+}
+
+void
+EngineJvm::registerWarProgress(ModulesJvm::Zipper *zip) {
+    ASSERT_not_null(zip);
+
+    ArchiveProgress info{ArchiveProgress::Kind::WAR};
+    info.nClassFiles = countArchiveFiles(zip, isArchiveClassFile);
+    info.nJarFiles = countArchiveFiles(zip, isArchiveJarFile);
+    archiveProgress_[zip] = info;
+
+    if (settings().engineJvm.loadAllJars)
+        updateLoaderProgress("jvm-war-jars", 0, info.nJarFiles);
+    if (settings().engineJvm.loadAllClasses)
+        updateLoaderProgress("jvm-war-classes", 0, info.nClassFiles);
+}
+
+void
+EngineJvm::registerJarProgress(ModulesJvm::Zipper *zip, ModulesJvm::Zipper *parentWar) {
+    ASSERT_not_null(zip);
+
+    ArchiveProgress info{ArchiveProgress::Kind::JAR};
+    info.parentWar = parentWar;
+    info.nClassFiles = countArchiveFiles(zip, isArchiveClassFile);
+    archiveProgress_[zip] = info;
+
+    if (settings().engineJvm.loadAllClasses)
+        updateLoaderProgress("jvm-jar-classes", 0, info.nClassFiles);
+
+    if (parentWar && settings().engineJvm.loadAllClasses) {
+        auto parent = archiveProgress_.find(parentWar);
+        if (parent != archiveProgress_.end() && parent->second.kind == ArchiveProgress::Kind::WAR) {
+            parent->second.nClassFiles += info.nClassFiles;
+            updateLoaderProgress("jvm-war-classes", parent->second.nClassesHandled, parent->second.nClassFiles);
+        }
+    }
+}
+
+void
+EngineJvm::noteWarJarHandled(ModulesJvm::Zipper *zip) {
+    auto found = archiveProgress_.find(zip);
+    if (found != archiveProgress_.end()) {
+        ++found->second.nJarsHandled;
+        updateLoaderProgress("jvm-war-jars", found->second.nJarsHandled, found->second.nJarFiles);
+    }
+}
+
+void
+EngineJvm::noteArchiveClassHandled(ModulesJvm::Zipper *zip) {
+    auto found = archiveProgress_.find(zip);
+    if (found == archiveProgress_.end())
+        return;
+
+    ArchiveProgress &info = found->second;
+    ++info.nClassesHandled;
+
+    switch (info.kind) {
+        case ArchiveProgress::Kind::JAR:
+            updateLoaderProgress("jvm-jar-classes", info.nClassesHandled, info.nClassFiles);
+            if (info.parentWar) {
+                auto parent = archiveProgress_.find(info.parentWar);
+                if (parent != archiveProgress_.end() && parent->second.kind == ArchiveProgress::Kind::WAR) {
+                    ++parent->second.nClassesHandled;
+                    updateLoaderProgress("jvm-war-classes", parent->second.nClassesHandled, parent->second.nClassFiles);
+                }
+            }
+            break;
+
+        case ArchiveProgress::Kind::WAR:
+            updateLoaderProgress("jvm-war-classes", info.nClassesHandled, info.nClassFiles);
+            break;
+    }
+}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //                                      Top-level, do everything functions
@@ -285,40 +387,37 @@ EngineJvm::parseContainers(const std::vector<std::string> &specimen) {
         checkSettings();
 
         // Prune away things we don't recognize as Java files.
-        std::vector<fs::path> classFiles{};
+        std::vector<fs::path> jvmFiles{};
         for (const std::string &s: specimen) {
             if (ModulesJvm::isJavaWarFile(s)) {
-                loadWarFile(s);
+                if (settings().engineJvm.loadAllClasses) {
+                    jvmFiles.push_back(s);
+                } else {
+                    loadWarFile(s);
+                }
             }
             else if (ModulesJvm::isJavaJarFile(s)) {
-                loadJarFile(s);
+                if (settings().engineJvm.loadAllClasses) {
+                    jvmFiles.push_back(s);
+                } else {
+                    loadJarFile(s);
+                }
             }
             else if (ModulesJvm::isJavaClassFile(s)) {
-                classFiles.push_back(s);
+                jvmFiles.push_back(s);
             }
             else {
                 // Search for fully qualified class name
                 auto path = pathToClass(s);
                 if (path.extension() == ".class") {
-                    classFiles.push_back(path);
-                }
-            }
-        }
-
-        // Preemptively load all classes from jar files
-        if (settings().engineJvm.loadAllClasses) {
-            for (auto zip : jars_) {
-                for (auto file : zip->files()) {
-                    if (CommandlineProcessing::isJavaClassFile(file.filename())) {
-                        classFiles.push_back(file.filename());
-                    }
+                    jvmFiles.push_back(path);
                 }
             }
         }
 
         // Process through ROSE's frontend()
-        if (!classFiles.empty()) {
-            SgProject* project = roseFrontendReplacement(classFiles);
+        if (!jvmFiles.empty()) {
+            SgProject* project = roseFrontendReplacement(jvmFiles);
             ASSERT_not_null(project);
 
             std::vector<SgAsmInterpretation*> interps = SageInterface::querySubTree<SgAsmInterpretation>(project);
@@ -403,12 +502,13 @@ EngineJvm::loadWarFile(const std::string &filename) {
 
     // Store WAR zipper for unified archive access (enables lazy loading)
     jars_.push_back(zipWar);
+    registerWarProgress(zipWar);
 
     // Load files contained in the war file
     for (auto file : zipWar->files()) {
-        if (settings().engineJvm.loadAllJars && CommandlineProcessing::isJavaJarFile(file.filename())) {
-            std::cerr << "..... loading jar file:" << file.filename() << "\n";
-            loadJarFile(file.filename(), zipWar);
+        if (settings().engineJvm.loadAllJars && isArchiveJarFile(file)) {
+            if (loadJarFile(file.filename(), zipWar))
+                noteWarJarHandled(zipWar);
         }
         // Class files in WAR will be loaded via normal mechanisms
         // The zipWar is already in jars_, so loadClassFile() will find them
@@ -440,7 +540,9 @@ EngineJvm::loadJarFile(const std::string &filename, ModulesJvm::Zipper* zip) {
     gf->set_name(filename);
     gf->set_data(SgFileContentList(bytes, nbytes));
 
-    jars_.push_back(new ModulesJvm::Zipper(gf));
+    auto zipJar = new ModulesJvm::Zipper(gf);
+    jars_.push_back(zipJar);
+    registerJarProgress(zipJar, zip);
 
     return true;
 }
@@ -456,7 +558,9 @@ EngineJvm::loadJarFile(const std::string &filename) {
     auto gf = new SgAsmGenericFile{};
     gf->parse(filename); /* this loads jar file into memory, does no reading of file */
 
-    jars_.push_back(new ModulesJvm::Zipper(gf));
+    auto zipJar = new ModulesJvm::Zipper(gf);
+    jars_.push_back(zipJar);
+    registerJarProgress(zipJar);
 
     return true;
 }
@@ -792,7 +896,7 @@ EngineJvm::roseFrontendReplacement(const std::vector<fs::path> &paths) {
     if (settings().engineJvm.loadAllClasses) {
         for (auto zip : jars_) {
             for (auto file : zip->files()) {
-                if (CommandlineProcessing::isJavaClassFile(file.filename())) {
+                if (isArchiveClassFile(file)) {
                     // Build className from file path for duplicate check
                     auto filePath = fs::path(file.filename());
                     auto classPath = filePath.parent_path() / filePath.stem();
@@ -807,11 +911,13 @@ EngineJvm::roseFrontendReplacement(const std::vector<fs::path> &paths) {
                     // Skip if this class has already been loaded
                     // (prevents loading same class from both WAR and nested JARs)
                     if (classes_.find(className) != classes_.end()) {
+                        noteArchiveClassHandled(zip);
                         continue;
                     }
 
 //TODO::add zip as a parameter to loadClassFile so faster to find
                     baseVa = loadClassFile(file.filename(), fileList, baseVa);
+                    noteArchiveClassHandled(zip);
                 }
             }
         }
