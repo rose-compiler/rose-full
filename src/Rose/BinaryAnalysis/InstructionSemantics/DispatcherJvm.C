@@ -2678,9 +2678,13 @@ struct IP_iload_3: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_imul: P {
-    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
+    void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ASSERT_require2(false, "imul unimplemented");
+        doBinaryOp(ops, ValueKind::Integer32,
+                   [ops](auto lhs, auto rhs) {
+                       auto product = ops->unsignedMultiply(lhs, rhs);
+                       return ops->extract(product, 0, 32);
+                   });
     }
 };
 
@@ -2782,9 +2786,10 @@ struct IP_invokevirtual: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_ior: P {
-    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
+    void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ASSERT_require2(false, "ior unimplemented");
+        doBinaryOp(ops, ValueKind::Integer32,
+             [ops](auto lhs, auto rhs) { return ops->or_(lhs, rhs); });
     }
 };
 
@@ -3297,9 +3302,13 @@ struct IP_lload_3: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_lmul: P {
-    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
+    void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ASSERT_require2(false, "lmul unimplemented");
+        doBinaryOp(ops, ValueKind::Integer64,
+                   [ops](auto lhs, auto rhs) {
+                       auto product = ops->unsignedMultiply(lhs, rhs);
+                       return ops->extract(product, 0, 64);
+                   });
     }
 };
 
@@ -3336,9 +3345,10 @@ struct IP_lookupswitch: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_lor: P {
-    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
+    void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ASSERT_require2(false, "lor unimplemented");
+        doBinaryOp(ops, ValueKind::Integer64,
+             [ops](auto lhs, auto rhs) { return ops->or_(lhs, rhs); });
     }
 };
 
@@ -3954,12 +3964,14 @@ DispatcherJvm::initializeDispatchTable() {
     iprocSet(0x65,  new Jvm::IP_lsub);
     iprocSet(0x66,  new Jvm::IP_fsub);
     iprocSet(0x67,  new Jvm::IP_dsub);
+    iprocSet(0x68,  new Jvm::IP_imul);
+    iprocSet(0x69,  new Jvm::IP_lmul);
 
     iprocSet(0x6a,  new Jvm::IP_fmul);
     iprocSet(0x6b,  new Jvm::IP_dmul);
+
     iprocSet(0x6e,  new Jvm::IP_fdiv);
     iprocSet(0x6f,  new Jvm::IP_ddiv);
-
     iprocSet(0x70,  new Jvm::IP_irem);
     iprocSet(0x71,  new Jvm::IP_lrem);
 
@@ -3973,6 +3985,9 @@ DispatcherJvm::initializeDispatchTable() {
     iprocSet(0x7d,  new Jvm::IP_lushr);
     iprocSet(0x7e,  new Jvm::IP_iand);
     iprocSet(0x7f,  new Jvm::IP_land);
+
+    iprocSet(0x80,  new Jvm::IP_ior);
+    iprocSet(0x81,  new Jvm::IP_lor);
 
     iprocSet(0x85,  new Jvm::IP_i2l);
 }
