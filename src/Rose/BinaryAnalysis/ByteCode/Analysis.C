@@ -1,6 +1,7 @@
 #include <featureTests.h>
 #ifdef ROSE_ENABLE_BINARY_ANALYSIS
 #include <Rose/BinaryAnalysis/ByteCode/Analysis.h>
+#include <Rose/BinaryAnalysis/ByteCode/Jvm.h>
 
 #include <Rose/BinaryAnalysis/Address.h>
 #include <Rose/BinaryAnalysis/Architecture/Base.h>
@@ -163,6 +164,12 @@ Class::partition(const PartitionerPtr &partitioner, std::map<std::string,Address
 
         // Create the (Partitioner2) function
         std::string functionName = name() + typeSeparator() + method->name();
+
+        // Include method descriptor for JVM methods to distinguish overloaded methods (including bridge methods)
+        if (auto jvmMethod = ByteCode::JvmMethod::promote(method)) {
+            functionName += jvmMethod->descriptor();
+        }
+
         function = Partitioner2::Function::instance(va, functionName);
 
         // Add newly discovered function to the list
@@ -173,7 +180,9 @@ Class::partition(const PartitionerPtr &partitioner, std::map<std::string,Address
             // This occurs for a nested/inner class with a constructor having an input parameter
             // of a dynamic type (I think, for example, see T8_NestMembersAttribute.java).
             // Also dotnet (see T1_Test1.cs).
-            mlog[Diagnostics::WARN] << "Class::partition(): discovered duplicate function: " << functionName << "\n";
+            mlog[Diagnostics::DEBUG] << "Class::partition(): discovered duplicate function: " << functionName
+                                      << " (old va=" << StringUtility::addrToString(discoveredFunctions[functionName])
+                                      << ", new va=" << StringUtility::addrToString(va) << ")\n";
         }
 
         std::set<Address> targets = method->targets();

@@ -391,6 +391,7 @@ bool
 EngineJvm::loadWarFile(const std::string &filename) {
     if (!CommandlineProcessing::isJavaWarFile(filename)) {
         return false;
+        
     }
     SAWYER_MESG(mlog[TRACE]) << "loading war file " << filename <<"\n";
 
@@ -400,18 +401,17 @@ EngineJvm::loadWarFile(const std::string &filename) {
     // Unzip war file but do not decompress any contents
     auto zipWar = new ModulesJvm::Zipper(gfWar);
 
+    // Store WAR zipper for unified archive access (enables lazy loading)
+    jars_.push_back(zipWar);
+
     // Load files contained in the war file
     for (auto file : zipWar->files()) {
         if (settings().engineJvm.loadAllJars && CommandlineProcessing::isJavaJarFile(file.filename())) {
             std::cerr << "..... loading jar file:" << file.filename() << "\n";
             loadJarFile(file.filename(), zipWar);
         }
-        else if (settings().engineJvm.loadAllClasses && CommandlineProcessing::isJavaClassFile(file.filename())) {
-            ASSERT_require2(true, "UNIMPLEMENTED: found a class file in a war file\n");
-        }
-        else {
-            std::cerr << "..... ignoring file:" << file.filename() << "\n";
-        }
+        // Class files in WAR will be loaded via normal mechanisms
+        // The zipWar is already in jars_, so loadClassFile() will find them
     }
 
     return true;
@@ -530,6 +530,13 @@ NOTES:
     auto p{path.parent_path() / path.stem()};
     std::string className = p.string();
 
+    // Normalize the className to match the format used by ByteCode::JvmClass::name()
+    // Strip common prefixes like "WEB-INF/classes/" that appear in WAR files
+    const std::string warClassPrefix = "WEB-INF/classes/";
+    if (className.substr(0, warClassPrefix.length()) == warClassPrefix) {
+        className = className.substr(warClassPrefix.length());
+    }
+
     // Check to see if the class has already been processed
     if (classes_.find(className) != classes_.end()) {
         return baseVa;
@@ -582,8 +589,9 @@ NOTES:
     auto pool = jfh->get_constant_pool();
 
     // Check the class name now that the path has been loaded
-    if (className != ByteCode::JvmClass::name(jfh->get_this_class(), pool)) {
-        className = ByteCode::JvmClass::name(jfh->get_this_class(), pool);
+    std::string parsedClassName = ByteCode::JvmClass::name(jfh->get_this_class(), pool);
+    if (className != parsedClassName) {
+        className = parsedClassName;
         if (classes_.find(className) != classes_.end()) {
             std::cerr << "[ERROR]: already processed class: " << className << "\n";
             throw std::runtime_error("can't load class twice");
@@ -785,8 +793,25 @@ EngineJvm::roseFrontendReplacement(const std::vector<fs::path> &paths) {
         for (auto zip : jars_) {
             for (auto file : zip->files()) {
                 if (CommandlineProcessing::isJavaClassFile(file.filename())) {
+                    // Build className from file path for duplicate check
+                    auto filePath = fs::path(file.filename());
+                    auto classPath = filePath.parent_path() / filePath.stem();
+                    std::string className = classPath.string();
+
+                    // Normalize the className to match the format used by ByteCode::JvmClass::name()
+                    const std::string warClassPrefix = "WEB-INF/classes/";
+                    if (className.substr(0, warClassPrefix.length()) == warClassPrefix) {
+                        className = className.substr(warClassPrefix.length());
+                    }
+
+                    // Skip if this class has already been loaded
+                    // (prevents loading same class from both WAR and nested JARs)
+                    if (classes_.find(className) != classes_.end()) {
+                        continue;
+                    }
+
 //TODO::add zip as a parameter to loadClassFile so faster to find
-                    loadClassFile(file.filename(), fileList, baseVa);
+                    baseVa = loadClassFile(file.filename(), fileList, baseVa);
                 }
             }
         }
