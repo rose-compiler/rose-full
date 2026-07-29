@@ -2150,9 +2150,14 @@ struct IP_goto_w: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_i2b: P {
-    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
+    void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ASSERT_require2(false, "i2b unimplemented");
+        // keep low 8 bits, then sign-extend to 32 bits
+        doUnaryOp(ops, ValueKind::Integer32,
+                  [ops](auto value) {
+                      auto low8 = ops->extract(value, 0, 8);
+                      return ops->signExtend(low8, 32);
+                  });
     }
 };
 
@@ -2164,9 +2169,14 @@ struct IP_i2b: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_i2c: P {
-    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
+    void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ASSERT_require2(false, "i2c unimplemented");
+        // keep low 16 bits, then zero-extend to 32 bits
+        doUnaryOp(ops, ValueKind::Integer32,
+                  [ops](auto value) {
+                      auto low16 = ops->extract(value, 0, 16);
+                      return ops->unsignedExtend(low16, 32);
+                  });
     }
 };
 
@@ -2228,9 +2238,14 @@ struct IP_i2l: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_i2s: P {
-    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
+    void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ASSERT_require2(false, "i2s unimplemented");
+        // keep low 16 bits, then sign-extend to 32 bits
+        doUnaryOp(ops, ValueKind::Integer32,
+                  [ops](auto value) {
+                      auto low16 = ops->extract(value, 0, 16);
+                      return ops->signExtend(low16, 32);
+                  });
     }
 };
 
@@ -3994,6 +4009,9 @@ DispatcherJvm::initializeDispatchTable() {
     iprocSet(0x83,  new Jvm::IP_lxor);
 
     iprocSet(0x85,  new Jvm::IP_i2l);
+    iprocSet(0x91,  new Jvm::IP_i2b);
+    iprocSet(0x92,  new Jvm::IP_i2c);
+    iprocSet(0x93,  new Jvm::IP_i2s);
 }
 
 DispatcherJvm::~DispatcherJvm() {}
