@@ -743,7 +743,7 @@ NOTES:
             bool magic = (bytes[0] == 0xCA && bytes[1] == 0xFE &&
                           bytes[2] == 0xBA && bytes[3] == 0xBE);
             if (!magic) {
-                delete bytes; bytes = nullptr;
+                delete[] bytes; bytes = nullptr;
                 throw std::runtime_error("magic number incorrect for class file contents");
             }
             break;

@@ -131,6 +131,9 @@ struct FileStat {
   /** Uncompressed size of the file (bytes) */
   size_t uncompressedSize() const;
 
+  /** ZIP compression method used for this file. */
+  uint16_t compressionMethod() const;
+
   /** Offset (in bytes) of the local headers
    *
    *  The local headers contain ...

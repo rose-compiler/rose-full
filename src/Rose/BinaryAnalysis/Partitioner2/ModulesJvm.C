@@ -5848,6 +5848,11 @@ FileStat::uncompressedSize() const {
     return uncompSize_;
 }
 
+uint16_t
+FileStat::compressionMethod() const {
+    return method_;
+}
+
 size_t
 FileStat::offset() const {
     return localHeaderOfs_;
@@ -5994,7 +5999,6 @@ Zipper::present(const std::string &name) const {
 unsigned char*
 Zipper::decode(const std::string &name, size_t &nbytes) {
     unsigned char* bytes{nullptr};
-    int status{0};
     nbytes = 0;
 
     // Can't decode the class if not in the jar/zipped file
@@ -6005,26 +6009,51 @@ Zipper::decode(const std::string &name, size_t &nbytes) {
 
         size_t compSize{stat.compressedSize()};
         size_t uncompSize{stat.uncompressedSize()};
-        size_t gfBufOffset{stat.offset() + MZ_ZIP_LOCAL_DIR_HEADER_SIZE + stat.filename().size()};
-        nbytes = uncompSize;
-
-        // Initialize decompressor/inflator
-        tinfl_decompressor decompressor{};
-        tinfl_init(&decompressor);
-
-        // Contents of the jar/zipped file container
         uint8_t* gfBuf = gf_->content().pool();
+        LocalHeader localHeader{gfBuf, stat.offset()};
+        size_t gfBufOffset{stat.offset() + localHeader.localHeaderSize()};
+        nbytes = uncompSize;
 
         // Decoded file contents, users will delete, not free (see SgAsmGenericFile::parse())
         bytes = new unsigned char[nbytes];
 
-        // TODO: flags copied from lldg: need something more "real"
-        int flags = 4; // WHERE_FROM
+        switch (stat.compressionMethod()) {
+            case 0: { // stored
+                if (compSize != uncompSize) {
+                    delete[] bytes;
+                    nbytes = 0;
+                    throw std::runtime_error("stored ZIP entry has mismatched compressed and uncompressed sizes: " +
+                                             stat.filename());
+                }
+                memcpy(bytes, gfBuf + gfBufOffset, nbytes);
+                break;
+            }
 
-        status = tinfl_decompress(&decompressor, gfBuf + gfBufOffset, &compSize, bytes, bytes, &nbytes, flags);
+            case 8: { // deflated
+                tinfl_decompressor decompressor{};
+                tinfl_init(&decompressor);
+
+                size_t inSize = compSize;
+                size_t outSize = uncompSize;
+                tinfl_status status = tinfl_decompress(&decompressor, gfBuf + gfBufOffset, &inSize, bytes, bytes, &outSize,
+                                                       TINFL_FLAG_USING_NON_WRAPPING_OUTPUT_BUF);
+                if (status != TINFL_STATUS_DONE) {
+                    delete[] bytes;
+                    bytes = nullptr;
+                    nbytes = 0;
+                    throw std::runtime_error("failed to deflate ZIP entry: " + stat.filename());
+                }
+                nbytes = outSize;
+                break;
+            }
+
+            default:
+                delete[] bytes;
+                nbytes = 0;
+                throw std::runtime_error("unsupported ZIP compression method for entry: " + stat.filename());
+        }
         break;
     }
-    if (status != 0) warn("decode/decompress status from Zipper::decode not zero");
 
     return bytes;
 }
