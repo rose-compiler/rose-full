@@ -64,6 +64,11 @@ private:
     std::vector<ModulesJvm::Zipper*> jars_; // Zipper owns SgAsmGenericFile*, ie, Zipper{gf}, yeah, will have buffer
                                             // Zipper.find(className)
 
+    // Multi-release JAR handling currently chooses the highest META-INF/versions/N class present in an archive instead of
+    // selecting for a configured Java runtime version. This differs from JVM semantics, but keeps eagerly loaded specimens
+    // self-consistent until runtime-version selection is exposed.
+    std::map<ModulesJvm::Zipper*, std::map<std::string, std::string>> archivePreferredClassFiles_;
+
     // Progress totals for loaded zip containers.
     std::map<ModulesJvm::Zipper*, ArchiveProgress> archiveProgress_;
 
@@ -284,6 +289,7 @@ public:
 private:
     void registerWarProgress(ModulesJvm::Zipper*);
     void registerJarProgress(ModulesJvm::Zipper*, ModulesJvm::Zipper *parentWar = nullptr);
+    const std::map<std::string, std::string>& preferredArchiveClassFiles(ModulesJvm::Zipper*);
     Address loadArchiveClassFiles(ModulesJvm::Zipper*, SgAsmGenericFileList*, Address);
     void beginArchiveClassProgress(ModulesJvm::Zipper*);
     void beginWarJarProgress(ModulesJvm::Zipper*);

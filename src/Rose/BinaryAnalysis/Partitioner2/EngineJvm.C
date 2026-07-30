@@ -67,6 +67,100 @@ countArchiveFiles(const ModulesJvm::Zipper *zip, bool (*predicate)(const Modules
     return nFiles;
 }
 
+struct ArchiveClassSelection {
+    std::string filename;
+    unsigned version = 0;
+};
+
+static bool
+stripPrefix(std::string &s, const std::string &prefix) {
+    if (s.substr(0, prefix.size()) == prefix) {
+        s = s.substr(prefix.size());
+        return true;
+    }
+    return false;
+}
+
+static bool
+parseJavaVersion(const std::string &s, size_t begin, size_t end, unsigned &version) {
+    ASSERT_require(begin <= end);
+    if (begin == end)
+        return false;
+
+    for (size_t i = begin; i < end; ++i) {
+        if (!std::isdigit(static_cast<unsigned char>(s[i])))
+            return false;
+    }
+
+    const unsigned long parsed = std::strtoul(s.substr(begin, end - begin).c_str(), nullptr, 10);
+    if (parsed > std::numeric_limits<unsigned>::max())
+        return false;
+
+    version = static_cast<unsigned>(parsed);
+    return true;
+}
+
+static std::string
+archiveClassName(const std::string &filename, unsigned *version = nullptr) {
+    if (version)
+        *version = 0;
+
+    const fs::path filePath(filename);
+    std::string className = (filePath.parent_path() / filePath.stem()).string();
+
+    stripPrefix(className, "WEB-INF/classes/");
+
+    const std::string multiReleasePrefix = "META-INF/versions/";
+    if (className.substr(0, multiReleasePrefix.size()) == multiReleasePrefix) {
+        const size_t versionBegin = multiReleasePrefix.size();
+        const size_t versionEnd = className.find('/', versionBegin);
+        unsigned parsedVersion = 0;
+        if (versionEnd != std::string::npos && versionEnd + 1 < className.size() &&
+            parseJavaVersion(className, versionBegin, versionEnd, parsedVersion)) {
+            className = className.substr(versionEnd + 1);
+            if (version)
+                *version = parsedVersion;
+        }
+    }
+
+    return className;
+}
+
+static std::map<std::string, ArchiveClassSelection>
+selectArchiveClassFiles(const ModulesJvm::Zipper *zip) {
+    ASSERT_not_null(zip);
+
+    std::map<std::string, ArchiveClassSelection> selected;
+    for (const ModulesJvm::FileStat &file: zip->files()) {
+        if (!isArchiveClassFile(file))
+            continue;
+
+        unsigned version = 0;
+        const std::string className = archiveClassName(file.filename(), &version);
+        const auto found = selected.find(className);
+        if (found == selected.end() || version > found->second.version)
+            selected[className] = ArchiveClassSelection{file.filename(), version};
+    }
+
+    return selected;
+}
+
+const std::map<std::string, std::string>&
+EngineJvm::preferredArchiveClassFiles(ModulesJvm::Zipper *zip) {
+    ASSERT_not_null(zip);
+
+    auto cached = archivePreferredClassFiles_.find(zip);
+    if (cached == archivePreferredClassFiles_.end()) {
+        std::map<std::string, std::string> preferred;
+        const std::map<std::string, ArchiveClassSelection> selected = selectArchiveClassFiles(zip);
+        for (const auto &entry: selected)
+            preferred[entry.first] = entry.second.filename;
+        cached = archivePreferredClassFiles_.insert(std::make_pair(zip, preferred)).first;
+    }
+
+    return cached->second;
+}
+
 EngineJvm::EngineJvm(const Settings &settings)
     : Engine("JVM", settings), nextFunctionVa_{static_cast<Address>(-1)} {
 }
@@ -506,7 +600,7 @@ EngineJvm::pathToClass(const std::string &fqcn) {
 
     std::string className{fqcn};
     std::replace(className.begin(), className.end(), '.', '/');
-    className += ".class";
+    std::string classFileName = className + ".class";
 
     // Search order used by JVM loader:
     //
@@ -520,8 +614,15 @@ EngineJvm::pathToClass(const std::string &fqcn) {
 
     // However, let's search jars_ first as a jar file could be from command line (require -classpath instead?)
     for (auto zip : jars_) {
-        if (zip->present(className)) {
-            classFilePath = fs::path{className};
+        const auto &preferred = preferredArchiveClassFiles(zip);
+        const auto selected = preferred.find(className);
+        if (selected != preferred.end()) {
+            classFilePath = fs::path{selected->second};
+            break;
+        }
+
+        if (zip->present(classFileName)) {
+            classFilePath = fs::path{classFileName};
             break;
         }
     }
@@ -530,7 +631,7 @@ EngineJvm::pathToClass(const std::string &fqcn) {
     if (!bfs::exists(classFilePath)) {
         for (auto cp : classPath()) {
             // 1. Search cp as directory
-            fs::path fullPath{cp + "/" + className};
+            fs::path fullPath{cp + "/" + classFileName};
             if (bfs::exists(fullPath)) {
                 classFilePath = fullPath;
                 break;
@@ -576,22 +677,17 @@ Address
 EngineJvm::loadArchiveClassFiles(ModulesJvm::Zipper *zip, SgAsmGenericFileList* fileList, Address baseVa) {
     ASSERT_not_null(zip);
 
+    const std::map<std::string, std::string> &selected = preferredArchiveClassFiles(zip);
+
     for (auto file : zip->files()) {
         if (isArchiveClassFile(file)) {
-            // Build className from file path for duplicate check
-            auto filePath = fs::path(file.filename());
-            auto classPath = filePath.parent_path() / filePath.stem();
-            std::string className = classPath.string();
-
-            // Normalize the className to match the format used by ByteCode::JvmClass::name()
-            const std::string warClassPrefix = "WEB-INF/classes/";
-            if (className.substr(0, warClassPrefix.length()) == warClassPrefix) {
-                className = className.substr(warClassPrefix.length());
-            }
+            const std::string className = archiveClassName(file.filename());
+            const auto selectedClass = selected.find(className);
+            const bool isSelected = selectedClass != selected.end() && selectedClass->second == file.filename();
 
             // Skip if this class has already been loaded
             // (prevents loading same class from both WAR and nested JARs)
-            if (classes_.find(className) == classes_.end()) {
+            if (isSelected && classes_.find(className) == classes_.end()) {
 //TODO::add zip as a parameter to loadClassFile so faster to find
                 baseVa = loadClassFile(file.filename(), fileList, baseVa);
             }
@@ -715,16 +811,7 @@ NOTES:
     size_t nbytes{0};
     unsigned char* bytes{nullptr};
 
-    // Drop the extension, hopefully ".class"
-    auto p{path.parent_path() / path.stem()};
-    std::string className = p.string();
-
-    // Normalize the className to match the format used by ByteCode::JvmClass::name()
-    // Strip common prefixes like "WEB-INF/classes/" that appear in WAR files
-    const std::string warClassPrefix = "WEB-INF/classes/";
-    if (className.substr(0, warClassPrefix.length()) == warClassPrefix) {
-        className = className.substr(warClassPrefix.length());
-    }
+    std::string className = archiveClassName(path.string());
 
     // Check to see if the class has already been processed
     if (classes_.find(className) != classes_.end()) {
@@ -779,13 +866,14 @@ NOTES:
 
     // Check the class name now that the path has been loaded
     std::string parsedClassName = ByteCode::JvmClass::name(jfh->get_this_class(), pool);
-    if (className != parsedClassName) {
+    if (className != parsedClassName)
         className = parsedClassName;
-        if (classes_.find(className) != classes_.end()) {
-            std::cerr << "[ERROR]: already processed class: " << className << "\n";
-            throw std::runtime_error("can't load class twice");
-        }
+
+    if (classes_.find(className) != classes_.end()) {
+        SageInterface::deleteAST(gf);
+        return baseVa;
     }
+
     classes_[className] = gf;
 
     fileList->get_files().push_back(gf);
