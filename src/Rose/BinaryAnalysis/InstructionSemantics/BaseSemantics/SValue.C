@@ -199,23 +199,29 @@ SValue::toString() const {
     return ss.str();
 }
 
+std::string
+toString(ValueKind kind) {
+    switch (kind) {
+        case ValueKind::Unknown:            return "Unknown";
+        case ValueKind::Integer32:          return "Integer32";
+        case ValueKind::Integer64:          return "Integer64";
+        case ValueKind::NativeInt:          return "NativeInt";
+        case ValueKind::Float32:            return "Float32";
+        case ValueKind::Float64:            return "Float64";
+        case ValueKind::ArrayReference:     return "ArrayReference";
+        case ValueKind::ObjectReference:    return "ObjectReference";
+        case ValueKind::ManagedPointer:     return "ManagedPointer";
+        case ValueKind::UnmanagedPointer:   return "UnmanagedPointer";
+        case ValueKind::ReturnAddress:      return "ReturnAddress";
+        case ValueKind::Category2Tail:      return "Category2Tail";
+        case ValueKind::Invalid:            return "Invalid";
+    }
+    ASSERT_not_reachable("invalid ValueKind");
+}
+
 std::ostream&
 operator<<(std::ostream &o, ValueKind kind) {
-    switch (kind) {
-        case ValueKind::Unknown:            return o << "Unknown";
-        case ValueKind::Integer32:          return o << "Integer32";
-        case ValueKind::Integer64:          return o << "Integer64";
-        case ValueKind::NativeInt:          return o << "NativeInt";
-        case ValueKind::Float32:            return o << "Float32";
-        case ValueKind::Float64:            return o << "Float64";
-        case ValueKind::ArrayReference:     return o << "ArrayReference";
-        case ValueKind::ObjectReference:    return o << "ObjectReference";
-        case ValueKind::ReturnAddress:      return o << "ReturnAddress";
-        case ValueKind::Category2Tail:      return o << "Category2Tail";
-        case ValueKind::Invalid:            return o << "Invalid";
-        default:
-            return o << "ValueKind(" << static_cast<int>(kind) << ")";
-    }
+    return o << toString(kind);
 }
 
 std::string

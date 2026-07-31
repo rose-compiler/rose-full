@@ -42,6 +42,9 @@ enum class ValueKind {
     Invalid          // unusable/destroyed/corrupted slot
 };
 
+/** Prints a ValueKind to a string. */
+std::string toString(ValueKind);
+
 /** Prints a ValueKind to an output stream. */
 std::ostream& operator<<(std::ostream&, ValueKind);
 

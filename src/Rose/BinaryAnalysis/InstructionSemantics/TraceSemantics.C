@@ -19,6 +19,15 @@ namespace BinaryAnalysis {
 namespace InstructionSemantics {
 namespace TraceSemantics {
 
+static size_t
+fpWidth(BaseSemantics::ValueKind kind) {
+    switch (kind) {
+        case BaseSemantics::ValueKind::Float32: return 32;
+        case BaseSemantics::ValueKind::Float64: return 64;
+        default: ASSERT_not_reachable("value kind is not floating point");
+    }
+}
+
 RiscOperators::RiscOperators(const BaseSemantics::SValue::Ptr &protoval, const SmtSolver::Ptr &solver)
     : BaseSemantics::RiscOperators(protoval, solver), stream_(mlog[Diagnostics::INFO]) {
     name("Trace");
@@ -365,6 +374,15 @@ RiscOperators::before(const std::string &operator_name, const BaseSemantics::SVa
     if (shouldPrint()) {
         linePrefix();
         SAWYER_MESG(stream_) <<operator_name <<"(" <<toString(a) <<", " <<toString(b) <<", " <<toString(c) <<")";
+    }
+    checkSubdomain();
+}
+
+void
+RiscOperators::before(const std::string &operator_name, const BaseSemantics::SValuePtr &a, BaseSemantics::ValueKind kind) {
+    if (shouldPrint()) {
+        linePrefix();
+        SAWYER_MESG(stream_) <<operator_name <<"(" <<toString(a) <<", " <<BaseSemantics::toString(kind) <<")";
     }
     checkSubdomain();
 }
@@ -1168,10 +1186,12 @@ RiscOperators::interrupt(int a, int b) {
 }
 
 BaseSemantics::SValue::Ptr
-RiscOperators::fpFromInteger(const BaseSemantics::SValue::Ptr &a, SgAsmFloatType *at) {
-    before("fpFromInteger", a, at);
+RiscOperators::fpFromInteger(const BaseSemantics::SValue::Ptr &a, BaseSemantics::ValueKind dstKind) {
+    before("fpFromInteger", a, dstKind);
     try {
-        return check_width(after(subdomain_->fpFromInteger(a, at)), at->get_nBits());
+        BaseSemantics::SValue::Ptr result = after(subdomain_->fpFromInteger(a, dstKind));
+        ASSERT_require(result->kind() == dstKind);
+        return check_width(result, fpWidth(dstKind));
     } catch (const BaseSemantics::Exception &e) {
         after(e);
         throw;

@@ -675,8 +675,21 @@ public:
     // sometime in the future so they're consistent with most other RISC operators. [Robb P. Matzke 2015-08-03]
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+    /** Constructs a floating-point value from an integer value.
+     *
+     *  This operation numerically converts @p intValue to the floating-point kind
+     *  specified by @p dstKind. It does not reinterpret the integer bit pattern as
+     *  floating point.
+     *
+     *  The source value must have an integer @ref ValueKind, and @p dstKind must be
+     *  a supported floating-point kind such as @ref ValueKind::Float32 or
+     *  @ref ValueKind::Float64. The result has kind @p dstKind and is rounded as
+     *  required by the destination floating-point format.
+     */
+    virtual SValuePtr fpFromInteger(const SValuePtr &srcVal, ValueKind dstKind);
+
     /** Construct a floating-point value from an integer value. */
-    virtual SValuePtr fpFromInteger(const SValuePtr &intValue, SgAsmFloatType *fpType);
+    virtual SValuePtr fpFromInteger(const SValuePtr &srcVal, SgAsmFloatType *fpType);
 
     /** Construct an integer value from a floating-point value.
      *
@@ -934,6 +947,9 @@ public:
      */
     virtual void pushOperand(const SValuePtr &value);
 
+    SValuePtr fpNumber(float);
+    SValuePtr fpNumber(double);
+
 protected:
     /** Converts a floating-point AST type to its corresponding semantic value kind.
      *
@@ -946,6 +962,12 @@ protected:
      *  @ref BaseSemantics::NotImplemented for other floating-point formats.
      */
     ValueKind floatKind(SgAsmFloatType *fpType) const;
+
+    /** Returns the IEEE-754 binary representation of a host float. */
+    static uint32_t floatBits(float);
+
+    /** Returns the IEEE-754 binary representation of a host double. */
+    static uint64_t floatBits(double);
 };
 
 std::ostream& operator<<(std::ostream&, const RiscOperators&);

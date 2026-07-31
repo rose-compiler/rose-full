@@ -246,6 +246,7 @@ protected:
     void before(const std::string&, const BaseSemantics::SValuePtr&, const BaseSemantics::SValuePtr&);
     void before(const std::string&, const BaseSemantics::SValuePtr&, const BaseSemantics::SValuePtr&,
                 const BaseSemantics::SValuePtr&);
+    void before(const std::string&, const BaseSemantics::SValuePtr&, BaseSemantics::ValueKind);
     void before(const std::string&, const BaseSemantics::SValuePtr&, SgAsmFloatType*);
     void before(const std::string&, const BaseSemantics::SValuePtr&, SgAsmFloatType*, const BaseSemantics::SValuePtr&);
     void before(const std::string&, const BaseSemantics::SValuePtr&, SgAsmFloatType*, SgAsmFloatType*);
@@ -331,7 +332,8 @@ public:
 
     void interrupt(int majr, int minr) override;
 
-    BaseSemantics::SValuePtr fpFromInteger(const BaseSemantics::SValuePtr&, SgAsmFloatType*) override;
+    BaseSemantics::SValuePtr fpFromInteger(const BaseSemantics::SValuePtr &, BaseSemantics::ValueKind) override;
+
     BaseSemantics::SValuePtr fpToInteger(const BaseSemantics::SValuePtr&, SgAsmFloatType*,
                                          const BaseSemantics::SValuePtr&) override;
     BaseSemantics::SValuePtr fpConvert(const BaseSemantics::SValuePtr&, SgAsmFloatType*, SgAsmFloatType*) override;

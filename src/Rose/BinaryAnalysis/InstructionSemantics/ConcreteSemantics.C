@@ -926,9 +926,33 @@ RiscOperators::doubleToExpr(double d, SgAsmFloatType *retType) {
 }
     
 BaseSemantics::SValue::Ptr
-RiscOperators::fpFromInteger(const BaseSemantics::SValue::Ptr &intValue, SgAsmFloatType *retType) {
-    ASSERT_require(intValue->isConcrete());
-    return doubleToExpr((double)intValue->toUnsigned().get(), retType);
+RiscOperators::fpFromInteger(const BaseSemantics::SValue::Ptr &srcVal, BaseSemantics::ValueKind dstKind) {
+    ASSERT_not_null(srcVal);
+    ASSERT_require(srcVal->isConcrete());
+
+    switch (srcVal->kind()) {
+        case BaseSemantics::ValueKind::Integer32: {
+            ASSERT_require(srcVal->nBits() == 32);
+            const int32_t value = static_cast<int32_t>(srcVal->toUnsigned().get());
+
+            switch (dstKind) {
+                case BaseSemantics::ValueKind::Float32: return fpNumber(static_cast<float>(value));
+                case BaseSemantics::ValueKind::Float64: return fpNumber(static_cast<double>(value));
+                default: ASSERT_not_reachable("invalid destination kind for fpFromInteger");
+            }
+        }
+        case BaseSemantics::ValueKind::Integer64: {
+            ASSERT_require(srcVal->nBits() == 64);
+            const int64_t value = static_cast<int64_t>(srcVal->toUnsigned().get());
+
+            switch (dstKind) {
+                case BaseSemantics::ValueKind::Float32: return fpNumber(static_cast<float>(value));
+                case BaseSemantics::ValueKind::Float64: return fpNumber(static_cast<double>(value));
+                default: ASSERT_not_reachable("invalid destination kind for fpFromInteger");
+            }
+        }
+        default: ASSERT_not_reachable("fpFromInteger operand is not an integer");
+    }
 }
 
 BaseSemantics::SValue::Ptr

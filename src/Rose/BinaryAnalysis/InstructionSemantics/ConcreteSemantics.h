@@ -417,7 +417,8 @@ public:
     BaseSemantics::SValuePtr unsignedMultiply(const BaseSemantics::SValuePtr &a_,
                                               const BaseSemantics::SValuePtr &b_) override;
 
-    BaseSemantics::SValuePtr fpFromInteger(const BaseSemantics::SValuePtr &intValue, SgAsmFloatType*) override;
+    BaseSemantics::SValuePtr fpFromInteger(const BaseSemantics::SValuePtr &, BaseSemantics::ValueKind) override;
+
     BaseSemantics::SValuePtr fpToInteger(const BaseSemantics::SValuePtr &fpValue, SgAsmFloatType *fpType,
                                          const BaseSemantics::SValuePtr &dflt) override;
 

@@ -84,6 +84,20 @@ RiscOperators::bottom_(size_t nbits) {
 }
 
 SValue::Ptr
+RiscOperators::fpNumber(float value) {
+    SValue::Ptr result = protoval()->number_(32, floatBits(value));
+    result->kind(ValueKind::Float32);
+    return result;
+}
+
+SValue::Ptr
+RiscOperators::fpNumber(double value) {
+    SValuePtr result = protoval()->number_(64, floatBits(value));
+    result->kind(ValueKind::Float64);
+    return result;
+}
+
+SValue::Ptr
 RiscOperators::filterCallTarget(const SValue::Ptr &a) {
     return a->copy();
 }
@@ -311,9 +325,14 @@ RiscOperators::interrupt(const SValue::Ptr &majorNumber, const SValue::Ptr &mino
 }
 
 SValue::Ptr
-RiscOperators::fpFromInteger(const SValue::Ptr &/*intValue*/, SgAsmFloatType *fpType) {
-    ASSERT_always_not_null(fpType);
+RiscOperators::fpFromInteger(const SValuePtr &/*a*/, ValueKind /*dstKind*/) {
     throw NotImplemented("fpFromInteger is not implemented", currentInstruction());
+}
+
+SValue::Ptr
+RiscOperators::fpFromInteger(const SValuePtr &a, SgAsmFloatType *dstType) {
+    ASSERT_always_not_null(dstType);
+    return fpFromInteger(a, floatKind(dstType));
 }
 
 SValue::Ptr
@@ -428,6 +447,24 @@ RiscOperators::floatKind(SgAsmFloatType *fpType) const {
 
     throw NotImplemented("unsupported floating-point type",
                          currentInstruction());
+}
+
+uint32_t
+RiscOperators::floatBits(float value) {
+    static_assert(sizeof(float) == sizeof(uint32_t), "unsupported host float representation");
+
+    uint32_t bits;
+    std::memcpy(&bits, &value, sizeof bits);
+    return bits;
+}
+
+uint64_t
+RiscOperators::floatBits(double value) {
+    static_assert(sizeof(double) == sizeof(uint64_t), "unsupported host double representation");
+
+    uint64_t bits;
+    std::memcpy(&bits, &value, sizeof bits);
+    return bits;
 }
 
 SValue::Ptr

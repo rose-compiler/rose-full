@@ -126,24 +126,6 @@ Dispatcher::asU1(const SgAsmExpression* expr) {
     return static_cast<uint8_t>(ivExpr->get_signedValue());
 }
 
-uint32_t
-Dispatcher::floatBits(float value) {
-    static_assert(sizeof(float) == sizeof(uint32_t), "unsupported host float representation");
-
-    uint32_t bits;
-    std::memcpy(&bits, &value, sizeof bits);
-    return bits;
-}
-
-uint64_t
-Dispatcher::floatBits(double value) {
-    static_assert(sizeof(double) == sizeof(uint64_t), "unsupported host double representation");
-
-    uint64_t bits;
-    std::memcpy(&bits, &value, sizeof bits);
-    return bits;
-}
-
 SValue::Ptr
 Dispatcher::makeConstant(const std::string &kind, int64_t value, size_t nBits) {
         ValueKind valueKind{ValueKind::Unknown};

@@ -238,7 +238,6 @@ namespace JvmSemantics {
     void execute_checkcast(Ops ops, I insn, Args args);
     void execute_getfield(Ops ops, I insn, Args args);
     void execute_getstatic(Ops ops, I insn, Args args);
-    void execute_iconst_5(Ops ops, I insn, Args args);
     void execute_iinc(Ops ops, I insn, Args args);
     void execute_instanceof(Ops ops, I insn, Args args);
     void execute_invokedynamic(Ops ops, I insn, Args args);
@@ -492,7 +491,6 @@ namespace JvmSemantics {
     void execute_checkcast(Ops, I, Args) { jvmUnsupported("execute_checkcast"); }
     void execute_getfield(Ops, I, Args) { jvmUnsupported("execute_getfield"); }
     void execute_getstatic(Ops, I, Args) { jvmUnsupported("execute_getstatic"); }
-    void execute_iconst_5(Ops ops, I, Args args) { ASSERT_require(args.empty()); ops->pushOperand(ops->number_(32, 5)); }
     void execute_iinc(Ops, I, Args) { jvmUnsupported("execute_iinc"); }
     void execute_instanceof(Ops, I, Args) { jvmUnsupported("execute_instanceof"); }
     void execute_invokedynamic(Ops, I, Args) { jvmUnsupported("execute_invokedynamic"); }
@@ -1251,12 +1249,7 @@ struct IP_dcmpg: P {
 struct IP_dconst_0: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-
-        uint64_t bits = Dispatcher::floatBits(0.0);
-        auto sval = ops->number_(64, bits);
-        sval->kind(ValueKind::Float64);
-
-        ops->pushOperand(sval);
+        ops->pushOperand(ops->fpNumber(0.0));
     }
 };
 
@@ -1268,12 +1261,7 @@ struct IP_dconst_0: P {
 struct IP_dconst_1: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-
-        uint64_t bits = Dispatcher::floatBits(1.0);
-        auto sval = ops->number_(64, bits);
-        sval->kind(ValueKind::Float64);
-
-        ops->pushOperand(sval);
+        ops->pushOperand(ops->fpNumber(1.0));
     }
 };
 
@@ -1817,12 +1805,7 @@ struct IP_fcmpg: P {
 struct IP_fconst_0: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-
-        uint32_t bits = Dispatcher::floatBits(0.0f);
-        auto sval = ops->number_(32, bits);
-        sval->kind(ValueKind::Float32);
-
-        ops->pushOperand(sval);
+        ops->pushOperand(ops->fpNumber(0.0f));
     }
 };
 
@@ -1834,12 +1817,7 @@ struct IP_fconst_0: P {
 struct IP_fconst_1: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-
-        uint32_t bits = Dispatcher::floatBits(1.0f);
-        auto sval = ops->number_(32, bits);
-        sval->kind(ValueKind::Float32);
-
-        ops->pushOperand(sval);
+        ops->pushOperand(ops->fpNumber(1.0f));
     }
 };
 
@@ -1851,12 +1829,7 @@ struct IP_fconst_1: P {
 struct IP_fconst_2: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-
-        uint32_t bits = Dispatcher::floatBits(2.0f);
-        auto sval = ops->number_(32, bits);
-        sval->kind(ValueKind::Float32);
-
-        ops->pushOperand(sval);
+        ops->pushOperand(ops->fpNumber(2.0f));
     }
 };
 
@@ -2188,10 +2161,13 @@ struct IP_i2c: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_i2d: P {
-    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
+    void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        assert_args(insn, args, 0);
-        ASSERT_require2(false, "i2d unimplemented");
+
+        auto sval = ops->popOperand();
+        ASSERT_require2(sval->kind() == ValueKind::Integer32, "i2d operand is not Integer32");
+
+        ops->pushOperand(ops->fpFromInteger(sval, ValueKind::Float64));
     }
 };
 
@@ -2203,10 +2179,14 @@ struct IP_i2d: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_i2f: P {
-    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
+    void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ASSERT_require2(false, "i2f unimplemented");
-    }
+
+        auto sval = ops->popOperand();
+        ASSERT_require2(sval->kind() == ValueKind::Integer32, "i2f operand is not Integer32");
+
+        ops->pushOperand(ops->fpFromInteger(sval, ValueKind::Float32));
+}
 };
 
 // i2l (133 (0x85))
@@ -3065,9 +3045,15 @@ struct IP_l2d: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_l2f: P {
-    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
+    void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ASSERT_require2(false, "l2f unimplemented");
+
+        auto sval = ops->popOperand();
+        ASSERT_require2(sval->kind() == ValueKind::Integer64, "l2f operand is not Integer64");
+
+        auto result = ops->fpConvert(sval, ValueKind::Float32);
+        ASSERT_require2(result->kind() == ValueKind::Float32, "l2f result is not Float32");
+        ops->pushOperand(result);
     }
 };
 
@@ -3079,9 +3065,16 @@ struct IP_l2f: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_l2i: P {
-    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
+    void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ASSERT_require2(false, "l2i unimplemented");
+
+        auto sval = ops->popOperand();
+        ASSERT_require2(sval->kind() == ValueKind::Integer64,
+                        "l2i operand is not Integer64");
+
+        auto result = ops->extract(sval, 0, 32);
+        result->kind(ValueKind::Integer32);
+        ops->pushOperand(result);
     }
 };
 
@@ -4009,6 +4002,9 @@ DispatcherJvm::initializeDispatchTable() {
     iprocSet(0x83,  new Jvm::IP_lxor);
 
     iprocSet(0x85,  new Jvm::IP_i2l);
+    iprocSet(0x86,  new Jvm::IP_i2f);
+    iprocSet(0x87,  new Jvm::IP_i2d);
+    iprocSet(0x88,  new Jvm::IP_l2i);
     iprocSet(0x91,  new Jvm::IP_i2b);
     iprocSet(0x92,  new Jvm::IP_i2c);
     iprocSet(0x93,  new Jvm::IP_i2s);

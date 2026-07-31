@@ -1087,6 +1087,8 @@ public:
     BaseSemantics::SValuePtr unsignedMultiply(const BaseSemantics::SValuePtr &a_,
                                               const BaseSemantics::SValuePtr &b_) override;
 
+    BaseSemantics::SValuePtr fpFromInteger(const BaseSemantics::SValuePtr &, BaseSemantics::ValueKind) override;
+
     template<class FloatOp>
     BaseSemantics::SValuePtr
     fpBinaryOp(const BaseSemantics::SValuePtr &a, const BaseSemantics::SValuePtr &b, FloatOp operation);
