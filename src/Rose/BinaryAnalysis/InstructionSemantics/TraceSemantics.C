@@ -1216,6 +1216,22 @@ RiscOperators::fpToInteger(const BaseSemantics::SValue::Ptr &a, SgAsmFloatType *
 }
 
 BaseSemantics::SValue::Ptr
+RiscOperators::fpConvert(const BaseSemantics::SValue::Ptr &a, BaseSemantics::ValueKind dstKind) {
+    before("fpConvert", a, dstKind);
+    try {
+        BaseSemantics::SValue::Ptr result = after(subdomain_->fpConvert(a, dstKind));
+        ASSERT_require(result->kind() == dstKind);
+        return check_width(result, fpWidth(dstKind));
+    } catch (const BaseSemantics::Exception &e) {
+        after(e);
+        throw;
+    } catch (...) {
+        after_exception();
+        throw;
+    }
+}
+
+BaseSemantics::SValue::Ptr
 RiscOperators::fpConvert(const BaseSemantics::SValue::Ptr &a, SgAsmFloatType *at, SgAsmFloatType *bt) {
     before("fpConvert", a, at, bt);
     try {

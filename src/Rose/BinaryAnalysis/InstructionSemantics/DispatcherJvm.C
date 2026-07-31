@@ -3031,9 +3031,15 @@ struct IP_jsr_w: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_l2d: P {
-    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
+    void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ASSERT_require2(false, "l2d unimplemented");
+
+        auto sval = ops->popOperand();
+        ASSERT_require2(sval->kind() == ValueKind::Integer64, "l2d operand is not Integer64");
+
+        auto result = ops->fpConvert(sval, ValueKind::Float64);
+        ASSERT_require2(result->kind() == ValueKind::Float64, "l2d result is not Float64");
+        ops->pushOperand(result);
     }
 };
 
@@ -4005,6 +4011,8 @@ DispatcherJvm::initializeDispatchTable() {
     iprocSet(0x86,  new Jvm::IP_i2f);
     iprocSet(0x87,  new Jvm::IP_i2d);
     iprocSet(0x88,  new Jvm::IP_l2i);
+    iprocSet(0x89,  new Jvm::IP_l2f);
+    iprocSet(0x8a,  new Jvm::IP_l2d);
     iprocSet(0x91,  new Jvm::IP_i2b);
     iprocSet(0x92,  new Jvm::IP_i2c);
     iprocSet(0x93,  new Jvm::IP_i2s);

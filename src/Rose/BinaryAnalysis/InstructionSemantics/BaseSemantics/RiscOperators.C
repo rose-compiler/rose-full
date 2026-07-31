@@ -467,6 +467,24 @@ RiscOperators::floatBits(double value) {
     return bits;
 }
 
+float
+RiscOperators::bitsToFloat(uint32_t bits) {
+    static_assert(sizeof(float) == sizeof(bits), "unexpected host float size");
+
+    float value;
+    std::memcpy(&value, &bits, sizeof value);
+    return value;
+}
+
+double
+RiscOperators::bitsToDouble(uint64_t bits) {
+    static_assert(sizeof(double) == sizeof(bits), "unexpected host double size");
+
+    double value;
+    std::memcpy(&value, &bits, sizeof value);
+    return value;
+}
+
 SValue::Ptr
 RiscOperators::fpAdd(const SValue::Ptr&, const SValue::Ptr&) {
     throw NotImplemented("fpAdd is not implemented", currentInstruction());

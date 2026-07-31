@@ -1089,6 +1089,8 @@ public:
 
     BaseSemantics::SValuePtr fpFromInteger(const BaseSemantics::SValuePtr &, BaseSemantics::ValueKind) override;
 
+    BaseSemantics::SValuePtr fpConvert(const BaseSemantics::SValuePtr &, BaseSemantics::ValueKind) override;
+
     template<class FloatOp>
     BaseSemantics::SValuePtr
     fpBinaryOp(const BaseSemantics::SValuePtr &a, const BaseSemantics::SValuePtr &b, FloatOp operation);

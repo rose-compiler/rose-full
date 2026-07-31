@@ -968,6 +968,12 @@ protected:
 
     /** Returns the IEEE-754 binary representation of a host double. */
     static uint64_t floatBits(double);
+
+    /** Returns the host float represented by the specified IEEE-754 binary value. */
+    static float bitsToFloat(uint32_t);
+
+    /** Returns the host double represented by the specified IEEE-754 binary value. */
+    static double bitsToDouble(uint64_t);
 };
 
 std::ostream& operator<<(std::ostream&, const RiscOperators&);

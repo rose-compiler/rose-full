@@ -422,6 +422,8 @@ public:
     BaseSemantics::SValuePtr fpToInteger(const BaseSemantics::SValuePtr &fpValue, SgAsmFloatType *fpType,
                                          const BaseSemantics::SValuePtr &dflt) override;
 
+    BaseSemantics::SValuePtr fpConvert(const BaseSemantics::SValuePtr &, BaseSemantics::ValueKind) override;
+
     template<class FloatOp>
     BaseSemantics::SValuePtr
     fpBinaryOp(const BaseSemantics::SValuePtr &a, const BaseSemantics::SValuePtr &b, FloatOp operation);

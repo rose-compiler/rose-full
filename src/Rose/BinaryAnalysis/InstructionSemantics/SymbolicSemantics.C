@@ -1646,6 +1646,47 @@ RiscOperators::fpFromInteger(const BaseSemantics::SValue::Ptr &srcVal, BaseSeman
     }
 }
 
+BaseSemantics::SValue::Ptr
+RiscOperators::fpConvert(const BaseSemantics::SValue::Ptr &a, BaseSemantics::ValueKind retKind) {
+    ASSERT_not_null(a);
+    ASSERT_require(a->isConcrete());
+
+    switch (a->kind()) {
+        case BaseSemantics::ValueKind::Integer32:
+        case BaseSemantics::ValueKind::Integer64:
+            return fpFromInteger(a, retKind);
+
+        case BaseSemantics::ValueKind::Float32: {
+            ASSERT_require(a->nBits() == 32);
+
+            if (retKind == BaseSemantics::ValueKind::Float32) {
+                return a->copy();
+            }
+            ASSERT_require(retKind == BaseSemantics::ValueKind::Float64);
+            const float value = bitsToFloat(static_cast<uint32_t>(a->toUnsigned().get()));
+
+            return fpNumber(static_cast<double>(value));
+        }
+
+        case BaseSemantics::ValueKind::Float64: {
+            ASSERT_require(a->nBits() == 64);
+
+            if (retKind == BaseSemantics::ValueKind::Float64) {
+                return a->copy();
+            }
+            ASSERT_require(retKind == BaseSemantics::ValueKind::Float32);
+            const double value = bitsToDouble(static_cast<uint64_t>(a->toUnsigned().get()));
+
+            return fpNumber(static_cast<float>(value));
+        }
+
+        default:
+            throw BaseSemantics::NotImplemented(
+                "fpConvert source kind is not supported",
+                currentInstruction());
+    }
+}
+
 BaseSemantics::SValuePtr
 RiscOperators::fpAdd(const BaseSemantics::SValuePtr &lhs,
                      const BaseSemantics::SValuePtr &rhs) {
