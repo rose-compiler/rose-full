@@ -1127,9 +1127,13 @@ struct IP_checkcast: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_d2f: P {
-    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
+    void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ASSERT_require2(false, "d2f unimplemented");
+
+        auto value = ops->popOperand();
+        ASSERT_require2(value->kind() == ValueKind::Float64, "d2f operand is not Float64");
+
+        ops->pushOperand(ops->fpConvert(value, ValueKind::Float32));
     }
 };
 
@@ -1696,9 +1700,13 @@ struct IP_dup2_x2: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_f2d: P {
-    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
+    void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ASSERT_require2(false, "f2d unimplemented");
+
+        auto value = ops->popOperand();
+        ASSERT_require2(value->kind() == ValueKind::Float32, "f2d operand is not Float32");
+
+        ops->pushOperand(ops->fpConvert(value, ValueKind::Float64));
     }
 };
 
@@ -4013,6 +4021,10 @@ DispatcherJvm::initializeDispatchTable() {
     iprocSet(0x88,  new Jvm::IP_l2i);
     iprocSet(0x89,  new Jvm::IP_l2f);
     iprocSet(0x8a,  new Jvm::IP_l2d);
+
+    iprocSet(0x8d,  new Jvm::IP_f2d);
+
+    iprocSet(0x90,  new Jvm::IP_d2f);
     iprocSet(0x91,  new Jvm::IP_i2b);
     iprocSet(0x92,  new Jvm::IP_i2c);
     iprocSet(0x93,  new Jvm::IP_i2s);
