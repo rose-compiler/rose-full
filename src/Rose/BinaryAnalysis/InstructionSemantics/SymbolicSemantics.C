@@ -24,6 +24,9 @@ namespace BinaryAnalysis {
 namespace InstructionSemantics {
 namespace SymbolicSemantics {
 
+namespace BS = BaseSemantics;
+
+
 // temporarily disables usedef analysis; restores original value on destruction
 class PartialDisableUsedef {
 private:
@@ -1613,6 +1616,72 @@ RiscOperators::sgTypeToSymbolicType(SgAsmType *sgType) {
         throw BaseSemantics::Exception("cannot convert Sage type to symbolic type: "
                                        "not an integer or IEEE-754 type",
                                        currentInstruction());
+    }
+}
+
+BS::SValue::Ptr
+RiscOperators::fpToInteger(const BS::SValue::Ptr &srcVal, BS::ValueKind dstKind) {
+    ASSERT_not_null(srcVal);
+    ASSERT_require(srcVal->isConcrete());
+
+    ASSERT_require(dstKind == BS::ValueKind::Integer32 || dstKind == BS::ValueKind::Integer64);
+
+    double value;
+
+    switch (srcVal->kind()) {
+        case BS::ValueKind::Float32: {
+            ASSERT_require(srcVal->nBits() == 32);
+            const uint32_t bits = static_cast<uint32_t>(srcVal->toUnsigned().get());
+            value = static_cast<double>(bitsToFloat(bits)); // A binary32 value is represented exactly as a host double.
+            break;
+        }
+        case BS::ValueKind::Float64: {
+            ASSERT_require(srcVal->nBits() == 64);
+            const uint64_t bits = static_cast<uint64_t>(srcVal->toUnsigned().get());
+            value = bitsToDouble(bits);
+            break;
+        }
+        default: ASSERT_not_reachable("fpToInteger operand is not floating point");
+    }
+
+    switch (dstKind) {
+        case BS::ValueKind::Integer32: {
+            int32_t result;
+
+            if (std::isnan(value)) {
+                result = 0;
+            } else if (value <= static_cast<double>(std::numeric_limits<int32_t>::min())) {
+                result = std::numeric_limits<int32_t>::min();
+            } else if (value >= static_cast<double>(std::numeric_limits<int32_t>::max())) {
+                result = std::numeric_limits<int32_t>::max();
+            } else {
+                result = static_cast<int32_t>(value);
+            }
+            BS::SValue::Ptr retval = protoval()->number_(32, static_cast<uint32_t>(result));
+            retval->kind(BS::ValueKind::Integer32);
+            return retval;
+        }
+        case BS::ValueKind::Integer64: {
+            int64_t result;
+
+            const double minValue = -std::ldexp(1.0, 63); // -2^63
+            const double upperBound = std::ldexp(1.0, 63); // +2^63
+
+            if (std::isnan(value)) {
+                result = 0;
+            } else if (value <= minValue) {
+                result = std::numeric_limits<int64_t>::min();
+            } else if (value >= upperBound) {
+                result = std::numeric_limits<int64_t>::max();
+            } else {
+                result = static_cast<int64_t>(value);
+            }
+
+            BS::SValue::Ptr retval = protoval()->number_(64, static_cast<uint64_t>(result));
+            retval->kind(BS::ValueKind::Integer64);
+            return retval;
+        }
+        default: ASSERT_not_reachable("invalid destination kind for fpToInteger");
     }
 }
 

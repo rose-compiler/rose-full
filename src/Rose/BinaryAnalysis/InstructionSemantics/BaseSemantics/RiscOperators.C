@@ -325,20 +325,13 @@ RiscOperators::interrupt(const SValue::Ptr &majorNumber, const SValue::Ptr &mino
 }
 
 SValue::Ptr
+RiscOperators::fpToInteger(const SValuePtr &/*a*/, ValueKind /*dstKind*/) {
+    throw NotImplemented("fpToInteger is not implemented", currentInstruction());
+}
+
+SValue::Ptr
 RiscOperators::fpFromInteger(const SValuePtr &/*a*/, ValueKind /*dstKind*/) {
     throw NotImplemented("fpFromInteger is not implemented", currentInstruction());
-}
-
-SValue::Ptr
-RiscOperators::fpFromInteger(const SValuePtr &a, SgAsmFloatType *dstType) {
-    ASSERT_always_not_null(dstType);
-    return fpFromInteger(a, floatKind(dstType));
-}
-
-SValue::Ptr
-RiscOperators::fpToInteger(const SValue::Ptr &/*fpValue*/, SgAsmFloatType *fpType, const SValue::Ptr &/*dflt*/) {
-    ASSERT_always_not_null(fpType);
-    throw NotImplemented("fpToInteger is not implemented", currentInstruction());
 }
 
 SValue::Ptr
@@ -348,6 +341,17 @@ RiscOperators::fpConvert(const SValue::Ptr &a, ValueKind retKind) {
         return a->copy();
     }
     throw NotImplemented("fpConvert is not implemented for this ValueKind", currentInstruction());
+}
+
+SValue::Ptr
+RiscOperators::fpToInteger(const SValue::Ptr &/*fpValue*/, SgAsmFloatType* /*fpType*/, const SValue::Ptr &/*dflt*/) {
+    throw NotImplemented("fpToInteger is not implemented", currentInstruction());
+}
+
+SValue::Ptr
+RiscOperators::fpFromInteger(const SValuePtr &a, SgAsmFloatType *dstType) {
+    ASSERT_always_not_null(dstType);
+    return fpFromInteger(a, floatKind(dstType));
 }
 
 SValue::Ptr

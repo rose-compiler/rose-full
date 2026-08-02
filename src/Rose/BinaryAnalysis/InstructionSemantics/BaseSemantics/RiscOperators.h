@@ -677,7 +677,7 @@ public:
 
     /** Constructs a floating-point value from an integer value.
      *
-     *  This operation numerically converts @p intValue to the floating-point kind
+     *  This operation numerically converts @p srcVal to the floating-point kind
      *  specified by @p dstKind. It does not reinterpret the integer bit pattern as
      *  floating point.
      *
@@ -690,6 +690,17 @@ public:
 
     /** Construct a floating-point value from an integer value. */
     virtual SValuePtr fpFromInteger(const SValuePtr &srcVal, SgAsmFloatType *fpType);
+
+    /** Converts a floating-point value to an integer value.
+     *
+     *  The conversion is numeric rather than a reinterpretation of the source bit
+     *  pattern. The destination integer kind is specified by @p dstKind.
+     *
+     *  Finite values are truncated toward zero. Values outside the destination
+     *  range are clamped to the corresponding minimum or maximum integer value,
+     *  and NaN is converted to zero.
+     */
+    virtual SValuePtr fpToInteger(const SValuePtr &fpValue, ValueKind dstKind);
 
     /** Construct an integer value from a floating-point value.
      *

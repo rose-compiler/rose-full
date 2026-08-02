@@ -332,12 +332,13 @@ public:
 
     void interrupt(int majr, int minr) override;
 
+    BaseSemantics::SValuePtr fpToInteger(const BaseSemantics::SValuePtr &, BaseSemantics::ValueKind) override;
     BaseSemantics::SValuePtr fpFromInteger(const BaseSemantics::SValuePtr &, BaseSemantics::ValueKind) override;
+    BaseSemantics::SValuePtr fpConvert(const BaseSemantics::SValuePtr&, BaseSemantics::ValueKind) override;
 
     BaseSemantics::SValuePtr fpToInteger(const BaseSemantics::SValuePtr&, SgAsmFloatType*,
                                          const BaseSemantics::SValuePtr&) override;
 
-    BaseSemantics::SValuePtr fpConvert(const BaseSemantics::SValuePtr&, BaseSemantics::ValueKind) override;
     BaseSemantics::SValuePtr fpConvert(const BaseSemantics::SValuePtr&, SgAsmFloatType*, SgAsmFloatType*) override;
 
     BaseSemantics::SValuePtr fpIsNan(const BaseSemantics::SValuePtr&, SgAsmFloatType*) override;

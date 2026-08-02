@@ -417,12 +417,12 @@ public:
     BaseSemantics::SValuePtr unsignedMultiply(const BaseSemantics::SValuePtr &a_,
                                               const BaseSemantics::SValuePtr &b_) override;
 
+    BaseSemantics::SValuePtr fpToInteger(const BaseSemantics::SValuePtr &, BaseSemantics::ValueKind) override;
     BaseSemantics::SValuePtr fpFromInteger(const BaseSemantics::SValuePtr &, BaseSemantics::ValueKind) override;
-
-    BaseSemantics::SValuePtr fpToInteger(const BaseSemantics::SValuePtr &fpValue, SgAsmFloatType *fpType,
-                                         const BaseSemantics::SValuePtr &dflt) override;
-
     BaseSemantics::SValuePtr fpConvert(const BaseSemantics::SValuePtr &, BaseSemantics::ValueKind) override;
+
+    BaseSemantics::SValuePtr fpToInteger(const BaseSemantics::SValue::Ptr &,
+                                         SgAsmFloatType*, const BaseSemantics::SValue::Ptr &) override;
 
     template<class FloatOp>
     BaseSemantics::SValuePtr

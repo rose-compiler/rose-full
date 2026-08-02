@@ -20,11 +20,15 @@ namespace InstructionSemantics {
 namespace TraceSemantics {
 
 static size_t
-fpWidth(BaseSemantics::ValueKind kind) {
+kindWidth(BaseSemantics::ValueKind kind) {
     switch (kind) {
-        case BaseSemantics::ValueKind::Float32: return 32;
-        case BaseSemantics::ValueKind::Float64: return 64;
-        default: ASSERT_not_reachable("value kind is not floating point");
+        case BaseSemantics::ValueKind::Integer32:
+        case BaseSemantics::ValueKind::Float32:
+            return 32;
+        case BaseSemantics::ValueKind::Integer64:
+        case BaseSemantics::ValueKind::Float64:
+            return 64;
+        default: ASSERT_not_reachable("ValueKind does not have a numeric width");
     }
 }
 
@@ -1186,12 +1190,12 @@ RiscOperators::interrupt(int a, int b) {
 }
 
 BaseSemantics::SValue::Ptr
-RiscOperators::fpFromInteger(const BaseSemantics::SValue::Ptr &a, BaseSemantics::ValueKind dstKind) {
-    before("fpFromInteger", a, dstKind);
+RiscOperators::fpToInteger(const BaseSemantics::SValue::Ptr &a, BaseSemantics::ValueKind dstKind) {
+    before("fpToInteger", a, dstKind);
     try {
-        BaseSemantics::SValue::Ptr result = after(subdomain_->fpFromInteger(a, dstKind));
+        BaseSemantics::SValue::Ptr result = after(subdomain_->fpToInteger(a, dstKind));
         ASSERT_require(result->kind() == dstKind);
-        return check_width(result, fpWidth(dstKind));
+        return check_width(result, kindWidth(dstKind));
     } catch (const BaseSemantics::Exception &e) {
         after(e);
         throw;
@@ -1202,10 +1206,12 @@ RiscOperators::fpFromInteger(const BaseSemantics::SValue::Ptr &a, BaseSemantics:
 }
 
 BaseSemantics::SValue::Ptr
-RiscOperators::fpToInteger(const BaseSemantics::SValue::Ptr &a, SgAsmFloatType *at, const BaseSemantics::SValue::Ptr &b) {
-    before("fpToInteger", a, at, b);
+RiscOperators::fpFromInteger(const BaseSemantics::SValue::Ptr &a, BaseSemantics::ValueKind dstKind) {
+    before("fpFromInteger", a, dstKind);
     try {
-        return check_width(after(subdomain_->fpToInteger(a, at, b)), b->nBits());
+        BaseSemantics::SValue::Ptr result = after(subdomain_->fpFromInteger(a, dstKind));
+        ASSERT_require(result->kind() == dstKind);
+        return check_width(result, kindWidth(dstKind));
     } catch (const BaseSemantics::Exception &e) {
         after(e);
         throw;
@@ -1221,7 +1227,21 @@ RiscOperators::fpConvert(const BaseSemantics::SValue::Ptr &a, BaseSemantics::Val
     try {
         BaseSemantics::SValue::Ptr result = after(subdomain_->fpConvert(a, dstKind));
         ASSERT_require(result->kind() == dstKind);
-        return check_width(result, fpWidth(dstKind));
+        return check_width(result, kindWidth(dstKind));
+    } catch (const BaseSemantics::Exception &e) {
+        after(e);
+        throw;
+    } catch (...) {
+        after_exception();
+        throw;
+    }
+}
+
+BaseSemantics::SValue::Ptr
+RiscOperators::fpToInteger(const BaseSemantics::SValue::Ptr &a, SgAsmFloatType *at, const BaseSemantics::SValue::Ptr &b) {
+    before("fpToInteger", a, at, b);
+    try {
+        return check_width(after(subdomain_->fpToInteger(a, at, b)), b->nBits());
     } catch (const BaseSemantics::Exception &e) {
         after(e);
         throw;
