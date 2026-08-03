@@ -4,6 +4,7 @@
 #ifdef ROSE_ENABLE_BINARY_ANALYSIS
 
 #include <Rose/BinaryAnalysis/BasicTypes.h>
+#include <Rose/BinaryAnalysis/InstructionSemantics/BaseSemantics/RiscOperators.h>
 
 #include <boost/enable_shared_from_this.hpp>
 
@@ -61,10 +62,13 @@ protected:
     InsnProcessors iproc_table;
 
 public:
+    virtual int8_t   asS1(const SgAsmExpression* expr);
+    virtual uint8_t  asU1(const SgAsmExpression* expr);
+    virtual int16_t  asS2(const SgAsmExpression* expr);
+    virtual uint16_t asU2(const SgAsmExpression* expr);
+
     // Make a constant number_
-    virtual SValuePtr makeConstant(const std::string &kind, int64_t value, size_t nBits);
-    virtual int8_t  asS1(const SgAsmExpression* expr);
-    virtual uint8_t asU1(const SgAsmExpression* expr);
+    virtual SValuePtr makeConstant(ValueKind kind, int64_t value);
 
 #ifdef ROSE_ENABLE_BOOST_SERIALIZATION
 private:

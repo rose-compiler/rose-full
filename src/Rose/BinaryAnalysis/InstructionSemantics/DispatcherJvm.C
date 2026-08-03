@@ -238,7 +238,6 @@ namespace JvmSemantics {
     void execute_checkcast(Ops ops, I insn, Args args);
     void execute_getfield(Ops ops, I insn, Args args);
     void execute_getstatic(Ops ops, I insn, Args args);
-    void execute_iinc(Ops ops, I insn, Args args);
     void execute_instanceof(Ops ops, I insn, Args args);
     void execute_invokedynamic(Ops ops, I insn, Args args);
     void execute_invokeinterface(Ops ops, I insn, Args args);
@@ -256,7 +255,6 @@ namespace JvmSemantics {
     void execute_putfield(Ops ops, I insn, Args args);
     void execute_putstatic(Ops ops, I insn, Args args);
     void execute_ret(Ops ops, I insn, Args args);
-    void execute_wide(Ops ops, I insn, Args args);
 
 
     // Runtime-exception hooks. These are intended to be executable checks in the
@@ -487,11 +485,27 @@ namespace JvmSemantics {
         ops->pushOperand(arrayRef);
     }
 
+    void execute_iinc(Ops ops, size_t index, int32_t increment) {
+        auto oldValue = ops->readLocal(index);
+        ASSERT_require(oldValue->nBits() == 32);
+        ASSERT_require(oldValue->kind() == ValueKind::Integer32);
+
+        // A negative increment is represented as its 32-bit two's-complement bit
+        // pattern so the semantic addition has normal JVM int wraparound behavior.
+        auto delta = ops->number_(32, static_cast<uint32_t>(increment));
+        delta->kind(ValueKind::Integer32);
+
+        auto newValue = ops->add(oldValue, delta);
+        ASSERT_require(newValue->nBits() == 32);
+        newValue->kind(ValueKind::Integer32);
+
+        ops->writeLocal(index, newValue);
+    }
+
     void execute_athrow(Ops, I, Args) { jvmUnsupported("execute_athrow"); }
     void execute_checkcast(Ops, I, Args) { jvmUnsupported("execute_checkcast"); }
     void execute_getfield(Ops, I, Args) { jvmUnsupported("execute_getfield"); }
     void execute_getstatic(Ops, I, Args) { jvmUnsupported("execute_getstatic"); }
-    void execute_iinc(Ops, I, Args) { jvmUnsupported("execute_iinc"); }
     void execute_instanceof(Ops, I, Args) { jvmUnsupported("execute_instanceof"); }
     void execute_invokedynamic(Ops, I, Args) { jvmUnsupported("execute_invokedynamic"); }
     void execute_invokeinterface(Ops, I, Args) { jvmUnsupported("execute_invokeinterface"); }
@@ -509,7 +523,6 @@ namespace JvmSemantics {
     void execute_putfield(Ops, I, Args) { jvmUnsupported("execute_putfield"); }
     void execute_putstatic(Ops, I, Args) { jvmUnsupported("execute_putstatic"); }
     void execute_ret(Ops, I, Args) { jvmUnsupported("execute_ret"); }
-    void execute_wide(Ops, I, Args) { jvmUnsupported("execute_wide"); }
 
     void throwIfNull(Ops /*ops*/, const char *exceptionName, SValue::Ptr ref) {
         if (ref && ref->get_number() == 0)
@@ -724,6 +737,7 @@ bool isSubclassOf(SgClassType* derived, SgClassType* base) {
 using JvmSemantics::asU1;
 using JvmSemantics::doBinaryOp;
 using JvmSemantics::doUnaryOp;
+using JvmSemantics::execute_iinc;
 using JvmSemantics::isReference;
 
 // aaload (50 (0x32))
@@ -2326,7 +2340,7 @@ struct IP_iastore: P {
 struct IP_iconst_m1: P {
     void p(D d, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ops->pushOperand(d->makeConstant("i", -1, 32));
+        ops->pushOperand(d->makeConstant(ValueKind::Integer32, -1));
     }
 };
 
@@ -2338,7 +2352,7 @@ struct IP_iconst_m1: P {
 struct IP_iconst_0: P {
     void p(D d, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ops->pushOperand(d->makeConstant("i", 0, 32));
+        ops->pushOperand(d->makeConstant(ValueKind::Integer32, 0));
     }
 };
 
@@ -2350,7 +2364,7 @@ struct IP_iconst_0: P {
 struct IP_iconst_1: P {
     void p(D d, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ops->pushOperand(d->makeConstant("i", 1, 32));
+        ops->pushOperand(d->makeConstant(ValueKind::Integer32, 1));
     }
 };
 
@@ -2362,7 +2376,7 @@ struct IP_iconst_1: P {
 struct IP_iconst_2: P {
     void p(D d, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ops->pushOperand(d->makeConstant("i", 2, 32));
+        ops->pushOperand(d->makeConstant(ValueKind::Integer32, 2));
     }
 };
 
@@ -2374,7 +2388,7 @@ struct IP_iconst_2: P {
 struct IP_iconst_3: P {
     void p(D d, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ops->pushOperand(d->makeConstant("i", 3, 32));
+        ops->pushOperand(d->makeConstant(ValueKind::Integer32, 3));
     }
 };
 
@@ -2386,7 +2400,7 @@ struct IP_iconst_3: P {
 struct IP_iconst_4: P {
     void p(D d, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ops->pushOperand(d->makeConstant("i", 4, 32));
+        ops->pushOperand(d->makeConstant(ValueKind::Integer32, 4));
     }
 };
 
@@ -2398,7 +2412,7 @@ struct IP_iconst_4: P {
 struct IP_iconst_5: P {
     void p(D d, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ops->pushOperand(d->makeConstant("i", 5, 32));
+        ops->pushOperand(d->makeConstant(ValueKind::Integer32, 5));
     }
 };
 
@@ -2614,9 +2628,13 @@ struct IP_ifnull: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_iinc: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
+    void p(D d, Ops ops, I insn, Args args) {
         assert_args(insn, args, 2);
-        JvmSemantics::execute_iinc(ops, insn, args);
+
+        size_t index = d->asU1(args[0]);
+        int32_t increment = d->asS1(args[1]);
+
+        execute_iinc(ops, index, increment);
     }
 };
 
@@ -3195,7 +3213,7 @@ struct IP_lcmp: P {
 struct IP_lconst_0: P {
     void p(D d, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ops->pushOperand(d->makeConstant("l", 0, 64));
+        ops->pushOperand(d->makeConstant(ValueKind::Integer64, 0));
     }
 };
 
@@ -3207,7 +3225,7 @@ struct IP_lconst_0: P {
 struct IP_lconst_1: P {
     void p(D d, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ops->pushOperand(d->makeConstant("l", 1, 64));
+        ops->pushOperand(d->makeConstant(ValueKind::Integer64, 1));
     }
 };
 
@@ -3897,9 +3915,8 @@ struct IP_tableswitch: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_wide: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
-        /* Variable-length instruction: decoded operands are supplied by the front end. */
-        JvmSemantics::execute_wide(ops, insn, args);
+    void p(D /*d*/, Ops /*ops*/, I /*insn*/, Args /*args*/) {
+        ASSERT_require2(false, "wide instruction not implemented");
     }
 };
 
@@ -4025,12 +4042,11 @@ DispatcherJvm::initializeDispatchTable() {
     iprocSet(0x7d,  new Jvm::IP_lushr);
     iprocSet(0x7e,  new Jvm::IP_iand);
     iprocSet(0x7f,  new Jvm::IP_land);
-
     iprocSet(0x80,  new Jvm::IP_ior);
     iprocSet(0x81,  new Jvm::IP_lor);
     iprocSet(0x82,  new Jvm::IP_ixor);
     iprocSet(0x83,  new Jvm::IP_lxor);
-
+    iprocSet(0x84,  new Jvm::IP_iinc);
     iprocSet(0x85,  new Jvm::IP_i2l);
     iprocSet(0x86,  new Jvm::IP_i2f);
     iprocSet(0x87,  new Jvm::IP_i2d);
@@ -4046,6 +4062,9 @@ DispatcherJvm::initializeDispatchTable() {
     iprocSet(0x91,  new Jvm::IP_i2b);
     iprocSet(0x92,  new Jvm::IP_i2c);
     iprocSet(0x93,  new Jvm::IP_i2s);
+
+    // wide is complicated
+    // iprocSet(0xc4,  new Jvm::IP_wide);
 }
 
 DispatcherJvm::~DispatcherJvm() {}

@@ -928,11 +928,11 @@ public:
      *  which layer should invoke the @ref extract or @ref concat (or whatever other RISC operations might be necessary).
      *
      *  @{ */
-    virtual SValuePtr readLocal(uint8_t index);
+    virtual SValuePtr readLocal(size_t index);
     /** @} */
 
     // TODO: document following methods
-    virtual void writeLocal(uint8_t index, const SValuePtr &value);
+    virtual void writeLocal(size_t index, const SValuePtr &value);
 
     /** Peeks at a value from the Frame Operand Stack.
      *

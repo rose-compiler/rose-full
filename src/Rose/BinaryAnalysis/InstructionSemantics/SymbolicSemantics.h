@@ -1120,8 +1120,8 @@ public:
                      const BaseSemantics::SValuePtr &data,
                      const BaseSemantics::SValuePtr &cond) override;
 
-    BaseSemantics::SValuePtr readLocal(uint8_t index) override;
-    void writeLocal(uint8_t index, const BaseSemantics::SValuePtr &value) override;
+    BaseSemantics::SValuePtr readLocal(size_t index) override;
+    void writeLocal(size_t index, const BaseSemantics::SValuePtr &value) override;
 
     BaseSemantics::SValuePtr popOperand() override;
     void pushOperand(const BaseSemantics::SValuePtr &value) override;

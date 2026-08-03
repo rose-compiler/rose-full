@@ -113,36 +113,50 @@ Dispatcher::number_(size_t nbits, uint64_t number) const {
 }
 
 int8_t
-Dispatcher::asS1(const SgAsmExpression* expr) {
+Dispatcher::asS1(const SgAsmExpression *expr) {
     auto ivExpr = isSgAsmIntegerValueExpression(expr);
     ASSERT_not_null(ivExpr);
     return static_cast<int8_t>(ivExpr->get_signedValue());
 }
 
 uint8_t
-Dispatcher::asU1(const SgAsmExpression* expr) {
+Dispatcher::asU1(const SgAsmExpression *expr) {
     auto ivExpr = isSgAsmIntegerValueExpression(expr);
     ASSERT_not_null(ivExpr);
     return static_cast<uint8_t>(ivExpr->get_signedValue());
 }
 
-SValue::Ptr
-Dispatcher::makeConstant(const std::string &kind, int64_t value, size_t nBits) {
-        ValueKind valueKind{ValueKind::Unknown};
+int16_t
+Dispatcher::asS2(const SgAsmExpression *expr) {
+    auto ivExpr = isSgAsmIntegerValueExpression(expr);
+    ASSERT_not_null(ivExpr);
+    return static_cast<int16_t>(ivExpr->get_signedValue());
+}
 
-        if (kind == "i") {
-            valueKind = ValueKind::Integer32;
-        }
-        else if (kind == "l") {
-            valueKind = ValueKind::Integer64;
-        }
-        else {
-            ASSERT_require2(false, "unimplemented ValueKind in makeConstant()\n");
+uint16_t
+Dispatcher::asU2(const SgAsmExpression *expr) {
+    auto ivExpr = isSgAsmIntegerValueExpression(expr);
+    ASSERT_not_null(ivExpr);
+    return static_cast<uint16_t>(ivExpr->get_signedValue());
+}
+
+SValue::Ptr
+Dispatcher::makeConstant(ValueKind kind, int64_t value) {
+        size_t nBits;
+
+        switch (kind) {
+            case ValueKind::Integer32:
+                nBits = 32;
+                break;
+            case ValueKind::Integer64:
+                nBits = 64;
+                break;
+            default: ASSERT_not_reachable("invalid kind for makeConstant");
         }
 
         // Create the SValue and set its type/kind
         auto sval = operators_->number_(nBits, value);
-        sval->kind(valueKind);
+        sval->kind(kind);
 
         return sval;
     }

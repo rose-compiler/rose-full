@@ -668,13 +668,13 @@ RiscOperators::peekRegister(RegisterDescriptor reg, const SValue::Ptr &dflt_) {
 }
 
 SValue::Ptr
-RiscOperators::readLocal(uint8_t index) {
+RiscOperators::readLocal(size_t index) {
     ASSERT_not_null(currentState());
     return currentState()->readLocal(index);
 }
 
 void
-RiscOperators::writeLocal(uint8_t index, const SValuePtr &value) {
+RiscOperators::writeLocal(size_t index, const SValuePtr &value) {
     ASSERT_not_null(currentState());
     currentState()->writeLocal(index, value);
 }
