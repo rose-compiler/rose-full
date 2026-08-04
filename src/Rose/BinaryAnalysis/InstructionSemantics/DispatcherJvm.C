@@ -195,11 +195,6 @@ namespace JvmSemantics {
 
     using Args = std::vector<SgAsmExpression*>;
 
-    uint8_t  u1(SgAsmExpression*);
-    uint16_t u2(Args);
-    int8_t   s1(Args);
-    int16_t  s2(Args);
-
     SValue::Ptr nullReference(Ops ops);
     SValue::Ptr arrayLoad(Ops ops, const char *kind, SValue::Ptr arrayref, SValue::Ptr index);
     void        arrayStore(Ops ops, const char *kind, SValue::Ptr arrayref, SValue::Ptr index, SValue::Ptr value);
@@ -288,72 +283,6 @@ namespace JvmSemantics {
 
     [[noreturn]] static void jvmUnsupported(const char *name) {
         throw std::logic_error(std::string("JVM semantic helper not bound to framework state: ") + name);
-    }
-
-    // I'd like to name these, for example, asU1(...), this follows Robb's convention
-    uint8_t u1(SgAsmExpression *e) {
-        ASSERT_not_null(e);
-
-        uint8_t val = 0;
-        if (SgAsmIntegerValueExpression* ival = isSgAsmIntegerValueExpression(e))
-           {
-             val = ival->get_absoluteValue();
-           }
-          else
-           {
-             printf ("Error: in u1(): input SgAsmExpression* expression is not a SgAsmIntegerValueExpression* \n");
-             ROSE_ASSERT(false);
-           }
-
-        return val;
-    }
-
-    uint16_t u2(Args args) {
-        ASSERT_forbid(args.empty());
-        uint16_t val = 0;
-        if (SgAsmIntegerValueExpression* ival = isSgAsmIntegerValueExpression(args[0]))
-           {
-             val = ival->get_absoluteValue();
-           }
-          else
-           {
-             printf ("Error: in u2(): input SgAsmExpression* expression is not a SgAsmIntegerValueExpression* \n");
-             ROSE_ASSERT(false);
-           }
-
-        return val;
-    }
-
-    int8_t s1(Args args) {
-        ASSERT_forbid(args.empty());
-        int8_t val = 0;
-        if (SgAsmIntegerValueExpression* ival = isSgAsmIntegerValueExpression(args[0]))
-           {
-             val = ival->get_absoluteValue();
-           }
-          else
-           {
-             printf ("Error: in s1(): input SgAsmExpression* expression is not a SgAsmIntegerValueExpression* \n");
-             ROSE_ASSERT(false);
-           }
-
-        return val;
-    }
-
-    int16_t s2(Args args) {
-        ASSERT_forbid(args.empty());
-        int16_t val = 0;
-        if (SgAsmIntegerValueExpression* ival = isSgAsmIntegerValueExpression(args[0]))
-           {
-             val = ival->get_absoluteValue();
-           }
-          else
-           {
-             printf ("Error: in s2(): input SgAsmExpression* expression is not a SgAsmIntegerValueExpression* \n");
-             ROSE_ASSERT(false);
-           }
-
-        return val;
     }
 
     SValue::Ptr nullReference(Ops ops) {
@@ -2945,6 +2874,8 @@ struct IP_ishl: P {
 
         ASSERT_require2(count->kind() == ValueKind::Integer32, "ishl shift count must be Integer32");
         ASSERT_require2(value->kind() == ValueKind::Integer32, "ishl value must be Integer32");
+        ASSERT_require(count->nBits() == 32);
+        ASSERT_require(value->nBits() == 32);
 
         // JVM uses only low 5 bits of the shift count for int shifts.
         auto maskedCount = ops->and_(count, ops->number_(32, 0x1f));
@@ -2962,9 +2893,25 @@ struct IP_ishl: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_ishr: P {
-    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
+    void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ASSERT_require2(false, "ishr unimplemented");
+
+        auto count = ops->popOperand();
+        auto value = ops->popOperand();
+
+        ASSERT_require2(count->kind() == ValueKind::Integer32, "ishr shift count must be Integer32");
+        ASSERT_require2(value->kind() == ValueKind::Integer32, "ishr value must be Integer32");
+        ASSERT_require(count->nBits() == 32);
+        ASSERT_require(value->nBits() == 32);
+
+        // JVM int shifts use only the low five bits of the shift distance.
+        auto distance = ops->extract(count, 0, 5);
+
+        auto result = ops->shiftRightArithmetic(value, distance);
+        ASSERT_require(result->nBits() == 32);
+        result->kind(ValueKind::Integer32);
+
+        ops->pushOperand(result);
     }
 };
 
@@ -4160,6 +4107,7 @@ DispatcherJvm::initializeDispatchTable() {
     iprocSet(0x75,  new Jvm::IP_lneg);
     iprocSet(0x78,  new Jvm::IP_ishl);
     iprocSet(0x79,  new Jvm::IP_lshl);
+    iprocSet(0x7a,  new Jvm::IP_ishr);
 
     iprocSet(0x7c,  new Jvm::IP_iushr);
     iprocSet(0x7d,  new Jvm::IP_lushr);
