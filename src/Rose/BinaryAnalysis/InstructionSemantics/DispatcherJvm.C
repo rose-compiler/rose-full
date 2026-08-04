@@ -254,7 +254,6 @@ namespace JvmSemantics {
     void execute_newarray(Ops ops, I insn, Args args);
     void execute_putfield(Ops ops, I insn, Args args);
     void execute_putstatic(Ops ops, I insn, Args args);
-    void execute_ret(Ops ops, I insn, Args args);
 
 
     // Runtime-exception hooks. These are intended to be executable checks in the
@@ -465,6 +464,7 @@ namespace JvmSemantics {
     void branch_jsr_w(Ops, I, Args) { jvmUnsupported("branch_jsr_w"); }
     void branch_lookupswitch(Ops, I, Args) { jvmUnsupported("branch_lookupswitch"); }
     void branch_tableswitch(Ops, I, Args) { jvmUnsupported("branch_tableswitch"); }
+    void execute_ret(Ops, I, Args) { jvmUnsupported("execute_ret"); }
 
     void execute_anewarray(Ops ops, I /*insn*/, Args args) {
         uint8_t b1 = asU1(args[0]);
@@ -502,6 +502,86 @@ namespace JvmSemantics {
         ops->writeLocal(index, newValue);
     }
 
+    void execute_iload(Ops ops, size_t index) {
+        auto sval = ops->readLocal(index);
+        ASSERT_require(sval->nBits() == 32);
+        ASSERT_require2(sval->kind() == ValueKind::Integer32, "local variable for iload must be Integer32");
+
+        ops->pushOperand(sval);
+    }
+
+    void execute_lload(Ops ops, size_t index) {
+        auto sval = ops->readLocal(index);
+        ASSERT_require(sval->nBits() == 64);
+        ASSERT_require2(sval->kind() == ValueKind::Integer64, "local variable for lload must be Integer64");
+
+        ops->pushOperand(sval);
+    }
+
+    void execute_fload(Ops ops, size_t index) {
+        auto sval = ops->readLocal(index);
+        ASSERT_require(sval->nBits() == 32);
+        ASSERT_require2(sval->kind() == ValueKind::Float32, "local variable for fload must be Float32");
+
+        ops->pushOperand(sval);
+    }
+
+    void execute_dload(Ops ops, size_t index) {
+        auto sval = ops->readLocal(index);
+        ASSERT_require(sval->nBits() == 64);
+        ASSERT_require2(sval->kind() == ValueKind::Float64, "local variable for dload must be Float64");
+
+        ops->pushOperand(sval);
+    }
+
+    void execute_aload(Ops ops, size_t index) {
+        auto sval = ops->readLocal(index);
+        ASSERT_require(sval->kind() == ValueKind::ObjectReference ||
+                       sval->kind() == ValueKind::ArrayReference);
+
+        ops->pushOperand(sval);
+    }
+
+    void execute_istore(Ops ops, size_t index) {
+        auto sval = ops->popOperand();
+        ASSERT_require(sval->nBits() == 32);
+        ASSERT_require2(sval->kind() == ValueKind::Integer32, "top of stack must be Integer32");
+
+        ops->writeLocal(index, sval);
+    }
+
+    void execute_lstore(Ops ops, size_t index) {
+        auto sval = ops->popOperand();
+        ASSERT_require(sval->nBits() == 64);
+        ASSERT_require2(sval->kind() == ValueKind::Integer64, "top of stack must be Integer64");
+
+        ops->writeLocal(index, sval);
+    }
+
+    void execute_fstore(Ops ops, size_t index) {
+        auto sval = ops->popOperand();
+        ASSERT_require(sval->nBits() == 32);
+        ASSERT_require2(sval->kind() == ValueKind::Float32, "top of stack must be Float32");
+
+        ops->writeLocal(index, sval);
+    }
+
+    void execute_dstore(Ops ops, size_t index) {
+        auto sval = ops->popOperand();
+        ASSERT_require(sval->nBits() == 64);
+        ASSERT_require2(sval->kind() == ValueKind::Float64, "top of stack must be Float64");
+
+        ops->writeLocal(index, sval);
+    }
+
+    void execute_astore(Ops ops, size_t index) {
+        auto ref = ops->popOperand();
+        ASSERT_require2(isReference(ref), "astore requires top of stack to be a Reference");
+
+        ops->writeLocal(index, ref);
+    }
+
+
     void execute_athrow(Ops, I, Args) { jvmUnsupported("execute_athrow"); }
     void execute_checkcast(Ops, I, Args) { jvmUnsupported("execute_checkcast"); }
     void execute_getfield(Ops, I, Args) { jvmUnsupported("execute_getfield"); }
@@ -522,7 +602,6 @@ namespace JvmSemantics {
     void execute_newarray(Ops, I, Args) { jvmUnsupported("execute_newarray"); }
     void execute_putfield(Ops, I, Args) { jvmUnsupported("execute_putfield"); }
     void execute_putstatic(Ops, I, Args) { jvmUnsupported("execute_putstatic"); }
-    void execute_ret(Ops, I, Args) { jvmUnsupported("execute_ret"); }
 
     void throwIfNull(Ops /*ops*/, const char *exceptionName, SValue::Ptr ref) {
         if (ref && ref->get_number() == 0)
@@ -734,11 +813,12 @@ bool isSubclassOf(SgClassType* derived, SgClassType* base) {
     }
 }
 
+using JIK = JvmInstructionKind;
+namespace JS = JvmSemantics;
+
 using JvmSemantics::asU1;
 using JvmSemantics::doBinaryOp;
 using JvmSemantics::doUnaryOp;
-using JvmSemantics::execute_iinc;
-using JvmSemantics::isReference;
 
 // aaload (50 (0x32))
         // Description:
@@ -809,7 +889,7 @@ struct IP_aconst_null: P {
 struct IP_aload: P {
     void p(D d, Ops ops, I insn, Args args) {
         assert_args(insn, args, 1);
-        ops->pushOperand(ops->readLocal(d->asU1(args[0])));
+        JS::execute_aload(ops, d->asU1(args[0]));
     }
 };
 
@@ -927,11 +1007,7 @@ struct IP_arraylength: P {
 struct IP_astore: P {
     void p(D d, Ops ops, I insn, Args args) {
         assert_args(insn, args, 1);
-
-        auto ref = ops->popOperand();
-        ASSERT_require2(JvmSemantics::isReference(ref), "astore requires top of stack to be a Reference");
-
-        ops->writeLocal(d->asU1(args[0]), ref);
+        JS::execute_astore(ops, d->asU1(args[0]));
     }
 };
 
@@ -947,7 +1023,7 @@ struct IP_astore_0: P {
         assert_args(insn, args, 0);
 
         auto ref = ops->popOperand();
-        ASSERT_require2(isReference(ref), "astore_0 requires top of stack to be a Reference");
+        ASSERT_require2(JS::isReference(ref), "astore_0 requires top of stack to be a Reference");
 
         ops->writeLocal(0, ref);
     }
@@ -965,7 +1041,7 @@ struct IP_astore_1: P {
         assert_args(insn, args, 0);
 
         auto ref = ops->popOperand();
-        ASSERT_require2(isReference(ref), "astore_1 requires top of stack to be a Reference");
+        ASSERT_require2(JS::isReference(ref), "astore_1 requires top of stack to be a Reference");
 
         ops->writeLocal(1, ref);
     }
@@ -983,7 +1059,7 @@ struct IP_astore_2: P {
         assert_args(insn, args, 0);
 
         auto ref = ops->popOperand();
-        ASSERT_require2(isReference(ref), "astore_2 requires top of stack to be a Reference");
+        ASSERT_require2(JS::isReference(ref), "astore_2 requires top of stack to be a Reference");
 
         ops->writeLocal(2, ref);
     }
@@ -1001,7 +1077,7 @@ struct IP_astore_3: P {
         assert_args(insn, args, 0);
 
         auto ref = ops->popOperand();
-        ASSERT_require2(isReference(ref), "astore_3 requires top of stack to be a Reference");
+        ASSERT_require2(JS::isReference(ref), "astore_3 requires top of stack to be a Reference");
 
         ops->writeLocal(3, ref);
     }
@@ -1314,9 +1390,9 @@ struct IP_ddiv: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_dload: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
+    void p(D d, Ops ops, I insn, Args args) {
         assert_args(insn, args, 1);
-        ops->pushOperand(ops->readLocal(asU1(args[0])));
+        JS::execute_dload(ops, d->asU1(args[0]));
     }
 };
 
@@ -1435,12 +1511,9 @@ struct IP_dreturn: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_dstore: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
+    void p(D d, Ops ops, I insn, Args args) {
         assert_args(insn, args, 1);
-        auto sval = ops->popOperand();
-        ASSERT_require2(sval->kind() == ValueKind::Float64, "top of stack must be Float64");
-
-        ops->writeLocal(asU1(args[0]), sval);
+        JS::execute_dstore(ops, d->asU1(args[0]));
     }
 };
 
@@ -1894,9 +1967,9 @@ struct IP_fdiv: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_fload: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
+    void p(D d, Ops ops, I insn, Args args) {
         assert_args(insn, args, 1);
-        ops->pushOperand(ops->readLocal(asU1(args[0])));
+        JS::execute_fload(ops, d->asU1(args[0]));
     }
 };
 
@@ -2015,12 +2088,9 @@ struct IP_freturn: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_fstore: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
+    void p(D d, Ops ops, I insn, Args args) {
         assert_args(insn, args, 1);
-        auto sval = ops->popOperand();
-        ASSERT_require2(sval->kind() == ValueKind::Float32, "top of stack must be Float32");
-
-        ops->writeLocal(asU1(args[0]), sval);
+        JS::execute_fstore(ops, d->asU1(args[0]));
     }
 };
 
@@ -2630,11 +2700,8 @@ struct IP_ifnull: P {
 struct IP_iinc: P {
     void p(D d, Ops ops, I insn, Args args) {
         assert_args(insn, args, 2);
-
-        size_t index = d->asU1(args[0]);
         int32_t increment = d->asS1(args[1]);
-
-        execute_iinc(ops, index, increment);
+        JS::execute_iinc(ops, d->asU1(args[0]), increment);
     }
 };
 
@@ -2648,7 +2715,7 @@ struct IP_iinc: P {
 struct IP_iload: P {
     void p(D d, Ops ops, I insn, Args args) {
         assert_args(insn, args, 1);
-        ops->pushOperand(ops->readLocal(d->asU1(args[0])));
+        JS::execute_iload(ops, d->asU1(args[0]));
     }
 };
 
@@ -2911,10 +2978,7 @@ struct IP_ishr: P {
 struct IP_istore: P {
     void p(D d, Ops ops, I insn, Args args) {
         assert_args(insn, args, 1);
-        auto sval = ops->popOperand();
-        ASSERT_require2(sval->kind() == ValueKind::Integer32, "top of stack must be Integer32");
-
-        ops->writeLocal(d->asU1(args[0]), sval);
+        JS::execute_istore(ops, d->asU1(args[0]));
     }
 };
 
@@ -3291,9 +3355,9 @@ struct IP_ldiv: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_lload: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
+    void p(D d, Ops ops, I insn, Args args) {
         assert_args(insn, args, 1);
-        ops->pushOperand(ops->readLocal(asU1(args[0])));
+        JS::execute_lload(ops, d->asU1(args[0]));
     }
 };
 
@@ -3488,12 +3552,9 @@ struct IP_lshr: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_lstore: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
+    void p(D d, Ops ops, I insn, Args args) {
         assert_args(insn, args, 1);
-        auto sval = ops->popOperand();
-        ASSERT_require2(sval->kind() == ValueKind::Integer64, "top of stack must be Integer64");
-
-        ops->writeLocal(asU1(args[0]), sval);
+        JS::execute_lstore(ops, d->asU1(args[0]));
     }
 };
 
@@ -3800,7 +3861,7 @@ struct IP_putstatic: P {
 struct IP_ret: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 1);
-        JvmSemantics::execute_ret(ops, insn, args);
+        JS::execute_ret(ops, insn, args);
     }
 };
 
@@ -3915,8 +3976,63 @@ struct IP_tableswitch: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_wide: P {
-    void p(D /*d*/, Ops /*ops*/, I /*insn*/, Args /*args*/) {
-        ASSERT_require2(false, "wide instruction not implemented");
+    void p(D d, Ops ops, I insn, Args args) {
+        SValue::Ptr sval;
+
+        size_t index = d->asU2(args[1]);
+        const auto opcode = static_cast<JIK>(d->asU1(args[0]));
+
+        switch (opcode) {
+            case JIK::iload:
+                ASSERT_require(args.size() == 2);
+                JS::execute_iload(ops, index);
+                break;
+            case JIK::lload:
+                ASSERT_require(args.size() == 2);
+                JS::execute_lload(ops, index);
+                break;
+            case JIK::fload:
+                ASSERT_require(args.size() == 2);
+                JS::execute_fload(ops, index);
+                break;
+            case JIK::dload:
+                ASSERT_require(args.size() == 2);
+                JS::execute_dload(ops, index);
+                break;
+            case JIK::aload:
+                ASSERT_require(args.size() == 2);
+                JS::execute_aload(ops, index);
+                break;
+            case JIK::istore:
+                assert_args(insn, args, 2);
+                JS::execute_istore(ops, index);
+                break;
+            case JIK::lstore:
+                ASSERT_require(args.size() == 2);
+                JS::execute_lstore(ops, index);
+                break;
+            case JIK::fstore:
+                ASSERT_require(args.size() == 2);
+                JS::execute_fstore(ops, index);
+                break;
+            case JIK::dstore:
+                ASSERT_require(args.size() == 2);
+                JS::execute_dstore(ops, index);
+                break;
+            case JIK::astore:
+                ASSERT_require(args.size() == 2);
+                JS::execute_astore(ops, index);
+                break;
+            case JIK::iinc:
+                ASSERT_require(args.size() == 3);
+                JS::execute_iinc(ops, index, d->asS2(args[2]));
+                break;
+            case JIK::ret:
+                ASSERT_require(args.size() == 2);
+                ASSERT_require2(false, "wide ret is not implemented");
+
+            default: ASSERT_not_reachable("instruction cannot be modified by wide");
+        }
     }
 };
 
@@ -3947,21 +4063,28 @@ DispatcherJvm::initializeDispatchTable() {
     iprocSet(0x4d,  new Jvm::IP_astore_2);
     iprocSet(0x4e,  new Jvm::IP_astore_3);
 
-// Load a constant on to the operand stack.
-    iprocSet(0x0e,  new Jvm::IP_dconst_0);
-    iprocSet(0x0f,  new Jvm::IP_dconst_1);
-
     iprocSet(0x0b,  new Jvm::IP_fconst_0);
     iprocSet(0x0c,  new Jvm::IP_fconst_1);
     iprocSet(0x0d,  new Jvm::IP_fconst_2);
+    iprocSet(0x0e,  new Jvm::IP_dconst_0);
+    iprocSet(0x0f,  new Jvm::IP_dconst_1);
 
     iprocSet(0x17,  new Jvm::IP_fload);
+    iprocSet(0x18,  new Jvm::IP_dload);
+
     iprocSet(0x22,  new Jvm::IP_fload_0);
     iprocSet(0x23,  new Jvm::IP_fload_1);
     iprocSet(0x24,  new Jvm::IP_fload_2);
     iprocSet(0x25,  new Jvm::IP_fload_3);
 
+    iprocSet(0x26,  new Jvm::IP_dload_0);
+    iprocSet(0x27,  new Jvm::IP_dload_1);
+    iprocSet(0x28,  new Jvm::IP_dload_2);
+    iprocSet(0x29,  new Jvm::IP_dload_3);
+
     iprocSet(0x38,  new Jvm::IP_fstore);
+    iprocSet(0x39,  new Jvm::IP_dstore);
+
     iprocSet(0x43,  new Jvm::IP_fstore_0);
     iprocSet(0x44,  new Jvm::IP_fstore_1);
     iprocSet(0x45,  new Jvm::IP_fstore_2);
@@ -4063,8 +4186,7 @@ DispatcherJvm::initializeDispatchTable() {
     iprocSet(0x92,  new Jvm::IP_i2c);
     iprocSet(0x93,  new Jvm::IP_i2s);
 
-    // wide is complicated
-    // iprocSet(0xc4,  new Jvm::IP_wide);
+    iprocSet(0xc4,  new Jvm::IP_wide);
 }
 
 DispatcherJvm::~DispatcherJvm() {}
