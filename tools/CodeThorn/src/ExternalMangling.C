@@ -328,25 +328,6 @@ namespace
 #endif /* WITH_CUSTOM_LINKAGE_HANDLER */
 
   std::string
-  mangleFilename(ct::StringView filename)
-  {
-    std::string res;
-
-    res.reserve(filename.size());
-
-    auto replCh = [](char c) -> char
-                  {
-                    if ((c == '/') | (c == '\\') | (c == '.'))
-                      c = '_';
-
-                    return c;
-                  };
-
-    std::transform(filename.begin(), filename.end(), std::back_inserter(res), replCh);
-    return res;
-  }
-
-  std::string
   internalLinkageFromFile(const SgLocatedNode& n)
   {
     sg::NotNull<const Sg_File_Info> fi = n.get_file_info();
@@ -367,7 +348,7 @@ namespace
       return internalLinkageFromFile(SG_DEREF(isSgLocatedNode(n.get_parent())));
 
     if (linkageCandidate != "NULL_FILE") // \pp todo revise
-      return mangleFilename(linkageCandidate);
+      return ct::mangleFilename(linkageCandidate);
 
     msgWarn() << "mangling node with internal linkage w/o usable location info: " << n.class_name()
               << std::endl;
@@ -1232,7 +1213,7 @@ namespace
   mangleLocation(ct::SourceLocation loc, const char* prefix)
   {
     return join( prefix
-               , mangleFilename(loc.file())
+               , ct::mangleFilename(loc.file())
                , mglSimpleSep
                , std::to_string(loc.startLine())
                , mglSimpleSep
@@ -1630,6 +1611,25 @@ namespace
 
 namespace CodeThorn
 {
+std::string
+mangleFilename(const boost::string_view& filename)
+  {
+    std::string res;
+
+    res.reserve(filename.size());
+
+    auto replCh = [](char c) -> char
+                  {
+                    if ((c == '/') | (c == '\\') | (c == '.'))
+                      c = '_';
+
+                    return c;
+                  };
+
+    std::transform(filename.begin(), filename.end(), std::back_inserter(res), replCh);
+    return res;
+}
+
 
 NameShortener longNames()
 {

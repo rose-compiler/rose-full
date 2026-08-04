@@ -5,6 +5,7 @@
 #include <string>
 #include <iosfwd>
 #include <functional>
+#include <boost/utility/string_view.hpp>
 
 struct SgType;
 struct SgInitializedName;
@@ -51,6 +52,9 @@ mangle(const SgDeclarationStatement& n, NameShortener shorten = longNames(), boo
 
 const std::string&
 mangle(const SgDeclarationStatement* n, NameShortener shorten = longNames(), bool withUniqueMain = false);
+
+std::string mangleFilename(const boost::string_view& filename);
+
 /// \}
 
 /// Generates unique mangled external names for SgType nodes
