@@ -53,20 +53,27 @@ std::string CollectDependences::local_read_string(std::istream& input_file) {
           // Otherwise, seeing a single ':'
           [[fallthrough]]; // Explicitly indicates intentional fall-through 
          }
+       case '=':
+          if (next_string.size()>8 && 
+                 (next_string.substr(next_string.size()-8,8) == "operator" || next_string.substr(next_string.size()-9,8) == "operator")) {
+            next_string.push_back(c);
+            break;
+          }
+          [[fallthrough]]; // Explicitly indicates intentional fall-through 
        case '[':
        case ']':
        case '{':
        case '}':
        case ';':
-       case '=':
-            if (next_string != "") {
-              // This starts a new token. Return the current one.
-              input_file.putback(c);
-              Log.push("Seeing separator. Finished reading token " + next_string);
-            } else {
+            if (next_string == "") {
              // Found a token. Return it.
              next_string.push_back(c);
              Log.push("reading separator token " + next_string);
+            } 
+            else {
+              // This starts a new token. Return the current one.
+              input_file.putback(c);
+              Log.push("Seeing separator. Finished reading token " + next_string);
             }
             return next_string;
        default: 
@@ -164,9 +171,6 @@ bool WholeProgramDependenceAnalysis<NodeIterator,EdgeIterator>:: ComputeDependen
       SgNode* func = *p;
       if (func == 0) continue;
       std::string defn_file_name;
-      if (!AstInterface::get_fileInfo(func,&defn_file_name) || defn_file_name != fname) {
-         continue;
-      } 
       Log.push("Analyzing declaration " + func->unparseToString() + " in " + fname);
       ComputeDependences(func, root);
     }
