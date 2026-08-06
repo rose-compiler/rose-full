@@ -2415,9 +2415,36 @@ struct IP_iconst_5: P {
         // Run-time Exceptions:
         //   ArithmeticException if the divisor is zero.
 struct IP_idiv: P {
-    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
+    void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ASSERT_require2(false, "idiv unimplemented");
+
+        auto rhs = ops->popOperand(); // divisor
+        auto lhs = ops->popOperand(); // dividend
+
+        ASSERT_require(lhs->kind() == ValueKind::Integer32);
+        ASSERT_require(rhs->kind() == ValueKind::Integer32);
+        ASSERT_require(lhs->nBits() == 32);
+        ASSERT_require(rhs->nBits() == 32);
+
+        if (rhs->isConcrete() && rhs->toUnsigned().get() == 0) {
+            throw BaseSemantics::Exception("integer division by zero", ops->currentInstruction());
+        }
+
+        // JVM specifies INT_MIN / -1 == INT_MIN rather than overflow.
+        if (lhs->isConcrete() && rhs->isConcrete() &&
+            lhs->toUnsigned().get() == 0x80000000u &&
+            rhs->toUnsigned().get() == 0xffffffffu)
+        {
+            auto result = ops->number_(32, 0x80000000u);
+            result->kind(ValueKind::Integer32);
+            ops->pushOperand(result);
+            return;
+        }
+
+        auto result = ops->signedDivide(lhs, rhs);
+        ASSERT_require(result->nBits() == 32);
+        result->kind(ValueKind::Integer32);
+        ops->pushOperand(result);
     }
 };
 
@@ -3282,9 +3309,36 @@ struct IP_ldc2_w: P {
         // Run-time Exceptions:
         //   ArithmeticException if the divisor is zero.
 struct IP_ldiv: P {
-    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
+    void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ASSERT_require2(false, "ldiv unimplemented");
+
+        auto rhs = ops->popOperand(); // divisor
+        auto lhs = ops->popOperand(); // dividend
+
+        ASSERT_require(lhs->kind() == ValueKind::Integer64);
+        ASSERT_require(rhs->kind() == ValueKind::Integer64);
+        ASSERT_require(lhs->nBits() == 64);
+        ASSERT_require(rhs->nBits() == 64);
+
+        if (rhs->isConcrete() && rhs->toUnsigned().get() == 0) {
+            throw BaseSemantics::Exception("long division by zero", ops->currentInstruction());
+        }
+
+        // JVM specifies LONG_MIN / -1 == LONG_MIN rather than overflow.
+        if (lhs->isConcrete() && rhs->isConcrete() &&
+            lhs->toUnsigned().get() == 0x8000000000000000ull &&
+            rhs->toUnsigned().get() == 0xffffffffffffffffull)
+        {
+            auto result = ops->number_(64, 0x8000000000000000ull);
+            result->kind(ValueKind::Integer64);
+            ops->pushOperand(result);
+            return;
+        }
+
+        auto result = ops->signedDivide(lhs, rhs);
+        ASSERT_require(result->nBits() == 64);
+        result->kind(ValueKind::Integer64);
+        ops->pushOperand(result);
     }
 };
 
@@ -4116,10 +4170,10 @@ DispatcherJvm::initializeDispatchTable() {
     iprocSet(0x67,  new Jvm::IP_dsub);
     iprocSet(0x68,  new Jvm::IP_imul);
     iprocSet(0x69,  new Jvm::IP_lmul);
-
     iprocSet(0x6a,  new Jvm::IP_fmul);
     iprocSet(0x6b,  new Jvm::IP_dmul);
-
+    iprocSet(0x6c,  new Jvm::IP_idiv);
+    iprocSet(0x6d,  new Jvm::IP_ldiv);
     iprocSet(0x6e,  new Jvm::IP_fdiv);
     iprocSet(0x6f,  new Jvm::IP_ddiv);
     iprocSet(0x70,  new Jvm::IP_irem);
