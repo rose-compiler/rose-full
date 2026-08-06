@@ -3466,6 +3466,8 @@ struct IP_lshl: P {
         auto count = ops->popOperand();
         auto value = ops->popOperand();
 
+        ASSERT_require(count->nBits() == 32);
+        ASSERT_require(value->nBits() == 64);
         ASSERT_require2(count->kind() == ValueKind::Integer32, "lshl shift count must be Integer32");
         ASSERT_require2(value->kind() == ValueKind::Integer64, "lshl value must be Long");
 
@@ -3485,9 +3487,26 @@ struct IP_lshl: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_lshr: P {
-    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
+    void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ASSERT_require2(false, "lshr unimplemented");
+
+        auto count = ops->popOperand();
+        auto value = ops->popOperand();
+
+        ASSERT_require(count->nBits() == 32);
+        ASSERT_require(value->nBits() == 64);
+        ASSERT_require2(count->kind() == ValueKind::Integer32, "lshr shift count must be Integer32");
+        ASSERT_require2(value->kind() == ValueKind::Integer64, "lshr value must be Long");
+
+
+        // JVM long shifts use only the low six bits of the shift distance.
+        auto distance = ops->extract(count, 0, 6);
+
+        auto result = ops->shiftRightArithmetic(value, distance);
+        ASSERT_require(result->nBits() == 64);
+        result->kind(ValueKind::Integer64);
+
+        ops->pushOperand(result);
     }
 };
 
@@ -4108,7 +4127,7 @@ DispatcherJvm::initializeDispatchTable() {
     iprocSet(0x78,  new Jvm::IP_ishl);
     iprocSet(0x79,  new Jvm::IP_lshl);
     iprocSet(0x7a,  new Jvm::IP_ishr);
-
+    iprocSet(0x7b,  new Jvm::IP_lshr);
     iprocSet(0x7c,  new Jvm::IP_iushr);
     iprocSet(0x7d,  new Jvm::IP_lushr);
     iprocSet(0x7e,  new Jvm::IP_iand);
