@@ -141,6 +141,10 @@ public:
 
     void initializeFrame(RiscOperatorsPtr& ops, std::string& className, std::string& desc, uint16_t access, uint16_t maxLocals);
 
+    static bool isCategory1(const SValuePtr&);
+    static bool isCategory2(const SValuePtr&);
+    static bool isCategory2Tail(const SValuePtr&);
+
 private:
     /** Invalidate a range of local-variable slots.
      *
@@ -148,8 +152,6 @@ private:
      *  including its head and tail slots, to preserve JVM slot semantics.
      */
     void clearLocalRange(size_t begin, size_t nSlots);
-
-    bool isCategory2Tail(const SValuePtr&);
 };
     
 } // namespace

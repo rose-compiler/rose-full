@@ -134,16 +134,40 @@ FrameState::writeMemory(const SValue::Ptr &address_, const SValue::Ptr &value_, 
     ASSERT_require2(false, "TODO::writeMemory\n");
 }
 
-SValue::Ptr
-FrameState::readLocal(size_t index) const {
-    ASSERT_require2(index < locals_.size(), "ERROR: locals array size exceeded\n");
-    return locals_[index];
+bool
+FrameState::isCategory1(const SValue::Ptr &value) {
+    ASSERT_not_null(value);
+
+    switch (value->kind()) {
+        case ValueKind::Integer32:
+        case ValueKind::Float32:
+        case ValueKind::ObjectReference:
+        case ValueKind::ArrayReference:
+            return true;
+        case ValueKind::Integer64:
+        case ValueKind::Float64:
+        case ValueKind::Category2Tail:
+            return false;
+        default: ASSERT_not_reachable("invalid JVM ValueKind");
+    }
+}
+
+bool
+FrameState::isCategory2(const SValuePtr &value) {
+    ASSERT_not_null(value);
+    return value->kind() == ValueKind::Integer64 || value->kind() == ValueKind::Float64;
 }
 
 bool
 FrameState::isCategory2Tail(const SValuePtr& sval) {
     ASSERT_not_null(sval);
     return sval->kind() == ValueKind::Category2Tail;
+}
+
+SValue::Ptr
+FrameState::readLocal(size_t index) const {
+    ASSERT_require2(index < locals_.size(), "ERROR: locals array size exceeded\n");
+    return locals_[index];
 }
 
 void

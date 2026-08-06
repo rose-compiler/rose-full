@@ -205,7 +205,6 @@ namespace JvmSemantics {
     void methodReturn(Ops ops, I insn);
     void methodReturn(Ops ops, I insn, SValue::Ptr value);
 
-    void stack_swap(Ops ops);
     void branch_goto(Ops ops, I insn, Args args);
     void branch_goto_w(Ops ops, I insn, Args args);
     void branch_if_acmpeq(Ops ops, I insn, Args args);
@@ -365,11 +364,6 @@ namespace JvmSemantics {
 
     void methodReturn(Ops /*ops*/, I /*insn*/) { jvmUnsupported("methodReturn(void)"); }
     void methodReturn(Ops /*ops*/, I /*insn*/, SValue::Ptr /*value*/) { jvmUnsupported("methodReturn(value)"); }
-
-    void stack_swap(Ops ops) {
-        SValue::Ptr v1 = ops->popOperand(), v2 = ops->popOperand();
-        ops->pushOperand(v1); ops->pushOperand(v2);
-    }
 
     void branch_goto(Ops, I, Args) { jvmUnsupported("branch_goto"); }
     void branch_goto_w(Ops, I, Args) { jvmUnsupported("branch_goto_w"); }
@@ -3466,10 +3460,10 @@ struct IP_lshl: P {
         auto count = ops->popOperand();
         auto value = ops->popOperand();
 
-        ASSERT_require(count->nBits() == 32);
-        ASSERT_require(value->nBits() == 64);
         ASSERT_require2(count->kind() == ValueKind::Integer32, "lshl shift count must be Integer32");
         ASSERT_require2(value->kind() == ValueKind::Integer64, "lshl value must be Long");
+        ASSERT_require(count->nBits() == 32);
+        ASSERT_require(value->nBits() == 64);
 
         // JVM long shifts use only the low six bits of the shift distance.
         auto maskedCount = ops->and_(count, ops->number_(32, 0x3f));
@@ -3493,10 +3487,10 @@ struct IP_lshr: P {
         auto count = ops->popOperand();
         auto value = ops->popOperand();
 
-        ASSERT_require(count->nBits() == 32);
-        ASSERT_require(value->nBits() == 64);
         ASSERT_require2(count->kind() == ValueKind::Integer32, "lshr shift count must be Integer32");
         ASSERT_require2(value->kind() == ValueKind::Integer64, "lshr value must be Long");
+        ASSERT_require(count->nBits() == 32);
+        ASSERT_require(value->nBits() == 64);
 
 
         // JVM long shifts use only the low six bits of the shift distance.
@@ -3916,7 +3910,15 @@ struct IP_sipush: P {
 struct IP_swap: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        JvmSemantics::stack_swap(ops);
+
+        auto sval1 = ops->popOperand(); // original top
+        auto sval2 = ops->popOperand();
+
+        ASSERT_require(FrameState::isCategory1(sval1));
+        ASSERT_require(FrameState::isCategory1(sval2));
+
+        ops->pushOperand(sval1);
+        ops->pushOperand(sval2);
     }
 };
 
@@ -4100,6 +4102,8 @@ DispatcherJvm::initializeDispatchTable() {
 
     iprocSet(0x57,  new Jvm::IP_pop);
     iprocSet(0x58,  new Jvm::IP_pop2);
+
+    iprocSet(0x5f,  new Jvm::IP_swap);
 
     // Binary operators
     iprocSet(0x60,  new Jvm::IP_iadd);
