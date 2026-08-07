@@ -530,6 +530,11 @@ RiscOperators::fpDivide(const SValue::Ptr&, const SValue::Ptr&, SgAsmFloatType*)
 }
 
 SValue::Ptr
+RiscOperators::fpModulo(const SValue::Ptr&, const SValue::Ptr&) {
+    throw NotImplemented("fpModulo is not implemented", currentInstruction());
+}
+
+SValue::Ptr
 RiscOperators::fpSquareRoot(const SValue::Ptr&, SgAsmFloatType*) {
     throw NotImplemented("fpSquareRoot is not implemented", currentInstruction());
 }

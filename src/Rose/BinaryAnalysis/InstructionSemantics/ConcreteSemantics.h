@@ -432,6 +432,7 @@ public:
     BaseSemantics::SValuePtr fpSubtract(const BaseSemantics::SValuePtr &, const BaseSemantics::SValuePtr &) override;
     BaseSemantics::SValuePtr fpMultiply(const BaseSemantics::SValuePtr &, const BaseSemantics::SValuePtr &) override;
     BaseSemantics::SValuePtr fpDivide(const BaseSemantics::SValuePtr &, const BaseSemantics::SValuePtr &) override;
+    BaseSemantics::SValuePtr fpModulo(const BaseSemantics::SValuePtr &, const BaseSemantics::SValuePtr &) override;
 
     BaseSemantics::SValuePtr fpRoundTowardZero(const BaseSemantics::SValuePtr &a, SgAsmFloatType*) override;
 

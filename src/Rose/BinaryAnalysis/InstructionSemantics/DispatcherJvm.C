@@ -1417,9 +1417,10 @@ struct IP_dneg: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_drem: P {
-    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
+    void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ASSERT_require2(false, "drem unimplemented");
+        doBinaryOp(ops, ValueKind::Float64,
+             [ops](auto lhs, auto rhs) { return ops->fpModulo(lhs, rhs); });
     }
 };
 
@@ -2003,9 +2004,10 @@ struct IP_fneg: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_frem: P {
-    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
+    void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ASSERT_require2(false, "frem unimplemented");
+        doBinaryOp(ops, ValueKind::Float32,
+             [ops](auto lhs, auto rhs) { return ops->fpModulo(lhs, rhs); });
     }
 };
 
@@ -4196,6 +4198,8 @@ DispatcherJvm::initializeDispatchTable() {
     iprocSet(0x6f,  new Jvm::IP_ddiv);
     iprocSet(0x70,  new Jvm::IP_irem);
     iprocSet(0x71,  new Jvm::IP_lrem);
+    iprocSet(0x72,  new Jvm::IP_frem);
+    iprocSet(0x73,  new Jvm::IP_drem);
 
     // Unary(ish) operators
     iprocSet(0x74,  new Jvm::IP_ineg);

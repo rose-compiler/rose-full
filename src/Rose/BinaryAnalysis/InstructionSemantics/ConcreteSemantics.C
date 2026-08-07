@@ -1114,13 +1114,25 @@ RiscOperators::fpMultiply(const BaseSemantics::SValuePtr &lhs,
 
 BaseSemantics::SValuePtr
 RiscOperators::fpDivide(const BaseSemantics::SValuePtr &lhs,
+                          const BaseSemantics::SValuePtr &rhs) {
+    ASSERT_not_null(lhs);
+    ASSERT_not_null(rhs);
+    ASSERT_require2(lhs->isConcrete() && rhs->isConcrete(), "only concrete values");
+
+    return fpBinaryOp(lhs, rhs, [](auto a, auto b) {
+        return a/b;
+    });
+}
+
+BaseSemantics::SValuePtr
+RiscOperators::fpModulo(const BaseSemantics::SValuePtr &lhs,
                         const BaseSemantics::SValuePtr &rhs) {
     ASSERT_not_null(lhs);
     ASSERT_not_null(rhs);
     ASSERT_require2(lhs->isConcrete() && rhs->isConcrete(), "only concrete values");
 
     return fpBinaryOp(lhs, rhs, [](auto a, auto b) {
-            return a/b;
+        return std::fmod(a, b);
     });
 }
 

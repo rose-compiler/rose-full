@@ -1804,7 +1804,20 @@ RiscOperators::fpDivide(const BaseSemantics::SValuePtr &lhs,
                     "symbolic floating-point division is not implemented");
 
     return fpBinaryOp(lhs, rhs, [](auto a, auto b) {
-            return a/b;
+        return a/b;
+    });
+}
+
+BaseSemantics::SValuePtr
+RiscOperators::fpModulo(const BaseSemantics::SValuePtr &lhs,
+                        const BaseSemantics::SValuePtr &rhs) {
+    ASSERT_not_null(lhs);
+    ASSERT_not_null(rhs);
+    ASSERT_require2(lhs->isConcrete() && rhs->isConcrete(),
+                    "symbolic floating-point modulo is not implemented");
+
+    return fpBinaryOp(lhs, rhs, [](auto a, auto b) {
+        return std::fmod(a, b);
     });
 }
 

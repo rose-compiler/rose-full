@@ -1434,6 +1434,20 @@ RiscOperators::fpDivide(const BaseSemantics::SValue::Ptr &a, const BaseSemantics
 }
 
 BaseSemantics::SValue::Ptr
+RiscOperators::fpModulo(const BaseSemantics::SValue::Ptr &a, const BaseSemantics::SValue::Ptr &b) {
+    before("fpModulo", a, b);
+    try {
+        return check_width(after(subdomain_->fpModulo(a, b)), a->nBits());
+    } catch (const BaseSemantics::Exception &e) {
+        after(e);
+        throw;
+    } catch (...) {
+        after_exception();
+        throw;
+    }
+}
+
+BaseSemantics::SValue::Ptr
 RiscOperators::fpDivide(const BaseSemantics::SValue::Ptr &a, const BaseSemantics::SValue::Ptr &b, SgAsmFloatType *abt) {
     before("fpDivide", a, b, abt);
     try {

@@ -767,6 +767,9 @@ public:
     virtual SValuePtr fpDivide(const SValuePtr &a, const SValuePtr &b);
     virtual SValuePtr fpDivide(const SValuePtr &a, const SValuePtr &b, SgAsmFloatType *fpType);
 
+    /** Computes the floating-point remainder of @p a divided by @p b. */
+    virtual SValuePtr fpModulo(const SValuePtr &a, const SValuePtr &b);
+
     /** Square root.
      *
      *  Computes and returns the square root of the specified floating-point value.  Both values have the same type. */
