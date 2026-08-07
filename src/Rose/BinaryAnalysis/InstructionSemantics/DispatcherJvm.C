@@ -1394,9 +1394,18 @@ struct IP_dmul: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_dneg: P {
-    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
+    void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ASSERT_require2(false, "dneg unimplemented");
+
+        auto sval = ops->popOperand();
+        ASSERT_require(sval->kind() == ValueKind::Float64);
+        ASSERT_require(sval->nBits() == 64);
+
+        auto signMask = ops->number_(64, 0x8000000000000000ull);
+        auto result = ops->xor_(sval, signMask);
+        result->kind(ValueKind::Float64);
+
+        ops->pushOperand(result);
     }
 };
 
@@ -1971,9 +1980,18 @@ struct IP_fmul: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_fneg: P {
-    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
+    void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ASSERT_require2(false, "fneg unimplemented");
+
+        auto sval = ops->popOperand();
+        ASSERT_require(sval->kind() == ValueKind::Float32);
+        ASSERT_require(sval->nBits() == 32);
+
+        auto signMask = ops->number_(32, 0x80000000u);
+        auto result = ops->xor_(sval, signMask);
+        result->kind(ValueKind::Float32);
+
+        ops->pushOperand(result);
     }
 };
 
@@ -4182,6 +4200,8 @@ DispatcherJvm::initializeDispatchTable() {
     // Unary(ish) operators
     iprocSet(0x74,  new Jvm::IP_ineg);
     iprocSet(0x75,  new Jvm::IP_lneg);
+    iprocSet(0x76,  new Jvm::IP_fneg);
+    iprocSet(0x77,  new Jvm::IP_dneg);
     iprocSet(0x78,  new Jvm::IP_ishl);
     iprocSet(0x79,  new Jvm::IP_lshl);
     iprocSet(0x7a,  new Jvm::IP_ishr);
