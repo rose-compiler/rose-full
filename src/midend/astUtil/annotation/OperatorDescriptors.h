@@ -156,8 +156,8 @@ class OperatorSideEffectDescriptor
     }
   template <class CollectObject>
   void collect(AstInterface& fa, AstInterface::AstNodeList& args,
-                       CollectObject& collect_f,
-                       Map2Object<AstInterface*, AstNodePtr, AstNodePtr>* astcodegen =0) {
+               CollectObject& collect_f,
+               Map2Object<AstInterface*, AstNodePtr, AstNodePtr>* /*astcodegen*/ =0) {
     ReplaceParams paramMap = BaseClass::GenReplaceParams(fa, args);
     for (const_iterator p = begin(); p != BaseClass::end(); ++p) {
       BaseDescriptor exp = (*p), arg = exp;
