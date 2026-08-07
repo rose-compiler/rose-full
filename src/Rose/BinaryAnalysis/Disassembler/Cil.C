@@ -457,7 +457,7 @@ Cil::disassembleOne(const MemoryMap::Ptr &map, Address va, AddressSet*)
         }
 
         case 0x45: { // Cil_switch: jump to one of n values
-           const std::int32_t MAX_NTARGETS = 2048;
+           const std::int32_t MAX_NTARGETS = 8192; // the largest number of entries seen so far was 5455
            const std::int32_t minSwitchSize = 1 + sizeof(uint32_t);
            const uint32_t nTargets = ByteOrder::leToHost(*((uint32_t*)(rawBytes.data()+1)));
 
