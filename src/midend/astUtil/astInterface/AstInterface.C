@@ -1751,25 +1751,9 @@ IsVariableDecl(const AstNodePtr& _s, AstNodeList* vars, AstNodeList* init)
       DebugDecl([&_s]{return "Finding variable decl:" + AstToString(_s);});
       if (vars == 0 && init == 0)
          return true;
-      SgExpression* def = cur_var->get_initializer();
-      if (def != 0) {
-         switch (def->variantT()) {
-             case V_SgAssignInitializer:
-                def = isSgAssignInitializer(def)->get_operand();
-                break;
-             case V_SgAggregateInitializer: {
-                SgExpressionPtrList& list = isSgAggregateInitializer(def)->get_initializers()->get_expressions();
-                for (SgExpression* e : list) {
-                   DebugDecl([&e]{return "Checking aggregate variable decl:" + AstToString(e);});
-                   IsVariableDecl(e, vars, init);
-                }
-                break;
-              }
-             default: break;
-         }
-      } 
       if (vars != 0) vars->push_back(cur_var);
-      if (init != 0) init->push_back(def);
+      if (init != 0) init->push_back(AST_NULL);
+      IsVariableDecl(cur_var->get_initializer(), vars, init);
       return true;
      }
   case V_SgDesignatedInitializer: {
@@ -1781,8 +1765,33 @@ IsVariableDecl(const AstNodePtr& _s, AstNodeList* vars, AstNodeList* init)
       if (init != 0) init->push_back(initializer);
       return true;
    }
+  case V_SgAggregateInitializer: {
+      DebugDecl([&_s]{return "Finding variable decl:" + AstToString(_s);});
+      SgAggregateInitializer* aggr_init = isSgAggregateInitializer(s);
+      auto& list = aggr_init->get_initializers()->get_expressions();
+      for (auto& cur_var : list) {
+         IsVariableDecl(cur_var, vars, init);
+      }
+      return true;
+   }
+  case V_SgAssignInitializer: {
+      DebugDecl([&_s]{return "Finding variable decl:" + AstToString(_s);});
+      auto* def = isSgAssignInitializer(s)->get_operand();
+      if (init != 0) {
+          if ((init->back()) == AST_NULL) {
+             (init->back()) =  def;
+          } else {
+            if (vars != 0) {
+              vars->push_back(vars->back());
+            }
+            init->push_back(def);
+          }
+      }
+      return true;
+     } 
   default:
-      return false;
+     DebugDecl([&_s]{return "Not recognized variable decl:" + AstToString(_s);});
+  return false;
   }
 }
 
@@ -4907,6 +4916,7 @@ std::string AstInterface:: GetVariableSignature(const AstNodePtr& _variable) {
     AstNodeList args;
     if (AstInterface::IsArrayAccess(variable, &f)) {
        res += "_deref_(" + GetVariableSignature(f.get_ptr()) + ")";
+       DebugVariable([&res](){ return "Variable signature:" + res; });
        return res;
     } 
     if (AstInterface::IsFunctionCall(variable, &f, &args)) {
@@ -4918,22 +4928,28 @@ std::string AstInterface:: GetVariableSignature(const AstNodePtr& _variable) {
          res += AstInterface::GetVariableSignature(x);
        }
        res  +=  ")";
+       DebugVariable([&res](){ return "Variable signature:" + res; });
        return res;
     }
     }
     {
      AstNodeType alloc_type; 
      if (IsMemoryAllocation(variable, &alloc_type)) {
-        return res + "new_" + GetGlobalUniqueName(variable, GetTypeName(alloc_type), /*do_not_use_file_name*/true);
+        res = res + "new_" + GetGlobalUniqueName(variable, GetTypeName(alloc_type), /*do_not_use_file_name*/true);
+        DebugVariable([&res](){ return "Variable signature:" + res; });
+        return res;
      }
     }
     {
     std::string name;
     if (IsVarRef(variable, 0, &name, 0, 0, /*use_global_unique_name=*/true)) {
-      return res + name;
-    }
+        res = res + name;
+        DebugVariable([&res](){ return "Variable signature:" + res; });
+       return res; 
+      }
     }
     res += "_UNKNOWN_" + variable->class_name();
+    DebugVariable([&res](){ return "Variable signature:" + res; });
     return res;
 }
 

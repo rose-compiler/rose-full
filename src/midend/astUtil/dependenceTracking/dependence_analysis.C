@@ -170,7 +170,6 @@ bool WholeProgramDependenceAnalysis<NodeIterator,EdgeIterator>:: ComputeDependen
     {
       SgNode* func = *p;
       if (func == 0) continue;
-      std::string defn_file_name;
       Log.push("Analyzing declaration " + func->unparseToString() + " in " + fname);
       ComputeDependences(func, root);
     }
