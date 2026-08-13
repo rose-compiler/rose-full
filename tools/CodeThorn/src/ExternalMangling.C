@@ -297,6 +297,7 @@ namespace
            );
   }
 
+/*
   bool anonymousTypedef(const SgClassDeclaration* dcl)
   {
     return anonymousTypedef_(dcl);
@@ -306,6 +307,7 @@ namespace
   {
     return anonymousTypedef_(dcl);
   }
+*/
 
 #if WITH_CUSTOM_LINKAGE_HANDLER
   using StaticSuffixFn = std::function<std::string()>;
@@ -653,27 +655,6 @@ namespace
       void handle(const SgTypedefType& n)
       {
         sg::NotNull<const SgType> baseTy = n.get_base_type();
-
-        // since anonymous types in a typedef context get a name, we can use
-        //   that name to resolve typenames to anonymous types in this context.
-        // Note, this differs from the Itanium name mangling scheme where the typedef
-        //   name is transferred to anonymous type.
-        if (false)
-        {
-          bool                      typedefsAnonymousDecl = false;
-
-
-          // for a anonymous class/union/enum declared in a typedef
-          //   use the typedef name.
-          if (const SgClassType* baseClassTy = isSgClassType(baseTy))
-            typedefsAnonymousDecl = anonymousTypedef(isSgClassDeclaration(baseClassTy->get_declaration()));
-          else if (const SgEnumType* baseEnumTy = isSgEnumType(baseTy))
-            typedefsAnonymousDecl = anonymousTypedef(isSgEnumDeclaration(baseEnumTy->get_declaration()));
-
-          res = typedefsAnonymousDecl ? mangleDeclaration(n.get_declaration())
-                                      : mangleType(n.get_base_type(), ctx.inclReturnType(Ctx::WITH_RETURN_TYPE));
-          return;
-        }
 
         res = mangleType(*baseTy, ctx.inclReturnType(Ctx::WITH_RETURN_TYPE));
       }
@@ -1570,7 +1551,7 @@ namespace
 
   using MangledNameHashKey = std::tuple<const SgNode*, ExternalManglingContext>;
 
-  struct MangledNameHashKeyFn : public std::unary_function<MangledNameHashKey, std::size_t>
+  struct MangledNameHashKeyFn
   {
     std::size_t operator()(const MangledNameHashKey& key) const
     {

@@ -96,7 +96,7 @@ namespace CodeThorn {
 
     EStatePtr reInitEState(EStatePtr estate, Label label, CallString cs, PStatePtr pstate, InputOutput io);
     EStatePtr reInitEState(EStatePtr estate, Label label, CallString cs, PStatePtr pstate);
-    
+
     bool isApproximatedBy(EStatePtr es1, EStatePtr es2);
     EState combine(EStatePtr es1, EStatePtr es2);
     void combineInPlace1st(EStatePtr es1, EStatePtr es2);
@@ -180,11 +180,11 @@ namespace CodeThorn {
     // old methods, to be removed once older solvers are adapted as well
     void transferFunctionCallReturnContextInPlaceOld(CallString& cs, Label lab);
     bool isFeasiblePathContextOld(CallString& cs,Label lab);
-    
+
     CodeThorn::VariableIdSet determineUsedGlobalVars(SgProject* root, CodeThorn::VariableIdSet& setOfGlobalVars);
     void initializeGlobalVariables(SgProject* root, EStatePtr estate);
     void initializeArbitraryMemory(EStatePtr estate);
-    
+
     // modifies PState with written initializers
     EStatePtr transferVariableDeclarationEState(SgVariableDeclaration* decl,EStatePtr currentEState, Label targetLabel);
     EStatePtr transferVariableDeclarationWithInitializerEState(SgVariableDeclaration* decl, SgInitializedName* initName, SgInitializer* initializer, VariableId initDeclVarId, EStatePtr currentEState, Label targetLabel);
@@ -350,7 +350,7 @@ namespace CodeThorn {
     size_t getMaxCSLength();
 
     bool isRegisterAddress(AbstractValue memLoc);
-    
+
   protected:
     AbstractValue abstractValueFromSgValueExp(SgValueExp* valueExp, EvalMode mode);
     std::map<std::string,ReadWriteListener*> _readWriteListenerMap;
@@ -564,6 +564,10 @@ namespace CodeThorn {
     uint64_t _functionsAnalyzedNum=0;
     size_t _maxStateSize=0;
     size_t _maxCSLength=0;
+
+    // the inherted version is privatized (explicitely hidden) so clients
+    // use this' specialized version of initializeGlobalVariables.
+    using DFTransferFunctions::initializeGlobalVariables;
   };
 }
 
