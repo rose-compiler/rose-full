@@ -1544,11 +1544,12 @@ SgAsmJvmModule* SgAsmJvmModule::parse(SgAsmJvmConstantPool* pool)
   uint16_t requiresCount;
   Jvm::read_value(pool, requiresCount);
   for (int ii = 0; ii < requiresCount; ii++) {
-    SgAsmJvmModule::Requires* requires{new SgAsmJvmModule::Requires{}};
-    Jvm::read_value(pool, requires->requires_index);
-    Jvm::read_value(pool, requires->requires_flags);
-    Jvm::read_value(pool, requires->requires_version_index);
-    get_requires().push_back(requires);
+    // Note: requires is a C++20 keyword, using aRequires instead
+    SgAsmJvmModule::Requires* aRequires{new SgAsmJvmModule::Requires{}};
+    Jvm::read_value(pool, aRequires->requires_index);
+    Jvm::read_value(pool, aRequires->requires_flags);
+    Jvm::read_value(pool, aRequires->requires_version_index);
+    get_requires().push_back(aRequires);
   }
 
   // exports[]

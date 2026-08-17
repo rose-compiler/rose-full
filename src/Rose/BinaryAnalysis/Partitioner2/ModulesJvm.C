@@ -1971,15 +1971,19 @@ static void tdefl_optimize_huffman_table(tdefl_compressor *d, int table_num, int
   }
 }
 
-#define TDEFL_PUT_BITS(b, l) do { \
-  mz_uint bits = b; mz_uint len = l; MZ_ASSERT(bits <= ((1U << len) - 1U)); \
-  d->m_bit_buffer |= (bits << d->m_bits_in); d->m_bits_in += len; \
-  while (d->m_bits_in >= 8) { \
-    if (d->m_pOutput_buf < d->m_pOutput_buf_end) \
-      *d->m_pOutput_buf++ = (mz_uint8)(d->m_bit_buffer); \
-      d->m_bit_buffer >>= 8; \
-      d->m_bits_in -= 8; \
-  } \
+#define TDEFL_PUT_BITS(b, l) do {                              \
+    mz_uint bits = b;                                          \
+    mz_uint len = l;                                           \
+    MZ_ASSERT(bits <= ((1U << len) - 1U));                     \
+    d->m_bit_buffer |= (bits << d->m_bits_in);                 \
+    d->m_bits_in += len;                                       \
+    while (d->m_bits_in >= 8) {                                \
+        if (d->m_pOutput_buf < d->m_pOutput_buf_end) {         \
+           *d->m_pOutput_buf++ = (mz_uint8)(d->m_bit_buffer);  \
+        }                                                      \
+        d->m_bit_buffer >>= 8;                                 \
+        d->m_bits_in -= 8;                                     \
+    }                                                          \
 } MZ_MACRO_END
 
 #define TDEFL_RLE_PREV_CODE_SIZE() { if (rle_repeat_count) { \
