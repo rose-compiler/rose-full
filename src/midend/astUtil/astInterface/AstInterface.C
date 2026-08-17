@@ -1035,6 +1035,8 @@ std::string AstInterface::AstTypeToString( const AstNodePtr& n) {
   std::string res;
   switch (n.get_type()) {
    case AstNodePtr::SpecialAstType::NULL_AST:  res = "_NULL_";  break;
+   case AstNodePtr::SpecialAstType::NULL_AST_ARRAY_INDEX:  res = "_NULL_ARRAY_IDX";  break;
+   case AstNodePtr::SpecialAstType::NULL_AST_FIELD_INDEX:  res = "_NULL_FIELD_IDX";  break;
    case AstNodePtr::SpecialAstType::UNKNOWN_AST:  res = "_UNKNOWN_";  break;
    case AstNodePtr::SpecialAstType::UNKNOWN_FUNCTION_CALL:  
         res = "_UNKNOWN_FUNCTION_CALL_"; break;
@@ -1726,34 +1728,45 @@ IsAliasingDecl( const AstNodePtr& _s, AstList* vars, AstList* aliases)
 //! Check if $_s$ is a variable declaration node; 
 //! If yes, return the declared variables and their initial values
 bool AstInterface:: 
-IsVariableDecl(const AstNodePtr& _s, AstNodeList* vars, AstNodeList* init)
+IsVariableDecl(const AstNodePtr& _s, AstNodeList* vars, AstNodeList* init, AstList* designators)
 {
   SgNode* s = AstNodePtrImpl(_s).get_ptr(); 
 
   if (s == 0) return false;
 
+  // Sanity checks since we have three lists that need to be coordinated.
+  // init may have fewer entries when we are dealing with aggregate initializations.
+  assert(vars == 0 || init == 0 || init->size() <= vars->size()); 
+  assert(vars == 0 || designators == 0 || designators->size() <= vars->size()); 
+  assert(init == 0 || designators == 0 || designators->size() == init->size()); 
+
   switch (s->variantT()) {
     case V_SgVariableDeclaration: {
       SgVariableDeclaration *decl = isSgVariableDeclaration(s);
       DebugDecl([&_s]{return "Finding variable decl:" + AstToString(_s);});
-      if (vars == 0 && init == 0)
+      if (vars == 0 && init == 0 && designators == 0)
          return true;
       SgInitializedNamePtrList& names = decl->get_variables();
       for ( SgInitializedNamePtrList::iterator p = names.begin(); 
             p != names.end(); ++p) {
          SgInitializedName* cur_var = (*p);
-         IsVariableDecl(cur_var, vars, init);
+         IsVariableDecl(cur_var, vars, init, designators);
       }
       return true;
      }
     case V_SgInitializedName: {
       SgInitializedName* cur_var = isSgInitializedName(s);
       DebugDecl([&_s]{return "Finding variable decl:" + AstToString(_s);});
-      if (vars == 0 && init == 0)
+      if (vars == 0 && init == 0 && designators == 0)
          return true;
-      if (vars != 0) vars->push_back(cur_var);
+      if (vars != 0) { 
+           vars->push_back(cur_var);
+      }
       if (init != 0) init->push_back(AST_NULL);
-      IsVariableDecl(cur_var->get_initializer(), vars, init);
+      if (designators != 0) {
+          designators->push_back(cur_var->get_type());
+      }
+      IsVariableDecl(cur_var->get_initializer(), vars, init, designators);
       return true;
      }
   case V_SgDesignatedInitializer: {
@@ -1761,30 +1774,72 @@ IsVariableDecl(const AstNodePtr& _s, AstNodeList* vars, AstNodeList* init)
       SgDesignatedInitializer* design_init = isSgDesignatedInitializer(s);
       SgExpression *  designator  = design_init->get_designatorList()->get_expressions()[0];
       SgInitializer * initializer = design_init->get_memberInit();
-      if (vars != 0) vars->push_back(designator);
+      if (designators != 0) designators->push_back(designator);
       if (init != 0) init->push_back(initializer);
+      if (vars != 0) vars->push_back(vars->back()); // same aggregate variable. TODO: can extend to dot exp. 
       return true;
    }
   case V_SgAggregateInitializer: {
+      if (init==0 || init->empty()) return false; // No variables; only empty initializations.
       DebugDecl([&_s]{return "Finding variable decl:" + AstToString(_s);});
       SgAggregateInitializer* aggr_init = isSgAggregateInitializer(s);
+      if (init != 0) {
+         if (!init->back().is_null()) { 
+             init->push_back(AST_NULL); 
+             if (vars != 0) vars->push_back(vars->back()); 
+             if (designators != 0) designators->push_back(designators->back()); 
+         }
+         if (designators != 0) {
+            auto* t = designators->back().get_ptr();
+            assert(t != 0);
+            switch (t->variantT()) {
+              case V_SgArrayType:
+                init->back() = AST_NULL_ARRAY_INDEX(std::to_string(1));
+                designators->back() = isSgArrayType(t)->get_base_type();
+                break;
+              case V_SgClassType: {
+                init->back() = AST_NULL_FIELD_INDEX(std::to_string(1));
+                auto* class_def = GetClassDefn(isSgClassDeclaration(isSgClassType(t)->get_declaration()));
+                if (vars != 0) {
+                  // Pop off aggregate entries to match members with elemental initializations.
+                  // Here we assume there is at least one member variable inside class_def.
+                  while (vars->size() >= init->size()) vars->pop_back();
+                  for (auto* member :  class_def->get_members()) {  
+                     // Here future variables are pushed in.
+                     IsVariableDecl(member, vars, 0, 0);
+                  }
+                }
+                break;
+                }
+              default: break;
+             }
+          }
+      }
       auto& list = aggr_init->get_initializers()->get_expressions();
       for (auto& cur_var : list) {
-         IsVariableDecl(cur_var, vars, init);
+         IsVariableDecl(cur_var, vars, init, designators);
       }
       return true;
    }
   case V_SgAssignInitializer: {
       DebugDecl([&_s]{return "Finding variable decl:" + AstToString(_s);});
-      auto* def = isSgAssignInitializer(s)->get_operand();
       if (init != 0) {
-          if ((init->back()) == AST_NULL) {
-             (init->back()) =  def;
-          } else {
-            if (vars != 0) {
-              vars->push_back(vars->back());
-            }
-            init->push_back(def);
+          if (init->empty()) return false; // We don't have an earlier SgInitializedName. Unexpected.
+          auto* def = isSgAssignInitializer(s)->get_operand();
+          auto cur_init= init->back();
+          if (!cur_init.is_null()) { 
+             // add new entry
+             init->push_back(def); 
+             if (vars != 0) vars->push_back(vars->back()); 
+             if (designators != 0) designators->push_back(designators->back()); 
+          } 
+          init->back()  =  def;
+          if (vars != 0 && vars->size() > init->size() && cur_init.is_null_field_index()) {
+               // update the vars entry to be the member variable.
+               int index = atoi(cur_init.get_signature().c_str()); 
+               assert(index != 0);
+               init->push_back(AST_NULL_FIELD_INDEX(std::to_string(index+1)));
+               if (designators != 0) designators->push_back(designators->back());
           }
       }
       return true;
@@ -4874,6 +4929,8 @@ std::string AstInterface:: GetVariableSignature(const AstNodePtr& _variable) {
         return variable_name;
     }
     switch (variable->variantT()) {
+     case V_SgVariableSymbol:
+          return isSgVariableSymbol(variable)->get_name();
      case V_SgNamespaceDeclarationStatement:
           return isSgNamespaceDeclarationStatement(variable)->get_name().getString();
      case V_SgUsingDirectiveStatement:

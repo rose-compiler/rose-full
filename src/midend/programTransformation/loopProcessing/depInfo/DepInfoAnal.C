@@ -46,20 +46,20 @@ bool AnalyzeStmtRefs( AstInterface& fa, const AstNodePtr& n,
                       CollectObject<AstNodePtr> &rRefs)
 {
   bool has_unknown = false;
-  std::function<bool(AstNodePtr, AstNodePtr)> colw = [&wRefs, &has_unknown]
-          (AstNodePtr mod_first, AstNodePtr /*mod_second*/) {
-               if (mod_first == AST_UNKNOWN) {
+  std::function<bool(const SideEffectAnalysisInterface::SideEffectInfo&)> colw = [&wRefs, &has_unknown]
+          (const SideEffectAnalysisInterface::SideEffectInfo& info) {
+               if (info.first_.is_unknown()) {
                   has_unknown = true;
                   return true; 
                }
-                  return wRefs(mod_first); };
-  std::function<bool(AstNodePtr, AstNodePtr)> colr = [&rRefs, &has_unknown]
-          (AstNodePtr read_first, AstNodePtr /*read_second*/) {
-               if (read_first == AST_UNKNOWN) {
+               return wRefs(info.first_); };
+  std::function<bool(const SideEffectAnalysisInterface::SideEffectInfo&)> colr = [&rRefs, &has_unknown]
+          (const SideEffectAnalysisInterface::SideEffectInfo& info) {
+               if (info.first_.is_unknown()) {
                   has_unknown = true;
                   return true; 
                }
-                  return rRefs(read_first); };
+               return rRefs(info.first_); };
   StmtSideEffectCollect op(fa, LoopTransformInterface::getSideEffectInterface());
   op.set_modify_collect(colw);
   op.set_read_collect(colr);

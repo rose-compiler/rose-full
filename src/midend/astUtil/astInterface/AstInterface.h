@@ -19,7 +19,7 @@ class AstNodePtr {
   typedef SgNode BaseType;
   //! The UNKNOWN_AST and NULL_AST types have null as their values.
   //! The other types have concrete BaseType pointers as their values.
-  enum class SpecialAstType {SG_AST, GLOBAL_SIGNATURE, UNKNOWN_FUNCTION_CALL, UNKNOWN_PTR_REF, UNKNOWN_AST, NULL_AST}; 
+  enum class SpecialAstType {SG_AST = 0, GLOBAL_SIGNATURE = 1, UNKNOWN_MIN=2, UNKNOWN_FUNCTION_CALL=2, UNKNOWN_PTR_REF=3, UNKNOWN_AST=4, UNKNOWN_MAX=4, NULL_AST_MIN=5, NULL_AST=5, NULL_AST_ARRAY_INDEX=6, NULL_AST_FIELD_INDEX=7, NULL_AST_MAX=7, AST_TYPE_MAX=7}; 
  private:
   BaseType* repr_;
   SpecialAstType nodetype_;
@@ -28,34 +28,30 @@ class AstNodePtr {
   AstNodePtr(BaseType* _repr=0) : repr_(_repr), nodetype_(SpecialAstType::SG_AST) 
     { if (_repr == 0) nodetype_ = SpecialAstType::NULL_AST;  }
   AstNodePtr( const AstNodePtr& that) : repr_(that.repr_), nodetype_(that.nodetype_), sig_(that.sig_) {}
-  AstNodePtr(const std::string& sig) : repr_(0), nodetype_(SpecialAstType::GLOBAL_SIGNATURE), sig_(sig) {}
+  AstNodePtr(const std::string& sig, SpecialAstType t=SpecialAstType::GLOBAL_SIGNATURE, BaseType* repr=0) : repr_(repr), nodetype_(t), sig_(sig) {
+      if (t > SpecialAstType::AST_TYPE_MAX) {
+          std::cerr << "Error: UNKNOWN Special AST type!";
+          assert(0);
+      }
+  }
   AstNodePtr(SpecialAstType t, BaseType* repr = 0) : repr_(repr), nodetype_(t) {
-      switch (t) {
-       case SpecialAstType::UNKNOWN_AST : 
-       case SpecialAstType::UNKNOWN_FUNCTION_CALL : 
-       case SpecialAstType::NULL_AST : 
-           break;
-       default:
+      if (t > SpecialAstType::AST_TYPE_MAX) {
           std::cerr << "Error: UNKNOWN Special AST type!";
           assert(0);
       }
    }
   ~AstNodePtr() {}
   bool is_sage_ast() const { return nodetype_ == SpecialAstType::SG_AST; }
-  bool is_null() const { return nodetype_ == SpecialAstType::NULL_AST; }
-  bool is_unknown() const { switch (nodetype_) {
-                              case SpecialAstType::UNKNOWN_AST:
-                              case SpecialAstType::UNKNOWN_FUNCTION_CALL:
-                              case SpecialAstType::UNKNOWN_PTR_REF:
-                                   return true;
-                              default:
-                                  return false;
-                             }
-                          }
+  bool is_unknown() const { return nodetype_ >=  SpecialAstType::UNKNOWN_MIN && 
+                                   nodetype_ <= SpecialAstType::UNKNOWN_MAX; }
   bool is_unknown_function_call() const { return nodetype_ ==  SpecialAstType::UNKNOWN_FUNCTION_CALL; }
   bool is_unknown_reference() const { return nodetype_ ==  SpecialAstType::UNKNOWN_PTR_REF; }
   void set_is_unknown_function_call() { nodetype_ = SpecialAstType::UNKNOWN_FUNCTION_CALL; }
   void set_is_unknown_reference() { nodetype_ = SpecialAstType::UNKNOWN_PTR_REF; }
+  bool is_null_array_index() const { return nodetype_ ==  SpecialAstType::NULL_AST_ARRAY_INDEX; }
+  bool is_null_field_index() const { return nodetype_ ==  SpecialAstType::NULL_AST_FIELD_INDEX; }
+  bool is_null() const { return nodetype_ >=  SpecialAstType::NULL_AST_MIN &&
+                                   nodetype_ <= SpecialAstType::NULL_AST_MAX; }
   AstNodePtr& operator = (const AstNodePtr &that) 
       { repr_ = that.repr_; nodetype_ = that.nodetype_; sig_ = that.sig_; return *this; }
   bool operator != (const AstNodePtr &that) const
@@ -77,6 +73,9 @@ class AstNodePtr {
   std::string get_signature() const { return sig_; }
 };
 #define AST_NULL AstNodePtr(AstNodePtr::SpecialAstType::NULL_AST)
+#define AST_NULL_TYPE AstNodeType()
+#define AST_NULL_ARRAY_INDEX(i) AstNodePtr(i, AstNodePtr::SpecialAstType::NULL_AST_ARRAY_INDEX)
+#define AST_NULL_FIELD_INDEX(i) AstNodePtr(i, AstNodePtr::SpecialAstType::NULL_AST_FIELD_INDEX)
 #define AST_UNKNOWN AstNodePtr(AstNodePtr::SpecialAstType::UNKNOWN_AST)
 #define AST_UNKNOWN_CALL(x) AstNodePtr(AstNodePtr::SpecialAstType::UNKNOWN_FUNCTION_CALL, x)
 #define TYPE_NULL AstNodeType(AstNodeType::SpecialAstType::NULL_TYPE)
@@ -218,8 +217,10 @@ public:
   static AstNodeList GetChildrenList( const AstNodePtr &n);
 
   bool IsDecls( const AstNodePtr& s) ;
+  // Check if exp is a variable declaration, and if yes, break it down into individual components, 
+  // stored in vars (variables) and  inits (initializations for variables).
   static bool IsVariableDecl( const AstNodePtr& exp, AstList* vars = 0,
-                                 AstList* inits = 0);
+                                 AstList* inits = 0, AstList* designators=0);
   //! Check if exp declares a set of variables to be aliased to non-local storages, 
   //! represented by the returned global_signatures.
   bool IsAliasingDecl( const AstNodePtr& exp, AstList* vars = 0, AstList* aliases = 0);

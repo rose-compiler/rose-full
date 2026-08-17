@@ -31,12 +31,12 @@ class StmtInfoCollect : public ProcessAstTreeBase<AstInterface::AstNodePtr>
   AstNodePtr curstmt;
  protected:
   using ProcessAstTreeBase<AstInterface::AstNodePtr>::Skip;
-  virtual void AppendVariableDecl(AstInterface& fa, const AstNodePtr& variable, const AstNodePtr& var_init) = 0; 
-  virtual void AppendAliasDecl(AstInterface& fa, const AstNodePtr& variable, const AstNodePtr& var_init) = 0;
-  virtual void AppendModLoc( AstInterface& fa, const AstNodePtr& mod, 
-                              const AstNodePtr& rhs = AstNodePtr()) = 0;
+  virtual void AppendVariableDecl(AstInterface& fa, const AstNodePtr& variable, const AstNodePtr& var_init,
+                                  const AstNodePtr& attr) = 0; 
+  virtual void AppendAliasDecl(AstInterface& fa, const AstNodePtr& variable, const AstNodePtr& var_init)=0;
+  virtual void AppendModLoc( AstInterface& fa, const AstNodePtr& mod, const AstNodePtr& rhs) = 0;
   virtual void AppendReadLoc( AstInterface& fa, const AstNodePtr& read, 
-                              const AstNodePtr& lhs = 0) = 0; 
+                              const AstNodePtr& lhs) = 0; 
   virtual void AppendFuncCall( AstInterface& fa, const AstNodePtr& fc) = 0; 
   virtual void AppendMemoryAllocate( AstInterface& /* fa */, const AstNodePtr& /* s */) {}
   virtual void AppendMemoryFree( AstInterface& /* fa */, const AstNodePtr& /* s */) {}
@@ -80,12 +80,12 @@ class StmtSideEffectCollect : public StmtInfoCollect, public SideEffectAnalysisI
   protected:
     using StmtInfoCollect::AppendFuncCallArguments;
     using StmtInfoCollect::AppendFuncCallWrite;
-    virtual void AppendVariableDecl(AstInterface& /* fa */, const AstNodePtr& variable, const AstNodePtr& var_init) override;
+    virtual void AppendVariableDecl(AstInterface& /* fa */, const AstNodePtr& variable, const AstNodePtr& var_init, const AstNodePtr& attr) override;
     virtual void AppendAliasDecl(AstInterface& /*fa*/, const AstNodePtr& variable, const AstNodePtr& var_init) override;
     virtual void AppendModLoc( AstInterface& fa, const AstNodePtr& mod,
-                              const AstNodePtr& rhs = AstNodePtr()) override;
+                              const AstNodePtr& rhs) override;
     virtual void AppendReadLoc( AstInterface& fa, const AstNodePtr& read, 
-                              const AstNodePtr& lhs = 0) override;
+                              const AstNodePtr& lhs) override;
     virtual void AppendFuncCall( AstInterface& fa, const AstNodePtr& fc) override;
     virtual void AppendMemoryAllocate( AstInterface& /* fa */, const AstNodePtr& s) override;
     virtual void AppendMemoryFree( AstInterface& /* fa */, const AstNodePtr& s) override;
@@ -159,7 +159,7 @@ class StmtVarAliasCollect
   bool hasunknown, hasresult;
 
   UF_elem* get_alias_map( const std::string& varname, const AstNodePtr& scope);
-  virtual void AppendVariableDecl(AstInterface& fa, const AstNodePtr& variable, const AstNodePtr& var_init) override; 
+  virtual void AppendVariableDecl(AstInterface& fa, const AstNodePtr& variable, const AstNodePtr& var_init, const AstNodePtr& attr) override; 
   virtual void AppendAliasDecl(AstInterface& fa, const AstNodePtr& variable, const AstNodePtr& var_init) override; 
   virtual void AppendModLoc( AstInterface& fa, const AstNodePtr& mod,
                               const AstNodePtr& rhs = AstNodePtr()) override;
@@ -182,17 +182,17 @@ class ModifyVariableMap : public StmtSideEffectCollect
   typedef std::map <std::string, VarModSet, std::less<std::string> > VarModInfo;
   VarModInfo varmodInfo;
   Select sel;
-  std::function<bool(AstNodePtr,AstNodePtr)> collect_modify;
+  std::function<bool(const StmtSideEffectCollect::SideEffectInfo&)> collect_modify;
 
   public:
    AstInterface& get_astInterface() { return fa_; }
    ModifyVariableMap(AstInterface& _fa, Select _sel,
                      FunctionSideEffectInterface* a=0) 
      : StmtSideEffectCollect(_fa,a), sel(_sel) {
-      collect_modify = [this](AstNodePtr mod_first, AstNodePtr /*mod_second*/) {
+      collect_modify = [this](const SideEffectInfo& info) {
          std::string varname;
-         if (fa_.IsVarRef(mod_first,0, &varname)) {
-             AstNodePtr l = fa_.GetParent(mod_first);
+         if (fa_.IsVarRef(info.first_,0, &varname)) {
+             AstNodePtr l = fa_.GetParent(info.first_);
              VarModSet& cur = varmodInfo[varname];
              for ( ; l != 0; l = fa_.GetParent(l)) {
                if (sel(fa_,l))

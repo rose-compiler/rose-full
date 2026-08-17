@@ -106,65 +106,65 @@ build( AstInterface& fa, ReachingDefinitionAnalysis& r,
          }
       };
       // Collecting read set.
-      std::function<bool(AstNodePtr,AstNodePtr)>  opread = 
+      std::function<bool(const SideEffectAnalysisInterface::SideEffectInfo&)>  opread = 
               [&defvec, this, &fa, &in, &CreateEdges]
-            ( AstNodePtr read_first, AstNodePtr read_second) {
+            ( const SideEffectAnalysisInterface::SideEffectInfo& info) {
         if (DebugDefUseChain())  {
-           std::cerr << "processind read info : " << AstInterface::AstToString(read_first) << " : " << AstInterface::AstToString(read_second) << std::endl;
+           std::cerr << "processind read info : " << AstInterface::AstToString(info.first_) << " : " << AstInterface::AstToString(info.second_) << std::endl;
             DumpDefSet(defvec,in);
         }
-        Node* cur = this->CreateNode( fa, read_first, read_second, false);
+        Node* cur = this->CreateNode( fa, info.first_, info.second_, false);
         if (cur == 0) {
            if (DebugDefUseChain())
                std::cerr << "do not create node in def-use chain \n";
             return false;
         }
-        CreateEdges( cur, read_first);
+        CreateEdges( cur, info.first_);
         return true;
       };
       // Collecting mod set.
-      std::function<bool(AstNodePtr,AstNodePtr)> opgen = 
+      std::function<bool(const SideEffectAnalysisInterface::SideEffectInfo&)> opgen = 
               [&defvec, &g, &fa, &defmap, &in, &CreateEdges]
-        (AstNodePtr mod_first, AstNodePtr mod_second) {
+        (const SideEffectAnalysisInterface::SideEffectInfo& info) {
           std::string varname;
           AstNodePtr scope;
           if (DebugDefUseChain()) {
-            std::cerr << "processing gen mod info : " << AstInterface::AstToString(mod_first) << " : " << AstInterface::AstToString(mod_second) << std::endl;
+            std::cerr << "processing gen mod info : " << AstInterface::AstToString(info.first_) << " : " << AstInterface::AstToString(info.second_) << std::endl;
             DumpDefSet(defvec,in);
           }
-          typename std::map<AstNodePtr,Node*>::const_iterator p = defmap.find( mod_first);
+          typename std::map<AstNodePtr,Node*>::const_iterator p = defmap.find( info.first_);
           assert( p != defmap.end());
           Node* cur = (*p).second;
-          CreateEdges( cur, mod_first);
-          std::pair<AstNodePtr,AstNodePtr> mod(mod_first, mod_second);
-          if (fa.IsVarRef(mod_first, 0, &varname, &scope)) {
+          CreateEdges( cur, info.first_);
+          std::pair<AstNodePtr,AstNodePtr> mod(info.first_, info.second_);
+          if (fa.IsVarRef(info.first_, 0, &varname, &scope)) {
             g->add_def( in, varname, scope, mod);
           }
           else {
             g->add_unknown_def( in, mod);
           }
           if (DebugDefUseChain()) {
-            std::cerr << "finish processing gen mod info : " << AstInterface::AstToString(mod_first) << " : " << AstInterface::AstToString(mod_second) << std::endl;
+            std::cerr << "finish processing gen mod info : " << AstInterface::AstToString(info.first_) << " : " << AstInterface::AstToString(info.second_) << std::endl;
             DumpDefSet(defvec,in);
           }
           return true;
       };
-      std::function<bool(AstNodePtr, AstNodePtr)> opkill = 
+      std::function<bool(const SideEffectAnalysisInterface::SideEffectInfo&)> opkill = 
                       [&defvec, g, &fa, &in]
-       (AstNodePtr mod_first, AstNodePtr mod_second) {
+       (const SideEffectAnalysisInterface::SideEffectInfo& info) {
           std::string varname;
           AstNodePtr scope;
           if (DebugDefUseChain()) {
-            std::cerr << "processing kill mod info : " << AstInterface::AstToString(mod_first) << " : " << AstInterface::AstToString(mod_second) << std::endl;
+            std::cerr << "processing kill mod info : " << AstInterface::AstToString(info.first_) << " : " << AstInterface::AstToString(info.second_) << std::endl;
             DumpDefSet(defvec,in);
           }
-          if (fa.IsVarRef(mod_first, 0, &varname, &scope)) {
+          if (fa.IsVarRef(info.first_, 0, &varname, &scope)) {
              ReachingDefinitions kill = g->get_def_set(varname, scope);
              kill.complement();
              in &= kill;
            }
            if (DebugDefUseChain()) {
-             std::cerr << "finish processing kill mod info : " << AstInterface::AstToString(mod_first) << " : " << AstInterface::AstToString(mod_second) << std::endl;
+             std::cerr << "finish processing kill mod info : " << AstInterface::AstToString(info.first_) << " : " << AstInterface::AstToString(info.second_) << std::endl;
              DumpDefSet(defvec,in);
            }
            return true;

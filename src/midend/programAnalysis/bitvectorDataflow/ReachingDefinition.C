@@ -19,33 +19,6 @@ bool DebugReachingDef()
 
 
 
-class ConstructReachingDefinitionBase
-{
-  ReachingDefinitionBase& base;
-  AstInterface& fa;
- public:
-  bool operator()( AstNodePtr mod_first, AstNodePtr mod_second)
-  {
-    std::string varname;
-    AstNodePtr scope;
-    std::pair<AstNodePtr,AstNodePtr> mod(mod_first, mod_second);
-    if (fa.IsVarRef(mod.first, 0, &varname, &scope)) {
-      base.add_ref( varname, scope, mod);
-      if (DebugReachingDef())
-         std::cerr << "collecting var ref: " << varname << ":" << AstInterface::AstToString(mod.second) << std::endl;
-    }
-    else {
-      base.add_unknown_def( mod);
-      if (DebugReachingDef())
-         std::cerr << "collecting unknown ref: " << AstInterface::AstToString(mod.first) << ":" << AstInterface::AstToString(mod.second) << std::endl;
-    }
-    return true;
-  }
-public:
-  ConstructReachingDefinitionBase( AstInterface& _fa, ReachingDefinitionBase& b)
-    : base(b), fa(_fa) {}
-};
-
 void ReachingDefinitionBase::
 add_ref( const std::string& varname, const AstNodePtr& scope, const std::pair<AstNodePtr,AstNodePtr>& def)
 {
@@ -69,10 +42,22 @@ collect_refs ( AstInterface& fa, const AstNodePtr& h, FunctionSideEffectInterfac
      if (fa.IsVarRef( cur, 0, &varname, &scope))
         add_ref(varname, scope, std::pair<AstNodePtr, AstNodePtr>(cur, AST_NULL) );
   }
-  ConstructReachingDefinitionBase collect(fa, *this);
-  std::function<bool(AstNodePtr,AstNodePtr)> collect_f = [&collect](AstNodePtr first,AstNodePtr second) {
-       return collect(first, second);
+  std::function<bool(const SideEffectAnalysisInterface::SideEffectInfo&)> collect_f = [&fa,this](const SideEffectAnalysisInterface::SideEffectInfo& info) {
+    std::string varname;
+    AstNodePtr scope;
+    if (fa.IsVarRef(info.first_, 0, &varname, &scope)) {
+      this->add_ref( varname, scope, { info.first_, info.second_ });
+      if (DebugReachingDef())
+         std::cerr << "collecting var ref: " << varname << ":" << AstInterface::AstToString(info.second_) << std::endl;
+    }
+    else {
+      this->add_unknown_def( {info.first_, info.second_});
+      if (DebugReachingDef())
+         std::cerr << "collecting unknown ref: " << AstInterface::AstToString(info.first_) << ":" << AstInterface::AstToString(info.second_) << std::endl;
+    }
+    return true;
   };
+
   StmtSideEffectCollect op(fa, a);
   op.set_modify_collect(collect_f);
   op(h); 
@@ -107,11 +92,11 @@ class CollectLocalDefinitions
   const ReachingDefinitionGenerator& g;
 
  public:
-  bool operator()( AstNodePtr mod_first, AstNodePtr mod_second)
+  bool operator()( const SideEffectAnalysisInterface::SideEffectInfo& info)
   {
     std::string varname;
     AstNodePtr scope;
-    std::pair<AstNodePtr,AstNodePtr> mod(mod_first, mod_second);
+    std::pair<AstNodePtr,AstNodePtr> mod(info.first_, info.second_);
     if (fa.IsVarRef(mod.first, 0, &varname, &scope)) {
       defvars[varname] = std::pair<AstNodePtr, std::pair<AstNodePtr,AstNodePtr> >(scope, mod);
     }
@@ -149,11 +134,11 @@ class CollectKillDefinitions
   ReachingDefinitions kill;
   const ReachingDefinitionGenerator& g;
  public:
-  bool operator()( AstNodePtr mod_first, AstNodePtr /*mod_second*/)
+  bool operator()( const SideEffectAnalysisInterface::SideEffectInfo& info)
   {
     std::string varname;
     AstNodePtr scope;
-    if (fa.IsVarRef(mod_first, 0, &varname, &scope)) {
+    if (fa.IsVarRef(info.first_, 0, &varname, &scope)) {
       kill |= g.get_def_set(varname, scope);
     }
     return true;
@@ -180,8 +165,8 @@ finalize( AstInterface& fa, const ReachingDefinitionGenerator& g,
 {
   CollectLocalDefinitions collectgen(fa, g);
   CollectKillDefinitions collectkill(fa, g);
-  std::function<bool(AstNodePtr, AstNodePtr)> collectgen_f = [&collectgen](AstNodePtr first, AstNodePtr second) { return collectgen(first, second); };
-  std::function<bool(AstNodePtr, AstNodePtr)> collectkill_f = [&collectkill](AstNodePtr first, AstNodePtr second) { return collectkill(first, second); }; 
+  std::function<bool(const SideEffectAnalysisInterface::SideEffectInfo&)> collectgen_f = [&collectgen](const SideEffectAnalysisInterface::SideEffectInfo& info) { return collectgen(info); };
+  std::function<bool(const SideEffectAnalysisInterface::SideEffectInfo&)> collectkill_f = [&collectkill](const SideEffectAnalysisInterface::SideEffectInfo& info) { return collectkill(info); }; 
   StmtSideEffectCollect op(fa, a);
   op.set_modify_collect(collectgen_f);
   op.set_kill_collect(collectkill_f);

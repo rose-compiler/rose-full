@@ -56,7 +56,7 @@ AppendFuncCallWrite( AstInterface& fa, const AstNodePtr& fc)
   }
   for (const AstNodePtr& c : outargs) {
     DebugLocalInfoCollect([&c]() { return "Function write Argument?: " + AstInterface::AstToString(c); } );
-    AppendModLoc( fa, c);
+    AppendModLoc( fa, c, AST_UNKNOWN);
   }
 }
 
@@ -74,7 +74,7 @@ ProcessTree( AstInterface &fa, const AstInterface::AstNodePtr& s,
 {
  if (t == AstInterface::PreVisit) {
    AstInterface::AstNodePtr lhs, rhs, body;
-   AstInterface::AstNodeList vars, args;
+   AstInterface::AstNodeList vars, args, designators;
    AstInterface::OperatorEnum opr;
    std::vector<std::string> sigs;
    bool additional = false;
@@ -122,6 +122,7 @@ ProcessTree( AstInterface &fa, const AstInterface::AstNodePtr& s,
          ++pv;
          ++pa;
       }
+      vars.clear(); args.clear(); // clear out these variables so that they can be used later.
    }
    if (fa.IsAssignment(s, &lhs, &rhs, /*read_lhs*/&additional)) {
        DebugLocalInfoCollect([](){return "Is assignment"; });
@@ -148,20 +149,23 @@ ProcessTree( AstInterface &fa, const AstInterface::AstNodePtr& s,
           default: break;
          }
    }
-   else if (fa.IsVariableDecl( s, &vars, &args)) {
+   else if (fa.IsVariableDecl( s, &vars, &args, &designators)) {
       DebugLocalInfoCollect([](){ return "Is variable declaration."; });
       AstInterface::AstNodeList::const_iterator pv = vars.begin();
+      AstInterface::AstNodeList::const_iterator pt = designators.begin();
       AstInterface::AstNodeList::const_iterator pa = args.begin();
       modstack.push_back(s);
       while (pv != vars.end()) {
-         AstNodePtr ast = *pv;
+         auto ast = *pv;
+         auto t = *pt;
          AstNodePtr read_ast = *pa;
          if (read_ast != 0) {
             operator()(fa, read_ast);
          }
-         AppendVariableDecl( fa, ast, read_ast);
+         AppendVariableDecl( fa, ast, read_ast, t);
          ++pv;
          ++pa;
+         ++pt;
       }
       Skip(s);
    }
@@ -187,15 +191,15 @@ ProcessTree( AstInterface &fa, const AstInterface::AstNodePtr& s,
          AppendFuncCall(fa, AstNodePtrImpl(s).get_ptr());
          Skip(s);
    } 
-    else if (fa.IsAddressOfOp(s, &lhs)) {
+   else if (fa.IsAddressOfOp(s, &lhs)) {
        SkipOnly(lhs);
-    }
-    else if ( fa.IsMemoryAccess(s, &vars)) {
+   }
+   else if ( fa.IsMemoryAccess(s, &vars)) {
         DebugLocalInfoCollect([&s](){ return " append read set " + AstInterface::AstToString(s); });
         if (!fa.IsSameVarRef(s, fa.GetParent(s))) { /*QY: skip s if it refers to the same thing as parent*/
           ModMap *mp = modstack.size()?  &modstack.back().modmap : 0;
           if (mp == 0 || mp->find(s) == mp->end() || (*mp)[s].readlhs) {
-              AppendReadLoc(fa, s);
+              AppendReadLoc(fa, s, AST_NULL);
           }
         }
         AstNodeList arglist;
@@ -220,7 +224,7 @@ ProcessTree( AstInterface &fa, const AstInterface::AstNodePtr& s,
              if (!fa.IsMemoryAccess(c.first, &vars)  && !vars.empty()) {
                  // Here s is not a single reference but is a group of memory references.
                  for (const auto& v : vars) {
-                   AppendModLoc(fa, v);
+                   AppendModLoc(fa, v, AST_UNKNOWN);
                  }
              } else {
                AppendModLoc( fa, c.first, c.second.rhs);
@@ -260,7 +264,7 @@ class CollectReadRefWrap : public CollectObject<AstInterface::AstNodePtr>
       }
       DebugLocalInfoCollect([&ref,this](){ return "appending reading " + AstInterface::AstToString(ref) + " : " + AstInterface::AstToString(stmt); });
       if (collect != 0) {
-        (*collect)( AstNodePtrImpl(ref).get_ptr(), stmt);
+        (*collect)( { ref, stmt, AST_NULL} );
       }
       return true;
    }
@@ -284,10 +288,10 @@ class CollectCallRefWrap : public CollectObject<AstInterface::AstNodePtr>
       AstInterface::AstNodeList args;
       AstInterface::AstNodePtr callee;
       if (fa.IsFunctionCall(ref, &callee)) {
-        (*collect)(AstNodePtrImpl(callee).get_ptr(), stmt);
+        (*collect)( { callee, stmt, AST_NULL});
       } else {
         DebugLocalInfoCollect([&ref](){ return "Error: Expecting a function call but getting:" + AstInterface::AstToString(ref); });
-        (*collect)(AstNodePtrImpl(ref).get_ptr(), stmt);
+        (*collect)({ref, stmt, NULL});
       }
       return true;
    }
@@ -319,7 +323,7 @@ class CollectModRefWrap : public CollectReadRefWrap
       }
       if (mod != 0) {
         DebugLocalInfoCollect([&ref]{ return "collecting modification:" + AstInterface::AstToString(ref); });
-        (*mod)(ref, stmt);
+        (*mod)({ref, stmt, AST_NULL});
       }
       return true;
    }
@@ -329,23 +333,21 @@ void StmtSideEffectCollect::
 AppendAliasDecl(AstInterface& /* fa */, const AstNodePtr& variable, const AstNodePtr& var_init)
     {
      DebugLocalInfoCollect([&variable,&var_init](){ return "appending alias decl " + AstInterface::AstToString(variable) + " = " + AstInterface::AstToString(var_init); });
-     AstNodeType vartype;
      if(curstmt == 0) return;
      if (alias_collect != 0) {
-        (*alias_collect)(variable, var_init);
+        (*alias_collect)( {variable, var_init, AST_NULL} );
      } 
     }
 
 void StmtSideEffectCollect::
-AppendVariableDecl(AstInterface& /* fa */, const AstNodePtr& variable, const AstNodePtr& var_init)
+AppendVariableDecl(AstInterface& /* fa */, const AstNodePtr& variable, const AstNodePtr& var_init, const AstNodePtr& desig)
     {
      DebugLocalInfoCollect([&variable,&var_init](){ return "appending var decl " + AstInterface::AstToString(variable) + " = " + AstInterface::AstToString(var_init); });
-     AstNodeType vartype;
      if(curstmt == 0) return;
      if (varcollect != 0) {
-            (*varcollect)(variable, var_init);
+            (*varcollect)( {variable, var_init, desig});
      } else if (modcollect != 0) {
-            (*modcollect)(variable, var_init);
+            (*modcollect)( {variable, var_init, desig});
      }
     }
 
@@ -355,9 +357,9 @@ AppendModLoc(AstInterface&, const AstNodePtr& mod, const AstNodePtr& rhs)
        DebugLocalInfoCollect([&mod,&rhs](){ return "appending modifying " + AstInterface::AstToString(mod) + " = " + AstInterface::AstToString(rhs); });
        if(curstmt == 0) return;
        if (killcollect != 0 && rhs != 0) 
-            (*killcollect)(mod, rhs);
+            (*killcollect)({mod, rhs, AST_NULL});
        if (modcollect != 0)
-            (*modcollect)(mod, rhs);
+            (*modcollect)({mod, rhs, AST_NULL});
     }
 void StmtSideEffectCollect::
 AppendReadLoc(AstInterface &/*fa*/, const AstNodePtr &read, const AstNodePtr& lhs)
@@ -365,9 +367,9 @@ AppendReadLoc(AstInterface &/*fa*/, const AstNodePtr &read, const AstNodePtr& lh
       DebugLocalInfoCollect([&read](){ return "appending reading " + AstInterface::AstToString(read); });
       if (readcollect != 0) {          
          if (lhs==0) {
-            (*readcollect)(read, curstmt);
+            (*readcollect)({read, curstmt, AST_NULL});
          } else {
-            (*readcollect)(read, lhs);
+            (*readcollect)({read, lhs, AST_NULL});
          }
       }
     }
@@ -394,22 +396,22 @@ AppendFuncCall( AstInterface& fa, const AstNodePtr& fc)
   }
   if (callcollect != 0) {
      DebugLocalInfoCollect([](){ return "invoking collecting call"; });
-     (*callcollect)(callee, fc);
+     (*callcollect)({callee, fc, AST_NULL});
   }
 }
 void StmtSideEffectCollect::
 AppendMemoryAllocate( AstInterface& /* fa */, const AstNodePtr& s) {
    AstNodePtr init;
    if (allocate_collect != 0 && AstInterface::IsMemoryAllocation(s, 0, &init)) {
-      (*allocate_collect)(s, init);
+      (*allocate_collect)({s, init, AST_NULL});
    }
 }
 void StmtSideEffectCollect::
 AppendMemoryFree( AstInterface& /* fa */, const AstNodePtr& s) {
    if (free_collect != 0) {
-      (*free_collect)(s, curstmt);
+      (*free_collect)({s, curstmt, AST_NULL});
    } else if (modcollect != 0) {
-       (*modcollect)(s, curstmt);
+       (*modcollect)({s, curstmt,AST_NULL});
    }
 }
 class ModifyAliasMap : public CollectObject< std::pair<AstNodePtr, int> >
@@ -523,7 +525,7 @@ get_alias_map( const std::string& varname, const AstNodePtr& scope)
 }
 
 void StmtVarAliasCollect::
-AppendVariableDecl( AstInterface& fa, const AstNodePtr& var, const AstNodePtr& init) {
+AppendVariableDecl( AstInterface& fa, const AstNodePtr& var, const AstNodePtr& init, const AstNodePtr& desig) {
   return AppendModLoc(fa, var, init);
 }
 

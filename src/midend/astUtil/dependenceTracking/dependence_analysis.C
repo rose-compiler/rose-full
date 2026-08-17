@@ -192,13 +192,17 @@ void WholeProgramDependenceAnalysis<NodeIterator,EdgeIterator>::ComputeDependenc
         return true;
   };
   std::function<bool(const AstNodePtr&, const AstNodePtr&, const AstUtilInterface::OperatorSideEffect&)> save_variable_dep = 
-        [this,input] (const AstNodePtr& first, const AstNodePtr& second, const AstUtilInterface::OperatorSideEffect&) {
+        [this,input] (const AstNodePtr& first, const AstNodePtr& second, const AstUtilInterface::OperatorSideEffect& third) {
         assert(main_table != 0);
         if (second != AST_NULL) {
            auto first_sig = AstInterface::GetVariableSignature(first);
            auto init = AstInterface::GetVariableSignature(second);
+           auto desig = third.get_details();
            if (first_sig != "" && init.find("_UNKNOWN_") == std::string::npos)  {
              main_table->addEdge(main_table->addNode(first.get_ptr()), main_table->addNode(second.get_ptr()), AstUtilInterface::OperatorSideEffect::EnumVariant::Init);
+           }
+           if (desig != 0) {
+             main_table->addEdge(main_table->addNode(desig), main_table->addNode(second.get_ptr()), AstUtilInterface::OperatorSideEffect::EnumVariant::Init);
            }
         }
         return true;

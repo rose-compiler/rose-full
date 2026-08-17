@@ -74,18 +74,21 @@ void AstUtilInterface::ComputeAstSideEffects(SgNode* ast,
 
     StmtSideEffectCollect collect_operator(fa, funcAnnot);
     std::map<std::string, AstNodePtr > alias_map; 
-    std::function<bool(AstNodePtr, AstNodePtr)> save_alias = [&collect, &alias_map] (AstNodePtr first, AstNodePtr second) {
-      DebugAstUtil([&first,&second](){ return "save alias:" + AstInterface::GetVariableSignature(first) + "->" + AstInterface::GetVariableSignature(second); });
-      auto sig_first = AstInterface::GetVariableSignature(first);
+    std::function<bool(const SideEffectAnalysisInterface::SideEffectInfo&)> save_alias = [&collect, &alias_map] 
+        (const SideEffectAnalysisInterface::SideEffectInfo& info) {
+      DebugAstUtil([&info](){ return "save alias:" + AstInterface::GetVariableSignature(info.first_) + "->" + AstInterface::GetVariableSignature(info.second_); });
+      auto sig_first = AstInterface::GetVariableSignature(info.first_);
       AstNodePtr base;
-      if (AstInterface::IsAddressOfOp(second, &base)) {
+      if (AstInterface::IsAddressOfOp(info.second_, &base)) {
           alias_map["_deref_(" + sig_first + ")"] = base;
       }
-      alias_map[sig_first] = second;
-      if (collect != 0) (*collect)(first, second, OperatorSideEffect(OperatorSideEffect::EnumVariant::Alias, 0));
+      alias_map[sig_first] = info.second_;
+      if (collect != 0) {
+         (*collect)(info.first_, info.second_, OperatorSideEffect(OperatorSideEffect::EnumVariant::Alias, info.third_.get_ptr()));
+      }
       return true;
     };
-    auto save_memory_ref = [&alias_map, &is_function, &collect, &ast, &body, add_to_dep_analysis] (AstNodePtr ref, OperatorSideEffect what) {
+    auto save_memory_ref = [&alias_map, &is_function, &collect, &ast, &body, add_to_dep_analysis] (AstNodePtr ref, AstNodePtr src, OperatorSideEffect what) {
       bool done_annot = false;
       if (!ref.is_unknown() && !AstInterface::IsMemoryAccess(ref)) {
           DebugAstUtil([&ref](){ return "Do not save non-memory-access ref:" + AstInterface::AstToString(ref); });
@@ -116,7 +119,7 @@ void AstUtilInterface::ComputeAstSideEffects(SgNode* ast,
            DebugAstUtil([&ref](){ return "Did not find aliased reference:" + AstInterface::AstToString(ref); });
         }
       }
-      if (collect != 0) (*collect)(ref, what.get_details(), what);
+      if (collect != 0) (*collect)(ref, src, what);
       if (is_function && (ref.is_unknown() || !is_local_ref)) {
            DebugAstUtil([&ref](){ return "save non-local:" + AstInterface::AstToString(ref); });
            if (add_to_dep_analysis != 0) {
@@ -129,60 +132,64 @@ void AstUtilInterface::ComputeAstSideEffects(SgNode* ast,
       }
       return done_annot; /* done annotation? */
     };
-    std::function<bool(AstNodePtr, AstNodePtr)> save_mod = [&done_annot_mod,&save_memory_ref] (AstNodePtr first, AstNodePtr second) { 
-       if (save_memory_ref(first, OperatorSideEffect(OperatorSideEffect::EnumVariant::Modify, second.get_ptr(), first.is_unknown()))) { 
+    std::function<bool(const SideEffectAnalysisInterface::SideEffectInfo&)> save_mod = [&done_annot_mod,&save_memory_ref] (const SideEffectAnalysisInterface::SideEffectInfo& info) { 
+       if (save_memory_ref(info.first_, info.second_, OperatorSideEffect(OperatorSideEffect::EnumVariant::Modify, info.third_.get_ptr(), info.first_.is_unknown()))) { 
           DebugAstUtil([](){ return "Done mod annotation."; });
           done_annot_mod = true;
        }
        return true;
     };
-    std::function<bool(AstNodePtr, AstNodePtr)> save_read = [&save_memory_ref,&done_annot_read] (AstNodePtr first, AstNodePtr second) {
-      if (save_memory_ref(first, OperatorSideEffect(OperatorSideEffect::EnumVariant::Read, second.get_ptr(), first.is_unknown()))) {
+    std::function<bool(const SideEffectAnalysisInterface::SideEffectInfo&)> save_read = [&save_memory_ref,&done_annot_read] (const SideEffectAnalysisInterface::SideEffectInfo& info) {
+      if (save_memory_ref(info.first_, info.second_, OperatorSideEffect(OperatorSideEffect::EnumVariant::Read, info.third_.get_ptr(), info.first_.is_unknown()))) {
          DebugAstUtil([](){ return "Done read annotation."; });
          done_annot_read = true;
       }
       return true;
     };
-    std::function<bool(AstNodePtr, AstNodePtr)> save_kill = [&collect] (AstNodePtr first, AstNodePtr second) {
-      if (collect != 0) return (*collect)(first, second, OperatorSideEffect(OperatorSideEffect::EnumVariant::Kill, second.get_ptr(), first.is_unknown()));
+    std::function<bool(const SideEffectAnalysisInterface::SideEffectInfo&)> save_kill = [&collect] (const SideEffectAnalysisInterface::SideEffectInfo& info) {
+      if (collect != 0) return (*collect)(info.first_, info.second_, OperatorSideEffect(OperatorSideEffect::EnumVariant::Kill, info.second_.get_ptr(), info.first_.is_unknown()));
       return true;
     };
-    std::function<bool(AstNodePtr, AstNodePtr)> save_call = [&collect,&ast, &is_function, &done_annot_call, &done_annot_mod, &done_annot_read, &body, add_to_dep_analysis] (AstNodePtr first, AstNodePtr second) {
-      if (is_function && !AstInterface::IsLocalRef(first, body)) {
+    std::function<bool(const SideEffectAnalysisInterface::SideEffectInfo&)> save_call = [&collect,&ast, &is_function, &done_annot_call, &done_annot_mod, &done_annot_read, &body, add_to_dep_analysis] (const SideEffectAnalysisInterface::SideEffectInfo& info) {
+      if (is_function && !AstInterface::IsLocalRef(info.first_, body)) {
          done_annot_call = true;
-         OperatorSideEffect relation(OperatorSideEffect::EnumVariant::Call, second.get_ptr(), first.is_unknown());
+         OperatorSideEffect relation(OperatorSideEffect::EnumVariant::Call, info.second_.get_ptr(), info.first_.is_unknown());
          if (add_to_dep_analysis != 0) {
-            add_to_dep_analysis->SaveOperatorSideEffect(ast, GetVariableSignature(first), relation); 
+            add_to_dep_analysis->SaveOperatorSideEffect(ast, GetVariableSignature(info.first_), relation); 
          } 
-         if (do_annot)  AddOperatorSideEffectAnnotation(ast, first, relation); 
-         if (first.is_unknown()) {
+         if (do_annot)  AddOperatorSideEffectAnnotation(ast, info.first_, relation); 
+         if (info.first_.is_unknown()) {
             done_annot_call = true;
             done_annot_mod = true;
             done_annot_read = true;
          }
       }
-      DebugAstUtil([&first](){ return "save call:" + AstInterface::AstToString(first); });
-      if (collect != 0)  (*collect)(first, second, OperatorSideEffect::EnumVariant::Call);
+      DebugAstUtil([&info](){ return "save call:" + AstInterface::AstToString(info.first_); });
+      if (collect != 0)  (*collect)(info.first_, info.second_,OperatorSideEffect(OperatorSideEffect::EnumVariant::Call, info.third_.get_ptr()));
       return true;
     };
-    std::function<bool(AstNodePtr, AstNodePtr)> save_decl = [&collect] (AstNodePtr var, AstNodePtr init) {
+    std::function<bool(const SideEffectAnalysisInterface::SideEffectInfo&)> save_decl = [&collect] (const SideEffectAnalysisInterface::SideEffectInfo& info) {
+      auto var = info.first_, init=info.second_, desig=info.third_;
       DebugAstUtil([&var](){ return "save new decl:" + AstInterface::AstToString(var); });
-      if (collect != 0) (*collect)(var, init, OperatorSideEffect(OperatorSideEffect::EnumVariant::Decl, init.get_ptr()));
-      return true;
-    };
-    std::function<bool(AstNodePtr, AstNodePtr)> save_allocate = [&collect,&save_call] (AstNodePtr op, AstNodePtr init) {
-      DebugAstUtil([&op,&init](){ return "save allocate:" + AstInterface::AstToString(op) + ":" + AstInterface::AstToString(init); });
-      if (collect != 0) return (*collect)(op, init, OperatorSideEffect(OperatorSideEffect::EnumVariant::Allocate, init.get_ptr()));
-      save_call(op, init);
-      return true;
-    };
-    std::function<bool(AstNodePtr, AstNodePtr)> save_free = [&collect,&save_mod,&save_call] (AstNodePtr var, AstNodePtr init) {
-      DebugAstUtil([&var](){ return "save free:" + AstInterface::AstToString(var); });
-      if (collect != 0) { 
-           (*collect)(var, init, OperatorSideEffect(OperatorSideEffect::EnumVariant::Free, init.get_ptr()));
+      if (collect != 0) {
+         (*collect)(var, init, OperatorSideEffect(OperatorSideEffect::EnumVariant::Decl, desig.get_ptr()));
       }
-      save_mod(var, init); // a free is also a modify.
-      save_call(var, init);
+      return true;
+    };
+    std::function<bool(const SideEffectAnalysisInterface::SideEffectInfo&)> save_allocate = [&collect,&save_call] (const SideEffectAnalysisInterface::SideEffectInfo& info) {
+      auto op = info.first_, init=info.second_, details=info.third_;
+      DebugAstUtil([&op,&init](){ return "save allocate:" + AstInterface::AstToString(op) + ":" + AstInterface::AstToString(init); });
+      if (collect != 0) return (*collect)(op, init, OperatorSideEffect(OperatorSideEffect::EnumVariant::Allocate, details.get_ptr()));
+      save_call(info);
+      return true;
+    };
+    std::function<bool(const SideEffectAnalysisInterface::SideEffectInfo&)> save_free = [&collect,&save_mod,&save_call] (const SideEffectAnalysisInterface::SideEffectInfo& info) {
+      DebugAstUtil([&info](){ return "save free:" + AstInterface::AstToString(info.first_); });
+      if (collect != 0) { 
+           (*collect)(info.first_, info.second_, OperatorSideEffect(OperatorSideEffect::EnumVariant::Free, info.third_.get_ptr()));
+      }
+      save_mod(info); // a free is also a modify.
+      save_call(info);
       return true;
     };
     collect_operator.set_modify_collect(save_mod);

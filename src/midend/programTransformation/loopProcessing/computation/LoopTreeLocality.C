@@ -220,22 +220,22 @@ Build(LoopTreeLocalityAnal& tc, LoopTreeNode* root)
      
 void DepCompAstRefAnal:: Append(LoopTreeNode* _root)
      {
-       std::function<bool(AstNodePtr,AstNodePtr)> modcollect = 
-               [this](AstNodePtr mod_first, AstNodePtr /*mod_second*/) {
-            if (refmap.find(mod_first) == refmap.end()) {
+       std::function<bool(const SideEffectAnalysisInterface::SideEffectInfo&)> modcollect = 
+               [this](const SideEffectAnalysisInterface::SideEffectInfo& info) {
+            if (refmap.find(info.first_) == refmap.end()) {
                 int num = refmap.size();
-                refmap[mod_first] = -(num+1);
+                refmap[info.first_] = -(num+1);
                 return true;
             }
-            else if (refmap[mod_first] > 0)
-                refmap[mod_first] = -refmap[mod_first];
+            else if (refmap[info.first_] > 0)
+                refmap[info.first_] = -refmap[info.first_];
             return false;
           };
-       std::function<bool(AstNodePtr,AstNodePtr)> readcollect = 
-               [this](AstNodePtr read_first, AstNodePtr /*read_second*/) {
-            if (refmap.find(read_first) == refmap.end()) {
+       std::function<bool(const SideEffectAnalysisInterface::SideEffectInfo&)> readcollect = 
+               [this](const SideEffectAnalysisInterface::SideEffectInfo& info) {
+            if (refmap.find(info.first_) == refmap.end()) {
                 int num = refmap.size();
-                refmap[read_first] = num+1;
+                refmap[info.first_] = num+1;
                 return true;
             }
              return false;

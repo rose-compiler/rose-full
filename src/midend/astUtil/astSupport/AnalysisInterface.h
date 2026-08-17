@@ -40,7 +40,12 @@ class NoFunctionSideEffectAnalysis : public FunctionSideEffectInterface
 class SideEffectAnalysisInterface 
 {
  public:
-  typedef std::function<bool(AstNodePtr,AstNodePtr)> CollectObject;
+  struct SideEffectInfo { 
+        AstNodePtr first_, second_, third_; 
+        SideEffectInfo(const AstNodePtr& first, const AstNodePtr& second, const AstNodePtr third) 
+            : first_(first), second_(second), third_(third) {}
+        };
+  typedef std::function<bool(const SideEffectInfo&)> CollectObject;
   SideEffectAnalysisInterface() : modcollect(0), 
        readcollect(0), killcollect(0), callcollect(0), varcollect(0), allocate_collect(0), free_collect(0), alias_collect(0) {}
  
