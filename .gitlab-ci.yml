@@ -96,6 +96,7 @@ Build-Pack:
 
 #jobs for development pipeline ----------------------------------------------------------------------------------------------------------------------------------
 .develop-base:
+    interruptible: true
     rules:
         - if: $PIPE_TYPE == "develop"
           when: on_success
