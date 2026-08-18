@@ -536,7 +536,45 @@ SgAsmCilMetadataHeap::SgAsmCilMetadataHeap()
     , p_ReservedAlwaysOne(0)
     , p_Valid(0)
     , p_Sorted(0)
-    , p_DataSizeFlags(0) {}
+    , p_DataSizeFlags(0)
+    , p_AssemblyTable(nullptr)
+    , p_AssemblyOSTable(nullptr)
+    , p_AssemblyProcessorTable(nullptr)
+    , p_AssemblyRefTable(nullptr)
+    , p_AssemblyRefOSTable(nullptr)
+    , p_AssemblyRefProcessorTable(nullptr)
+    , p_ClassLayoutTable(nullptr)
+    , p_ConstantTable(nullptr)
+    , p_CustomAttributeTable(nullptr)
+    , p_DeclSecurityTable(nullptr)
+    , p_EventTable(nullptr)
+    , p_EventMapTable(nullptr)
+    , p_ExportedTypeTable(nullptr)
+    , p_FieldTable(nullptr)
+    , p_FieldLayoutTable(nullptr)
+    , p_FieldMarshalTable(nullptr)
+    , p_FieldRVATable(nullptr)
+    , p_FileTable(nullptr)
+    , p_GenericParamTable(nullptr)
+    , p_GenericParamConstraintTable(nullptr)
+    , p_ImplMapTable(nullptr)
+    , p_InterfaceImplTable(nullptr)
+    , p_ManifestResourceTable(nullptr)
+    , p_MemberRefTable(nullptr)
+    , p_MethodDefTable(nullptr)
+    , p_MethodImplTable(nullptr)
+    , p_MethodSemanticsTable(nullptr)
+    , p_MethodSpecTable(nullptr)
+    , p_ModuleTable(nullptr)
+    , p_ModuleRefTable(nullptr)
+    , p_NestedClassTable(nullptr)
+    , p_ParamTable(nullptr)
+    , p_PropertyTable(nullptr)
+    , p_PropertyMapTable(nullptr)
+    , p_StandAloneSigTable(nullptr)
+    , p_TypeDefTable(nullptr)
+    , p_TypeRefTable(nullptr)
+    , p_TypeSpecTable(nullptr) {}
 
 // The association between constructor arguments and their classes:
 //    property=Offset           class=SgAsmCilDataStream
@@ -555,7 +593,45 @@ SgAsmCilMetadataHeap::SgAsmCilMetadataHeap(uint32_t const& Offset,
     , p_ReservedAlwaysOne(0)
     , p_Valid(0)
     , p_Sorted(0)
-    , p_DataSizeFlags(0) {}
+    , p_DataSizeFlags(0)
+    , p_AssemblyTable(nullptr)
+    , p_AssemblyOSTable(nullptr)
+    , p_AssemblyProcessorTable(nullptr)
+    , p_AssemblyRefTable(nullptr)
+    , p_AssemblyRefOSTable(nullptr)
+    , p_AssemblyRefProcessorTable(nullptr)
+    , p_ClassLayoutTable(nullptr)
+    , p_ConstantTable(nullptr)
+    , p_CustomAttributeTable(nullptr)
+    , p_DeclSecurityTable(nullptr)
+    , p_EventTable(nullptr)
+    , p_EventMapTable(nullptr)
+    , p_ExportedTypeTable(nullptr)
+    , p_FieldTable(nullptr)
+    , p_FieldLayoutTable(nullptr)
+    , p_FieldMarshalTable(nullptr)
+    , p_FieldRVATable(nullptr)
+    , p_FileTable(nullptr)
+    , p_GenericParamTable(nullptr)
+    , p_GenericParamConstraintTable(nullptr)
+    , p_ImplMapTable(nullptr)
+    , p_InterfaceImplTable(nullptr)
+    , p_ManifestResourceTable(nullptr)
+    , p_MemberRefTable(nullptr)
+    , p_MethodDefTable(nullptr)
+    , p_MethodImplTable(nullptr)
+    , p_MethodSemanticsTable(nullptr)
+    , p_MethodSpecTable(nullptr)
+    , p_ModuleTable(nullptr)
+    , p_ModuleRefTable(nullptr)
+    , p_NestedClassTable(nullptr)
+    , p_ParamTable(nullptr)
+    , p_PropertyTable(nullptr)
+    , p_PropertyMapTable(nullptr)
+    , p_StandAloneSigTable(nullptr)
+    , p_TypeDefTable(nullptr)
+    , p_TypeRefTable(nullptr)
+    , p_TypeSpecTable(nullptr) {}
 
 void
 SgAsmCilMetadataHeap::initializeProperties() {
@@ -567,6 +643,44 @@ SgAsmCilMetadataHeap::initializeProperties() {
     p_Valid = 0;
     p_Sorted = 0;
     p_DataSizeFlags = 0;
+    p_AssemblyTable = nullptr;
+    p_AssemblyOSTable = nullptr;
+    p_AssemblyProcessorTable = nullptr;
+    p_AssemblyRefTable = nullptr;
+    p_AssemblyRefOSTable = nullptr;
+    p_AssemblyRefProcessorTable = nullptr;
+    p_ClassLayoutTable = nullptr;
+    p_ConstantTable = nullptr;
+    p_CustomAttributeTable = nullptr;
+    p_DeclSecurityTable = nullptr;
+    p_EventTable = nullptr;
+    p_EventMapTable = nullptr;
+    p_ExportedTypeTable = nullptr;
+    p_FieldTable = nullptr;
+    p_FieldLayoutTable = nullptr;
+    p_FieldMarshalTable = nullptr;
+    p_FieldRVATable = nullptr;
+    p_FileTable = nullptr;
+    p_GenericParamTable = nullptr;
+    p_GenericParamConstraintTable = nullptr;
+    p_ImplMapTable = nullptr;
+    p_InterfaceImplTable = nullptr;
+    p_ManifestResourceTable = nullptr;
+    p_MemberRefTable = nullptr;
+    p_MethodDefTable = nullptr;
+    p_MethodImplTable = nullptr;
+    p_MethodSemanticsTable = nullptr;
+    p_MethodSpecTable = nullptr;
+    p_ModuleTable = nullptr;
+    p_ModuleRefTable = nullptr;
+    p_NestedClassTable = nullptr;
+    p_ParamTable = nullptr;
+    p_PropertyTable = nullptr;
+    p_PropertyMapTable = nullptr;
+    p_StandAloneSigTable = nullptr;
+    p_TypeDefTable = nullptr;
+    p_TypeRefTable = nullptr;
+    p_TypeSpecTable = nullptr;
 }
 
 #endif // defined(ROSE_ENABLE_BINARY_ANALYSIS)

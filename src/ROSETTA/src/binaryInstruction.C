@@ -35662,7 +35662,7 @@ class SgAsmCilMethodData: public SgAsmCilNode {
 
 #ifndef DOCUMENTATION
     AsmCilMethodData.setDataPrototype(
-        "std::uint32_t", "rawHeader", "",
+        "std::uint32_t", "rawHeader", "= 0",
         NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE, COPY_DATA);
 #endif // !DOCUMENTATION
 
@@ -36128,229 +36128,229 @@ class SgAsmCilMetadataHeap: public SgAsmCilDataStream {
 
 #ifndef DOCUMENTATION
     AsmCilMetadataHeap.setDataPrototype(
-        "SgAsmCilAssemblyTable*", "AssemblyTable", "",
+        "SgAsmCilAssemblyTable*", "AssemblyTable", "= nullptr",
         NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, COPY_DATA);
 #endif // !DOCUMENTATION
 
 #ifndef DOCUMENTATION
     AsmCilMetadataHeap.setDataPrototype(
-        "SgAsmCilAssemblyOSTable*", "AssemblyOSTable", "",
+        "SgAsmCilAssemblyOSTable*", "AssemblyOSTable", "= nullptr",
         NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, COPY_DATA);
 #endif // !DOCUMENTATION
 
 #ifndef DOCUMENTATION
     AsmCilMetadataHeap.setDataPrototype(
-        "SgAsmCilAssemblyProcessorTable*", "AssemblyProcessorTable", "",
+        "SgAsmCilAssemblyProcessorTable*", "AssemblyProcessorTable", "= nullptr",
         NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, COPY_DATA);
 #endif // !DOCUMENTATION
 
 #ifndef DOCUMENTATION
     AsmCilMetadataHeap.setDataPrototype(
-        "SgAsmCilAssemblyRefTable*", "AssemblyRefTable", "",
+        "SgAsmCilAssemblyRefTable*", "AssemblyRefTable", "= nullptr",
         NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, COPY_DATA);
 #endif // !DOCUMENTATION
 
 #ifndef DOCUMENTATION
     AsmCilMetadataHeap.setDataPrototype(
-        "SgAsmCilAssemblyRefOSTable*", "AssemblyRefOSTable", "",
+        "SgAsmCilAssemblyRefOSTable*", "AssemblyRefOSTable", "= nullptr",
         NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, COPY_DATA);
 #endif // !DOCUMENTATION
 
 #ifndef DOCUMENTATION
     AsmCilMetadataHeap.setDataPrototype(
-        "SgAsmCilAssemblyRefProcessorTable*", "AssemblyRefProcessorTable", "",
+        "SgAsmCilAssemblyRefProcessorTable*", "AssemblyRefProcessorTable", "= nullptr",
         NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, COPY_DATA);
 #endif // !DOCUMENTATION
 
 #ifndef DOCUMENTATION
     AsmCilMetadataHeap.setDataPrototype(
-        "SgAsmCilClassLayoutTable*", "ClassLayoutTable", "",
+        "SgAsmCilClassLayoutTable*", "ClassLayoutTable", "= nullptr",
         NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, COPY_DATA);
 #endif // !DOCUMENTATION
 
 #ifndef DOCUMENTATION
     AsmCilMetadataHeap.setDataPrototype(
-        "SgAsmCilConstantTable*", "ConstantTable", "",
+        "SgAsmCilConstantTable*", "ConstantTable", "= nullptr",
         NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, COPY_DATA);
 #endif // !DOCUMENTATION
 
 #ifndef DOCUMENTATION
     AsmCilMetadataHeap.setDataPrototype(
-        "SgAsmCilCustomAttributeTable*", "CustomAttributeTable", "",
+        "SgAsmCilCustomAttributeTable*", "CustomAttributeTable", "= nullptr",
         NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, COPY_DATA);
 #endif // !DOCUMENTATION
 
 #ifndef DOCUMENTATION
     AsmCilMetadataHeap.setDataPrototype(
-        "SgAsmCilDeclSecurityTable*", "DeclSecurityTable", "",
+        "SgAsmCilDeclSecurityTable*", "DeclSecurityTable", "= nullptr",
         NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, COPY_DATA);
 #endif // !DOCUMENTATION
 
 #ifndef DOCUMENTATION
     AsmCilMetadataHeap.setDataPrototype(
-        "SgAsmCilEventTable*", "EventTable", "",
+        "SgAsmCilEventTable*", "EventTable", "= nullptr",
         NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, COPY_DATA);
 #endif // !DOCUMENTATION
 
 #ifndef DOCUMENTATION
     AsmCilMetadataHeap.setDataPrototype(
-        "SgAsmCilEventMapTable*", "EventMapTable", "",
+        "SgAsmCilEventMapTable*", "EventMapTable", "= nullptr",
         NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, COPY_DATA);
 #endif // !DOCUMENTATION
 
 #ifndef DOCUMENTATION
     AsmCilMetadataHeap.setDataPrototype(
-        "SgAsmCilExportedTypeTable*", "ExportedTypeTable", "",
+        "SgAsmCilExportedTypeTable*", "ExportedTypeTable", "= nullptr",
         NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, COPY_DATA);
 #endif // !DOCUMENTATION
 
 #ifndef DOCUMENTATION
     AsmCilMetadataHeap.setDataPrototype(
-        "SgAsmCilFieldTable*", "FieldTable", "",
+        "SgAsmCilFieldTable*", "FieldTable", "= nullptr",
         NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, COPY_DATA);
 #endif // !DOCUMENTATION
 
 #ifndef DOCUMENTATION
     AsmCilMetadataHeap.setDataPrototype(
-        "SgAsmCilFieldLayoutTable*", "FieldLayoutTable", "",
+        "SgAsmCilFieldLayoutTable*", "FieldLayoutTable", "= nullptr",
         NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, COPY_DATA);
 #endif // !DOCUMENTATION
 
 #ifndef DOCUMENTATION
     AsmCilMetadataHeap.setDataPrototype(
-        "SgAsmCilFieldMarshalTable*", "FieldMarshalTable", "",
+        "SgAsmCilFieldMarshalTable*", "FieldMarshalTable", "= nullptr",
         NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, COPY_DATA);
 #endif // !DOCUMENTATION
 
 #ifndef DOCUMENTATION
     AsmCilMetadataHeap.setDataPrototype(
-        "SgAsmCilFieldRVATable*", "FieldRVATable", "",
+        "SgAsmCilFieldRVATable*", "FieldRVATable", "= nullptr",
         NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, COPY_DATA);
 #endif // !DOCUMENTATION
 
 #ifndef DOCUMENTATION
     AsmCilMetadataHeap.setDataPrototype(
-        "SgAsmCilFileTable*", "FileTable", "",
+        "SgAsmCilFileTable*", "FileTable", "= nullptr",
         NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, COPY_DATA);
 #endif // !DOCUMENTATION
 
 #ifndef DOCUMENTATION
     AsmCilMetadataHeap.setDataPrototype(
-        "SgAsmCilGenericParamTable*", "GenericParamTable", "",
+        "SgAsmCilGenericParamTable*", "GenericParamTable", "= nullptr",
         NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, COPY_DATA);
 #endif // !DOCUMENTATION
 
 #ifndef DOCUMENTATION
     AsmCilMetadataHeap.setDataPrototype(
-        "SgAsmCilGenericParamConstraintTable*", "GenericParamConstraintTable", "",
+        "SgAsmCilGenericParamConstraintTable*", "GenericParamConstraintTable", "= nullptr",
         NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, COPY_DATA);
 #endif // !DOCUMENTATION
 
 #ifndef DOCUMENTATION
     AsmCilMetadataHeap.setDataPrototype(
-        "SgAsmCilImplMapTable*", "ImplMapTable", "",
+        "SgAsmCilImplMapTable*", "ImplMapTable", "= nullptr",
         NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, COPY_DATA);
 #endif // !DOCUMENTATION
 
 #ifndef DOCUMENTATION
     AsmCilMetadataHeap.setDataPrototype(
-        "SgAsmCilInterfaceImplTable*", "InterfaceImplTable", "",
+        "SgAsmCilInterfaceImplTable*", "InterfaceImplTable", "= nullptr",
         NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, COPY_DATA);
 #endif // !DOCUMENTATION
 
 #ifndef DOCUMENTATION
     AsmCilMetadataHeap.setDataPrototype(
-        "SgAsmCilManifestResourceTable*", "ManifestResourceTable", "",
+        "SgAsmCilManifestResourceTable*", "ManifestResourceTable", "= nullptr",
         NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, COPY_DATA);
 #endif // !DOCUMENTATION
 
 #ifndef DOCUMENTATION
     AsmCilMetadataHeap.setDataPrototype(
-        "SgAsmCilMemberRefTable*", "MemberRefTable", "",
+        "SgAsmCilMemberRefTable*", "MemberRefTable", "= nullptr",
         NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, COPY_DATA);
 #endif // !DOCUMENTATION
 
 #ifndef DOCUMENTATION
     AsmCilMetadataHeap.setDataPrototype(
-        "SgAsmCilMethodDefTable*", "MethodDefTable", "",
+        "SgAsmCilMethodDefTable*", "MethodDefTable", "= nullptr",
         NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, COPY_DATA);
 #endif // !DOCUMENTATION
 
 #ifndef DOCUMENTATION
     AsmCilMetadataHeap.setDataPrototype(
-        "SgAsmCilMethodImplTable*", "MethodImplTable", "",
+        "SgAsmCilMethodImplTable*", "MethodImplTable", "= nullptr",
         NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, COPY_DATA);
 #endif // !DOCUMENTATION
 
 #ifndef DOCUMENTATION
     AsmCilMetadataHeap.setDataPrototype(
-        "SgAsmCilMethodSemanticsTable*", "MethodSemanticsTable", "",
+        "SgAsmCilMethodSemanticsTable*", "MethodSemanticsTable", "= nullptr",
         NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, COPY_DATA);
 #endif // !DOCUMENTATION
 
 #ifndef DOCUMENTATION
     AsmCilMetadataHeap.setDataPrototype(
-        "SgAsmCilMethodSpecTable*", "MethodSpecTable", "",
+        "SgAsmCilMethodSpecTable*", "MethodSpecTable", "= nullptr",
         NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, COPY_DATA);
 #endif // !DOCUMENTATION
 
 #ifndef DOCUMENTATION
     AsmCilMetadataHeap.setDataPrototype(
-        "SgAsmCilModuleTable*", "ModuleTable", "",
+        "SgAsmCilModuleTable*", "ModuleTable", "= nullptr",
         NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, COPY_DATA);
 #endif // !DOCUMENTATION
 
 #ifndef DOCUMENTATION
     AsmCilMetadataHeap.setDataPrototype(
-        "SgAsmCilModuleRefTable*", "ModuleRefTable", "",
+        "SgAsmCilModuleRefTable*", "ModuleRefTable", "= nullptr",
         NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, COPY_DATA);
 #endif // !DOCUMENTATION
 
 #ifndef DOCUMENTATION
     AsmCilMetadataHeap.setDataPrototype(
-        "SgAsmCilNestedClassTable*", "NestedClassTable", "",
+        "SgAsmCilNestedClassTable*", "NestedClassTable", "= nullptr",
         NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, COPY_DATA);
 #endif // !DOCUMENTATION
 
 #ifndef DOCUMENTATION
     AsmCilMetadataHeap.setDataPrototype(
-        "SgAsmCilParamTable*", "ParamTable", "",
+        "SgAsmCilParamTable*", "ParamTable", "= nullptr",
         NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, COPY_DATA);
 #endif // !DOCUMENTATION
 
 #ifndef DOCUMENTATION
     AsmCilMetadataHeap.setDataPrototype(
-        "SgAsmCilPropertyTable*", "PropertyTable", "",
+        "SgAsmCilPropertyTable*", "PropertyTable", "= nullptr",
         NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, COPY_DATA);
 #endif // !DOCUMENTATION
 
 #ifndef DOCUMENTATION
     AsmCilMetadataHeap.setDataPrototype(
-        "SgAsmCilPropertyMapTable*", "PropertyMapTable", "",
+        "SgAsmCilPropertyMapTable*", "PropertyMapTable", "= nullptr",
         NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, COPY_DATA);
 #endif // !DOCUMENTATION
 
 #ifndef DOCUMENTATION
     AsmCilMetadataHeap.setDataPrototype(
-        "SgAsmCilStandAloneSigTable*", "StandAloneSigTable", "",
+        "SgAsmCilStandAloneSigTable*", "StandAloneSigTable", "= nullptr",
         NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, COPY_DATA);
 #endif // !DOCUMENTATION
 
 #ifndef DOCUMENTATION
     AsmCilMetadataHeap.setDataPrototype(
-        "SgAsmCilTypeDefTable*", "TypeDefTable", "",
+        "SgAsmCilTypeDefTable*", "TypeDefTable", "= nullptr",
         NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, COPY_DATA);
 #endif // !DOCUMENTATION
 
 #ifndef DOCUMENTATION
     AsmCilMetadataHeap.setDataPrototype(
-        "SgAsmCilTypeRefTable*", "TypeRefTable", "",
+        "SgAsmCilTypeRefTable*", "TypeRefTable", "= nullptr",
         NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, COPY_DATA);
 #endif // !DOCUMENTATION
 
 #ifndef DOCUMENTATION
     AsmCilMetadataHeap.setDataPrototype(
-        "SgAsmCilTypeSpecTable*", "TypeSpecTable", "",
+        "SgAsmCilTypeSpecTable*", "TypeSpecTable", "= nullptr",
         NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, COPY_DATA);
 #endif // !DOCUMENTATION
 

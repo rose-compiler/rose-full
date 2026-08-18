@@ -80,155 +80,155 @@ class SgAsmCilMetadataHeap: public SgAsmCilDataStream {
 
     /** Property: AssemblyTable. */
     [[using Rosebud: rosetta, traverse]]
-    SgAsmCilAssemblyTable* AssemblyTable;
+    SgAsmCilAssemblyTable* AssemblyTable = nullptr;
 
     /** Property: AssemblyOSTable. */
     [[using Rosebud: rosetta, traverse]]
-    SgAsmCilAssemblyOSTable* AssemblyOSTable;
+    SgAsmCilAssemblyOSTable* AssemblyOSTable = nullptr;
 
     /** Property: AssemblyProcessorTable. */
     [[using Rosebud: rosetta, traverse]]
-    SgAsmCilAssemblyProcessorTable* AssemblyProcessorTable;
+    SgAsmCilAssemblyProcessorTable* AssemblyProcessorTable = nullptr;
 
     /** Property: AssemblyRefTable. */
     [[using Rosebud: rosetta, traverse]]
-    SgAsmCilAssemblyRefTable* AssemblyRefTable;
+    SgAsmCilAssemblyRefTable* AssemblyRefTable = nullptr;
 
     /** Property: AssemblyRefOSTable. */
     [[using Rosebud: rosetta, traverse]]
-    SgAsmCilAssemblyRefOSTable* AssemblyRefOSTable;
+    SgAsmCilAssemblyRefOSTable* AssemblyRefOSTable = nullptr;
 
     /** Property: AssemblyRefProcessorTable. */
     [[using Rosebud: rosetta, traverse]]
-    SgAsmCilAssemblyRefProcessorTable* AssemblyRefProcessorTable;
+    SgAsmCilAssemblyRefProcessorTable* AssemblyRefProcessorTable = nullptr;
 
     /** Property: ClassLayoutTable. */
     [[using Rosebud: rosetta, traverse]]
-    SgAsmCilClassLayoutTable* ClassLayoutTable;
+    SgAsmCilClassLayoutTable* ClassLayoutTable = nullptr;
 
     /** Property: ConstantTable. */
     [[using Rosebud: rosetta, traverse]]
-    SgAsmCilConstantTable* ConstantTable;
+    SgAsmCilConstantTable* ConstantTable = nullptr;
 
     /** Property: CustomAttributeTable. */
     [[using Rosebud: rosetta, traverse]]
-    SgAsmCilCustomAttributeTable* CustomAttributeTable;
+    SgAsmCilCustomAttributeTable* CustomAttributeTable = nullptr;
 
     /** Property: DeclSecurityTable. */
     [[using Rosebud: rosetta, traverse]]
-    SgAsmCilDeclSecurityTable* DeclSecurityTable;
+    SgAsmCilDeclSecurityTable* DeclSecurityTable = nullptr;
 
     /** Property: EventTable. */
     [[using Rosebud: rosetta, traverse]]
-    SgAsmCilEventTable* EventTable;
+    SgAsmCilEventTable* EventTable = nullptr;
 
     /** Property: EventMapTable. */
     [[using Rosebud: rosetta, traverse]]
-    SgAsmCilEventMapTable* EventMapTable;
+    SgAsmCilEventMapTable* EventMapTable = nullptr;
 
     /** Property: ExportedTypeTable. */
     [[using Rosebud: rosetta, traverse]]
-    SgAsmCilExportedTypeTable* ExportedTypeTable;
+    SgAsmCilExportedTypeTable* ExportedTypeTable = nullptr;
 
     /** Property: FieldTable. */
     [[using Rosebud: rosetta, traverse]]
-    SgAsmCilFieldTable* FieldTable;
+    SgAsmCilFieldTable* FieldTable = nullptr;
 
     /** Property: FieldLayoutTable. */
     [[using Rosebud: rosetta, traverse]]
-    SgAsmCilFieldLayoutTable* FieldLayoutTable;
+    SgAsmCilFieldLayoutTable* FieldLayoutTable = nullptr;
 
     /** Property: FieldMarshalTable. */
     [[using Rosebud: rosetta, traverse]]
-    SgAsmCilFieldMarshalTable* FieldMarshalTable;
+    SgAsmCilFieldMarshalTable* FieldMarshalTable = nullptr;
 
     /** Property: FieldRVATable. */
     [[using Rosebud: rosetta, traverse]]
-    SgAsmCilFieldRVATable* FieldRVATable;
+    SgAsmCilFieldRVATable* FieldRVATable = nullptr;
 
     /** Property: FileTable. */
     [[using Rosebud: rosetta, traverse]]
-    SgAsmCilFileTable* FileTable;
+    SgAsmCilFileTable* FileTable = nullptr;
 
     /** Property: GenericParamTable. */
     [[using Rosebud: rosetta, traverse]]
-    SgAsmCilGenericParamTable* GenericParamTable;
+    SgAsmCilGenericParamTable* GenericParamTable = nullptr;
 
     /** Property: GenericParamConstraintTable. */
     [[using Rosebud: rosetta, traverse]]
-    SgAsmCilGenericParamConstraintTable* GenericParamConstraintTable;
+    SgAsmCilGenericParamConstraintTable* GenericParamConstraintTable = nullptr;
 
     /** Property: ImplMapTable. */
     [[using Rosebud: rosetta, traverse]]
-    SgAsmCilImplMapTable* ImplMapTable;
+    SgAsmCilImplMapTable* ImplMapTable = nullptr;
 
     /** Property: InterfaceImplTable. */
     [[using Rosebud: rosetta, traverse]]
-    SgAsmCilInterfaceImplTable* InterfaceImplTable;
+    SgAsmCilInterfaceImplTable* InterfaceImplTable = nullptr;
 
     /** Property: ManifestResourceTable. */
     [[using Rosebud: rosetta, traverse]]
-    SgAsmCilManifestResourceTable* ManifestResourceTable;
+    SgAsmCilManifestResourceTable* ManifestResourceTable = nullptr;
 
     /** Property: MemberRefTable. */
     [[using Rosebud: rosetta, traverse]]
-    SgAsmCilMemberRefTable* MemberRefTable;
+    SgAsmCilMemberRefTable* MemberRefTable = nullptr;
 
     /** Property: MethodDefTable. */
     [[using Rosebud: rosetta, traverse]]
-    SgAsmCilMethodDefTable* MethodDefTable;
+    SgAsmCilMethodDefTable* MethodDefTable = nullptr;
 
     /** Property: MethodImplTable. */
     [[using Rosebud: rosetta, traverse]]
-    SgAsmCilMethodImplTable* MethodImplTable;
+    SgAsmCilMethodImplTable* MethodImplTable = nullptr;
 
     /** Property: MethodSemanticsTable. */
     [[using Rosebud: rosetta, traverse]]
-    SgAsmCilMethodSemanticsTable* MethodSemanticsTable;
+    SgAsmCilMethodSemanticsTable* MethodSemanticsTable = nullptr;
 
     /** Property: MethodSpecTable. */
     [[using Rosebud: rosetta, traverse]]
-    SgAsmCilMethodSpecTable* MethodSpecTable;
+    SgAsmCilMethodSpecTable* MethodSpecTable = nullptr;
 
     /** Property: ModuleTable. */
     [[using Rosebud: rosetta, traverse]]
-    SgAsmCilModuleTable* ModuleTable;
+    SgAsmCilModuleTable* ModuleTable = nullptr;
 
     /** Property: ModuleRefTable. */
     [[using Rosebud: rosetta, traverse]]
-    SgAsmCilModuleRefTable* ModuleRefTable;
+    SgAsmCilModuleRefTable* ModuleRefTable = nullptr;
 
     /** Property: NestedClassTable. */
     [[using Rosebud: rosetta, traverse]]
-    SgAsmCilNestedClassTable* NestedClassTable;
+    SgAsmCilNestedClassTable* NestedClassTable = nullptr;
 
     /** Property: ParamTable. */
     [[using Rosebud: rosetta, traverse]]
-    SgAsmCilParamTable* ParamTable;
+    SgAsmCilParamTable* ParamTable = nullptr;
 
     /** Property: PropertyTable. */
     [[using Rosebud: rosetta, traverse]]
-    SgAsmCilPropertyTable* PropertyTable;
+    SgAsmCilPropertyTable* PropertyTable = nullptr;
 
     /** Property: PropertyMapTable. */
     [[using Rosebud: rosetta, traverse]]
-    SgAsmCilPropertyMapTable* PropertyMapTable;
+    SgAsmCilPropertyMapTable* PropertyMapTable = nullptr;
 
     /** Property: StandAloneSigTable. */
     [[using Rosebud: rosetta, traverse]]
-    SgAsmCilStandAloneSigTable* StandAloneSigTable;
+    SgAsmCilStandAloneSigTable* StandAloneSigTable = nullptr;
 
     /** Property: TypeDefTable. */
     [[using Rosebud: rosetta, traverse]]
-    SgAsmCilTypeDefTable* TypeDefTable;
+    SgAsmCilTypeDefTable* TypeDefTable = nullptr;
 
     /** Property: TypeRefTable. */
     [[using Rosebud: rosetta, traverse]]
-    SgAsmCilTypeRefTable* TypeRefTable;
+    SgAsmCilTypeRefTable* TypeRefTable = nullptr;
 
     /** Property: TypeSpecTable. */
     [[using Rosebud: rosetta, traverse]]
-    SgAsmCilTypeSpecTable* TypeSpecTable;
+    SgAsmCilTypeSpecTable* TypeSpecTable = nullptr;
 
 public:
     /// reference kinds in the metadata tables

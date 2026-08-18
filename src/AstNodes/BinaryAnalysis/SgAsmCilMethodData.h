@@ -23,7 +23,7 @@ private:
   std::vector<SgAsmCilExceptionData*> clauses = {};
   
   [[using Rosebud: rosetta]]
-  std::uint32_t rawHeader;
+  std::uint32_t rawHeader = 0;
 
 public:
   std::uint8_t get_kind() const

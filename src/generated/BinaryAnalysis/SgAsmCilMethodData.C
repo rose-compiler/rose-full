@@ -33,11 +33,13 @@ SgAsmCilMethodData::~SgAsmCilMethodData() {
 }
 
 SgAsmCilMethodData::SgAsmCilMethodData()
-    : p_clauses({}) {}
+    : p_clauses({})
+    , p_rawHeader(0) {}
 
 void
 SgAsmCilMethodData::initializeProperties() {
     p_clauses = {};
+    p_rawHeader = 0;
 }
 
 #endif // defined(ROSE_ENABLE_BINARY_ANALYSIS)

@@ -7,7 +7,7 @@
 
 SgAsmPESection::SgAsmPESection(SgAsmPEFileHeader *fhdr)
     : SgAsmGenericSection(fhdr->get_file(), fhdr) {
-    set_section_entry(nullptr);
+    initializeProperties();
 }
 
 /* Pre-unparsing updates */
