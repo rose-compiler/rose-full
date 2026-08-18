@@ -110,8 +110,8 @@ Build-Pack:
     script:
         - ./$TEST_DIRECTORY/develop_launcher.sh $CI_JOB_NAME
 
-#The point of this job is to block the completion of the development pipeline if another pipeline is in the process of pushing to certain branches. If not
-#other pipelines are holding the recource this job will immidiatly exit.
+#The point of this job is to block the completion of the development pipeline if another pipeline is in the process of pushing to certain branches. If no
+#other pipelines are holding the resource this job will immediately exit.
 Deploy-Blocker:
     rules:
         - if: $PIPE_TYPE == "develop" && $PIPE_LOCK == "true" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME =~ /-rc/
