@@ -92,6 +92,9 @@ public:
     /** Find and return the descriptor for a method from the constant pool at the given index */
     static std::string methodDescriptor(SgAsmJvmConstantPool *pool, size_t index);
 
+    /** Find and return the descriptor for a field from the constant pool at the given index */
+    static std::string fieldDescriptor(SgAsmJvmConstantPool *pool, size_t index);
+
     /** Initialize local variables in advance of a method invocation */
     static void initializeInvocationLocals(BaseSemantics::RiscOperators *ops,
                                            const BaseSemantics::FrameState::Ptr &frame,

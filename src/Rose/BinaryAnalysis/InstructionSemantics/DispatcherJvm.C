@@ -4127,8 +4127,37 @@ struct IP_pop2: P {
         //   NullPointerException if objectref is null.
 struct IP_putfield: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
-        assert_args(insn, args, 2);
-        JvmSemantics::execute_putfield(ops, insn, args);
+        assert_args(insn, args, 1);
+
+        const SValuePtr value = ops->popOperand();
+        const SValuePtr objectRef = ops->popOperand();
+
+        ASSERT_not_null(value);
+        ASSERT_not_null(objectRef);
+        ASSERT_require(objectRef->kind() == ValueKind::ObjectReference);
+
+        auto state = ops->currentState();
+        ASSERT_not_null(state);
+
+        auto frame = state->currentFrame();
+        ASSERT_not_null(frame);
+
+        auto pool = frame->jvmConstantPool();
+        ASSERT_not_null(pool);
+
+        auto ivExpr = isSgAsmIntegerValueExpression(args[0]);
+        ASSERT_not_null(ivExpr);
+        const size_t index = static_cast<uint16_t>(ivExpr->get_absoluteValue());
+
+        std::string descriptor = DispatcherJvm::fieldDescriptor(pool, index);
+        (void) descriptor;
+
+        // Eventually:
+        //
+        //     d->writeField(objectRef, fieldRef, value);
+        //
+        // For now, without an object/heap model, consuming the operands is
+        // the semantic effect we can represent.
     }
 };
 
@@ -4563,7 +4592,7 @@ DispatcherJvm::initializeDispatchTable() {
     iprocSet(0xb2,  new Jvm::IP_getstatic);
 //  iprocSet(0xb3,  new Jvm::IP_putstatic);
 //  iprocSet(0xb4,  new Jvm::IP_getfield);
-//  iprocSet(0xb5,  new Jvm::IP_putfield);
+    iprocSet(0xb5,  new Jvm::IP_putfield);
 
     iprocSet(0xb6,  new Jvm::IP_invokevirtual);
     iprocSet(0xb7,  new Jvm::IP_invokespecial);
@@ -4635,6 +4664,19 @@ DispatcherJvm::iprocKey(SgAsmInstruction *insn_) const {
 RegisterDescriptor
 DispatcherJvm::instructionPointerRegister() const {
     return REG_PC;
+}
+
+std::string
+DispatcherJvm::fieldDescriptor(SgAsmJvmConstantPool *pool, size_t index) {
+    auto entry = pool->get_entry(index);
+    ASSERT_not_null(entry);
+
+    ASSERT_require(entry->get_tag() == SgAsmJvmConstantPoolEntry::CONSTANT_Fieldref);
+    entry = pool->get_entry(entry->get_name_and_type_index());
+
+    ASSERT_require(entry->get_tag() == SgAsmJvmConstantPoolEntry::CONSTANT_NameAndType);
+
+    return pool->get_utf8_string(entry->get_descriptor_index());
 }
 
 std::string
