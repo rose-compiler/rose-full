@@ -9,12 +9,6 @@
 #include <Rose/BinaryAnalysis/Partitioner2/BasicTypes.h>
 #endif
 
-//erasmus
-#if 0
-// For operators
-#include <Rose/BinaryAnalysis/InstructionSemantics/SymbolicSemantics.h>
-#endif
-
 class SgAsmInstructionList;
 
 namespace Rose {
@@ -30,6 +24,7 @@ using PartitionerPtr = P2::PartitionerPtr;
 class Class;
 class Namespace;
 
+using ClassPtr = Sawyer::SharedPointer<Class>;
 using NamespacePtr = Sawyer::SharedPointer<Namespace>;
 
 /** Base class for ByteCode Code.
@@ -93,11 +88,17 @@ public:
     virtual const SgAsmInstructionList* instructions() const = 0;
     virtual void decode(const Disassembler::BasePtr&) const = 0;
 
+    virtual std::string descriptor() const = 0;
+
     /* Annotate the AST (.e.g., add comments to instructions) */
     virtual void annotate() = 0;
 
     /* Set of instruction branch targets */
     std::set<Address> targets() const;
+
+    // Accessors to ByteCode::Class containing this method
+    ClassPtr analysisClass();
+    void analysisClass(ClassPtr);
 
     // Methods associated with basic blocks (Rose::BinaryAnalysis::Partitioner2)
     //
@@ -109,6 +110,7 @@ public:
 protected:
     Method(Address);
     Address classAddr_;
+    ClassPtr class_; // Class containing this method
     P2::FunctionPtr function_;
     std::vector<BasicBlockPtr> blocks_;
 };
@@ -178,7 +180,7 @@ class Class: public Sawyer::SharedObject,
     const std::vector<Interface::Ptr>& interfaces() const;
 
     virtual void partition(const PartitionerPtr &partitioner,
-                           std::map<std::string,Address> &discoveredFunctions) const;
+                           std::map<std::string,Address> &discoveredFunctions);
     virtual void digraph() const;
     virtual void dump() = 0;
 
@@ -215,7 +217,7 @@ class Namespace: public Sawyer::SharedObject,
 
     virtual std::string name() const;
     virtual void partition(const PartitionerPtr &partitioner,
-                           std::map<std::string,Address> &discoveredFunctions) const;
+                           std::map<std::string,Address> &discoveredFunctions);
 
     void append(Class::Ptr ptr);
 
@@ -244,7 +246,7 @@ class Container: public Sawyer::SharedObject,
   public:
     virtual std::string name() const = 0;
     virtual bool isSystemReserved(const std::string &name) const = 0;
-    virtual void partition(const PartitionerPtr &partitioner) const;
+    virtual void partition(const PartitionerPtr &partitioner);
 
     const std::vector<Namespace::Ptr>& namespaces() const;
 

@@ -80,7 +80,9 @@ class JvmMethod final : public Method {
     void annotate() override;
 
     bool isStatic() const;
-    std::string descriptor() const;
+    std::string descriptor() const override;
+
+    SgAsmJvmConstantPool* constant_pool();
 
     JvmMethod() = delete;
     JvmMethod(SgAsmJvmFileHeader*, SgAsmJvmMethod*, Address);

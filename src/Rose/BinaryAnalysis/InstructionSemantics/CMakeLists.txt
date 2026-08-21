@@ -3,6 +3,7 @@ add_subdirectory(BaseSemantics)
 add_library(roseBinaryAnalysisInstructionSemantics OBJECT
   ConcreteSemantics.C
   DataFlowSemantics.C
+  DescriptorParser.C
   DispatcherAarch32.C
   DispatcherAarch64.C
   DispatcherCil.C
@@ -31,6 +32,7 @@ install(FILES
   ConcreteSemantics.h
   ConcreteSemantics.tpp
   DataFlowSemantics.h
+  DescriptorParser.h
   DispatcherAarch32.h
   DispatcherAarch64.h
   DispatcherCil.h

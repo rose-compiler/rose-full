@@ -155,6 +155,11 @@ std::string JvmMethod::descriptor() const {
     return std::string{""};
 }
 
+SgAsmJvmConstantPool*
+JvmMethod::constant_pool() {
+    return jfh_->get_constant_pool();
+}
+
 const Code &
 JvmMethod::code() const {
     return code_;

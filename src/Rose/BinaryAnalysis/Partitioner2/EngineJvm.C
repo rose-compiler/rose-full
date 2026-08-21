@@ -34,8 +34,6 @@
 #include <boost/filesystem.hpp>
 #include <ROSE_UNUSED.h>
 
-constexpr bool DEBUG_WITH_DUMP = false;
-
 using namespace Rose::Diagnostics;
 using AddressSegment = Sawyer::Container::AddressSegment<Rose::BinaryAnalysis::Address,uint8_t>;
 using opcode = Rose::BinaryAnalysis::JvmInstructionKind;
@@ -405,10 +403,14 @@ EngineJvm::loadWarFile(const std::string &filename) {
     // Load files contained in the war file
     for (auto file : zipWar->files()) {
         if (settings().engineJvm.loadAllJars && CommandlineProcessing::isJavaJarFile(file.filename())) {
+            std::cerr << "..... loading jar file:" << file.filename() << "\n";
             loadJarFile(file.filename(), zipWar);
         }
         else if (settings().engineJvm.loadAllClasses && CommandlineProcessing::isJavaClassFile(file.filename())) {
-            ASSERT_require2(false, "UNIMPLEMENTED: found a class file in a war file\n");
+            ASSERT_require2(true, "UNIMPLEMENTED: found a class file in a war file\n");
+        }
+        else {
+            std::cerr << "..... ignoring file:" << file.filename() << "\n";
         }
     }
 
@@ -883,6 +885,7 @@ EngineJvm::runPartitionerInit(const Partitioner::Ptr &partitioner) {
 void
 EngineJvm::runPartitionerRecursive(const Partitioner::Ptr &partitioner) {
     Sawyer::Message::Stream where(mlog[WHERE]);
+    ASSERT_not_null(interpretation());
     SgAsmGenericHeaderList *interpHeaders = interpretation()->get_headers();
     ASSERT_not_null(interpHeaders);
 
@@ -900,12 +903,8 @@ EngineJvm::runPartitionerRecursive(const Partitioner::Ptr &partitioner) {
 
     BaseSemantics::MemoryState::Ptr mstate = InstructionSemantics::SymbolicSemantics::MemoryListState::instance(protoval, protoval);
 
-    BaseSemantics::FrameState::Ptr fstate = BaseSemantics::FrameState::instance(protoval);
-    fstate->purpose(BaseSemantics::AddressSpace::Purpose::FRAMES);
-
-    auto state = BaseSemantics::State::instance(rstate, mstate, istate, fstate);
+    auto state = BaseSemantics::State::instance(rstate, mstate, istate);
     ASSERT_require(state);
-    ASSERT_require(state->hasFrameState());
 
     // Make the symbolic execution state available
     state_ = state;
@@ -947,12 +946,7 @@ EngineJvm::runPartitionerRecursive(const Partitioner::Ptr &partitioner) {
         SAWYER_MESG(where) <<"discovering and populating functions\n";
 
         jvmClass->partition(partitioner, functions_);
-
-        if (DEBUG_WITH_DUMP) {
-            jvmClass->dump();
-            jvmClass->digraph();
-        }
-    }
+   }
 }
 
 void

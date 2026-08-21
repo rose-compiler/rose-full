@@ -59,6 +59,8 @@ class CilMethod final : public Method {
     const SgAsmInstructionList* instructions() const override;
     void decode(const Disassembler::BasePtr &disassembler) const override;
 
+    std::string descriptor() const override;
+
     void annotate() override;
 
     CilMethod() = delete;

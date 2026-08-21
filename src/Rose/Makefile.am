@@ -158,6 +158,7 @@ librose_partial_la_SOURCES =								\
 	BinaryAnalysis/InstructionSemantics/BaseSemantics/SymbolicMemory.C		\
 	BinaryAnalysis/InstructionSemantics/ConcreteSemantics.C				\
 	BinaryAnalysis/InstructionSemantics/DataFlowSemantics.C				\
+	BinaryAnalysis/InstructionSemantics/DescriptorParser.C				\
 	BinaryAnalysis/InstructionSemantics/DispatcherAarch32.C				\
 	BinaryAnalysis/InstructionSemantics/DispatcherAarch64.C				\
 	BinaryAnalysis/InstructionSemantics/DispatcherCil.C				\

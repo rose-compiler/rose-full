@@ -322,34 +322,68 @@ State::hasFrameState() const {
 
 SValuePtr
 State::readLocal(size_t index) {
-    ASSERT_not_null(frameState());
-    return frameState()->readLocal(index);
+    ASSERT_not_null(currentFrame());
+    return currentFrame()->readLocal(index);
 }
 
 void
 State::writeLocal(size_t index, const SValuePtr &value) {
     ASSERT_not_null(value);
-    ASSERT_not_null(frameState());
-    return frameState()->writeLocal(index, value);
+    ASSERT_not_null(currentFrame());
+    return currentFrame()->writeLocal(index, value);
+}
+
+FrameState::Ptr
+State::currentFrame() const {
+    for (auto iter = addressSpaces_.rbegin(); iter != addressSpaces_.rend(); ++iter) {
+        if ((*iter)->purpose() == AddressSpace::Purpose::FRAMES) {
+            FrameState::Ptr frame = as<FrameState>(*iter);
+            ASSERT_not_null(frame);
+            return frame;
+        }
+    }
+    return {};
+}
+
+void
+State::pushFrame(const FrameState::Ptr &frame) {
+    ASSERT_not_null(frame);
+    ASSERT_require(frame->purpose() == AddressSpace::Purpose::FRAMES);
+
+    insertAddressSpace(frame);
+}
+
+FrameState::Ptr
+State::popFrame() {
+    for (auto iter = addressSpaces_.rbegin(); iter != addressSpaces_.rend(); ++iter) {
+        if ((*iter)->purpose() == AddressSpace::Purpose::FRAMES) {
+            FrameState::Ptr frame = as<FrameState>(*iter);
+            ASSERT_not_null(frame);
+
+            addressSpaces_.erase(std::prev(iter.base()));
+            return frame;
+        }
+    }
+    ASSERT_not_reachable("cannot pop an empty frame stack");
 }
 
 SValue::Ptr
 State::peekOperand(size_t depth) {
-    ASSERT_not_null(frameState());
-    return frameState()->peekOperand(depth);
+    ASSERT_not_null(currentFrame());
+    return currentFrame()->peekOperand(depth);
 }
 
 SValue::Ptr
 State::popOperand() {
-    ASSERT_not_null(frameState());
-    return frameState()->popOperand();
+    ASSERT_not_null(currentFrame());
+    return currentFrame()->popOperand();
 }
 
 void
 State::pushOperand(const SValue::Ptr &value) {
     ASSERT_not_null(value);
-    ASSERT_not_null(frameState());
-    frameState()->pushOperand(value);
+    ASSERT_not_null(currentFrame());
+    currentFrame()->pushOperand(value);
 }
 
 SValue::Ptr
@@ -508,7 +542,6 @@ State::hash(Combinatorics::Hasher &hasher, RiscOperators *addrOps, RiscOperators
     for (const AddressSpace::Ptr &space: addressSpaces())
         space->hash(hasher, addrOps, valOps);
 }
-
 void
 State::print(std::ostream &stream, const std::string &prefix) const {
     Formatter fmt;

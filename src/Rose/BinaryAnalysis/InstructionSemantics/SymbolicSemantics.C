@@ -148,6 +148,7 @@ SValue::copy(size_t new_width) const {
     retval->kind(kind());
     retval->arrayLength(arrayLength());
     retval->typeDescriptor(typeDescriptor());
+    retval->symbolName(symbolName());
 
     return retval;
 }

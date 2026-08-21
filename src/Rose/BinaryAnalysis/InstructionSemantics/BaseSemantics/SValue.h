@@ -77,6 +77,7 @@ protected:
     ValueKind kind_ = ValueKind::Unknown;       /** Kind of the value type. */
     SValuePtr arrayLength_;                     /** Symbolic length of the array if an ArrayReference. */
     std::string typeDescriptor_;   /** Description of the type if a Reference, empty means no descriptor. */
+    std::string symbolName_;       /** Name of the symbolic program entity represented by this value; empty means none. */
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     // Serialization
@@ -90,6 +91,7 @@ private:
         s & BOOST_SERIALIZATION_NVP(kind_);
         s & BOOST_SERIALIZATION_NVP(arrayLength_);
         s & BOOST_SERIALIZATION_NVP(typeDescriptor_);
+        s & BOOST_SERIALIZATION_NVP(symbolName_);
     }
 #endif
     
@@ -221,6 +223,11 @@ public:
     virtual void typeDescriptor(const std::string &s);
     virtual const std::string& typeDescriptor() const;
     virtual bool hasTypeDescriptor() const;
+
+    /** Property: symbol name. */
+    virtual void symbolName(const std::string &s);
+    virtual const std::string& symbolName() const;
+    virtual bool hasSymbolName() const;
 
     /** Determines whether a value is JVM category-1.
      *

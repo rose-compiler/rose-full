@@ -150,6 +150,11 @@ public:
     void name(const std::string&);
     /** @} */
 
+    /** Label for this address space.
+     *
+     *  The label may be used in place of the name where circumstances dictate. */
+    virtual std::string label() const;
+
     /** Remove all values.
      *
      *  All address and value pairs are removed from the address space, making the space completely empty. */

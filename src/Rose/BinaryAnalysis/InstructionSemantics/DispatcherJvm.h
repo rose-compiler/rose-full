@@ -4,6 +4,7 @@
 #ifdef ROSE_ENABLE_BINARY_ANALYSIS
 
 #include <Rose/BinaryAnalysis/InstructionSemantics/BaseSemantics/Dispatcher.h>
+#include <Rose/BinaryAnalysis/InstructionSemantics/BaseSemantics/FrameState.h>
 
 #ifdef ROSE_HAVE_BOOST_SERIALIZATION_LIB
 #include <boost/serialization/access.hpp>
@@ -81,10 +82,20 @@ public:
 public:
     // documented in the base class
     virtual BaseSemantics::DispatcherPtr create(const BaseSemantics::RiscOperatorsPtr&) const override;
+
     virtual int iprocKey(SgAsmInstruction*) const override;
+    virtual RegisterDescriptor instructionPointerRegister() const override;
 
     /** Make a record of errors in the semantic analysis */
     void recordSemanticError(const std::string &msg);
+
+    /** Find and return the descriptor for a method from the constant pool at the given index */
+    static std::string methodDescriptor(SgAsmJvmConstantPool *pool, size_t index);
+
+    /** Initialize local variables in advance of a method invocation */
+    static void initializeInvocationLocals(BaseSemantics::RiscOperators *ops,
+                                           const BaseSemantics::FrameState::Ptr &frame,
+                                           const std::string &descriptor, bool hasReceiver);
 
 private:
     // Initialize the dispatch table that handles each kind of instruction

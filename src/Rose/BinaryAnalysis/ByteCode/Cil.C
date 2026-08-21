@@ -243,6 +243,11 @@ CilMethod::name() const {
     return utf8ToString(sgMethod_->get_Name_string());
 }
 
+std::string
+CilMethod::descriptor() const {
+    return "CilMethod::descriptor(): Not Implemented";
+}
+
 bool
 CilMethod::isSystemReserved(const std::string &name) const {
     return CilContainer::isCilSystemReserved(name);

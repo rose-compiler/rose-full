@@ -124,6 +124,11 @@ AddressSpace::purpose(const AddressSpace::Purpose p) {
     purpose_ = p;
 }
 
+std::string
+AddressSpace::label() const {
+    return name();
+}
+
 const std::string&
 AddressSpace::name() const {
     return name_;
@@ -186,7 +191,8 @@ std::string
 AddressSpace::printableName() const {
     std::regex re("[A-Za-z][_0-9A-Za-z]*");
     if (std::regex_match(name(), re)) {
-        return name();
+        // May add additional information beyond just name()
+        return label();
     } else {
         return "\"" + StringUtility::cEscape(name()) + "\"";
     }

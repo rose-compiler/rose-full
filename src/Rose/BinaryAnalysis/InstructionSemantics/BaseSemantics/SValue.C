@@ -83,6 +83,21 @@ SValue::hasTypeDescriptor() const {
     return typeDescriptor_.size() > 0;
 }
 
+const std::string&
+SValue::symbolName() const {
+    return symbolName_;
+}
+
+void
+SValue::symbolName(const std::string &s) {
+    symbolName_ = s;
+}
+
+bool
+SValue::hasSymbolName() const {
+    return symbolName_.size() > 0;
+}
+
 SValuePtr
 SValue::arrayLength() const {
     return arrayLength_;

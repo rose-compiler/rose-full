@@ -370,6 +370,7 @@ nobase_pkginclude_HEADERS=								\
 	Rose/BinaryAnalysis/InstructionSemantics/ConcreteSemantics.h			\
 	Rose/BinaryAnalysis/InstructionSemantics/ConcreteSemantics.tpp			\
 	Rose/BinaryAnalysis/InstructionSemantics/DataFlowSemantics.h			\
+	Rose/BinaryAnalysis/InstructionSemantics/DescriptorParser.h			\
 	Rose/BinaryAnalysis/InstructionSemantics/DispatcherAarch32.h			\
 	Rose/BinaryAnalysis/InstructionSemantics/DispatcherAarch64.h			\
 	Rose/BinaryAnalysis/InstructionSemantics/DispatcherCil.h                        \

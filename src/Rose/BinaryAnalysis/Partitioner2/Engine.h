@@ -363,7 +363,7 @@ private:
     ProgressPtr progress_;                              // optional progress reporting
     std::vector<std::string> specimen_;                 // list of additional command line arguments (often file names)
 protected:
-    ByteCode::Class::Ptr analysisClass_;                // the ByteCode analysis class used for partitioning
+    ByteCode::Class::Ptr analysisClass_;               // the ByteCode analysis class used for partitioning
     Architecture::BaseConstPtr architecture_;           // architecture-specific information
     InstructionSemantics::BaseSemantics::StatePtr state_; // the semantics machine state
 
@@ -1038,6 +1038,7 @@ public:
      *
      * @{ */
     ByteCode::Class::Ptr analysisClass() {
+        ASSERT_not_null(analysisClass_);
         return analysisClass_;
     }
     /** @} */

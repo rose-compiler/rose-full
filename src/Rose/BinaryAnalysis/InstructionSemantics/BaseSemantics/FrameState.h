@@ -67,9 +67,12 @@ public:
     using Ptr = FrameStatePtr;
 
 private:
+    size_t frameId_ = 0; // unique frame identifier
+    Sawyer::Optional<Address> returnAddress_ = Sawyer::Nothing(); // caller resume address
+    SgAsmJvmConstantPool *pool_ = nullptr; // JVM constant pool
     std::vector<SValuePtr> stack_;  // operand stack for the frame
     std::vector<SValuePtr> locals_; // local variables for the frame
-    ByteCode::Class::Ptr class_; // information pertaining to the current analysis class
+    ByteCode::Method::Ptr method_;  // method associated with this invocation frame
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     // Serialization
@@ -80,8 +83,12 @@ private:
     template<class S>
     void serialize(S &s, const unsigned /*version*/) {
         s & BOOST_SERIALIZATION_BASE_OBJECT_NVP(MemoryState);
+        s & BOOST_SERIALIZATION_NVP(frameId_);
+        s & BOOST_SERIALIZATION_NVP(returnAddress_);
+        s & BOOST_SERIALIZATION_NVP(pool_);
         s & BOOST_SERIALIZATION_NVP(stack_);
         s & BOOST_SERIALIZATION_NVP(locals_);
+        s & BOOST_SERIALIZATION_NVP(method_);
     }
 #endif
 
@@ -92,11 +99,12 @@ protected:
     FrameState(); // for serialization
 
     // All memory states should be heap allocated; use instance(), create(), or clone() instead.
-    explicit FrameState(const SValuePtr &valProtoval);
+    explicit FrameState(const SValuePtr &valProtoval, const Sawyer::Optional<Address> &, SgAsmJvmConstantPool*);
+    explicit FrameState(const FrameState &other);
 
 public:
     /** Instantiate a new empty frame state on the heap. */
-    static FrameStatePtr instance(const SValuePtr &valProtoval);
+    static FrameStatePtr instance(const SValuePtr &valProtoval, const Sawyer::Optional<Address> &, SgAsmJvmConstantPool*);
 
 public:
     // documented in base class
@@ -136,10 +144,30 @@ public:
     void hash(Combinatorics::Hasher&, RiscOperators* addrOps, RiscOperators* valOps) const override;
     void print(std::ostream&, Formatter&) const override;
 
-    void analysisClass(ByteCode::Class::Ptr&);
-    ByteCode::Class::Ptr analysisClass();
+    void analysisMethod(ByteCode::Method::Ptr&);
+    ByteCode::Method::Ptr analysisMethod();
 
-    void initializeFrame(RiscOperatorsPtr& ops, std::string& className, std::string& desc, uint16_t access, uint16_t maxLocals);
+    SValuePtr createArgument(const std::string &descriptor, size_t argIdx);
+    static std::string argumentDescriptor(const std::string &descriptor, size_t argIdx);
+
+    void initializeRootFrame(RiscOperatorsPtr& ops, size_t index);
+    void initializeRootFrame(const ByteCode::Method::Ptr&);
+
+    SgAsmJvmConstantPool* jvmConstantPool() const;
+    void jvmConstantPool(SgAsmJvmConstantPool *pool);
+
+    const Sawyer::Optional<Address>& returnAddress() const;
+    void returnAddress(Address);
+
+    size_t frameId() const;
+    void frameId(size_t);
+    static size_t newFrameId();
+
+    std::string frameLabel() const;
+    std::string frameName() const;
+
+    // Short form of frameLabel
+    std::string label() const override;
 
     static bool isCategory1(const SValuePtr&);
     static bool isCategory2(const SValuePtr&);

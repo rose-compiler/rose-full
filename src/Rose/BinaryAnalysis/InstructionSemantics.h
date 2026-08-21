@@ -6,6 +6,7 @@
 #include <Rose/BinaryAnalysis/InstructionSemantics/BaseSemantics.h>
 #include <Rose/BinaryAnalysis/InstructionSemantics/ConcreteSemantics.h>
 #include <Rose/BinaryAnalysis/InstructionSemantics/DataFlowSemantics.h>
+#include <Rose/BinaryAnalysis/InstructionSemantics/DescriptorParser.h>
 #include <Rose/BinaryAnalysis/InstructionSemantics/DispatcherAarch32.h>
 #include <Rose/BinaryAnalysis/InstructionSemantics/DispatcherAarch64.h>
 #include <Rose/BinaryAnalysis/InstructionSemantics/DispatcherCil.h>

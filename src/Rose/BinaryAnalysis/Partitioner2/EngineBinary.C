@@ -1584,7 +1584,7 @@ EngineBinary::runPartitionerRecursive(const Partitioner::Ptr &partitioner) {
 
     BaseSemantics::MemoryState::Ptr mstate = InstructionSemantics::SymbolicSemantics::MemoryListState::instance(protoval, protoval);
 
-    BaseSemantics::FrameState::Ptr fstate = BaseSemantics::FrameState::instance(protoval);
+    BaseSemantics::FrameState::Ptr fstate = BaseSemantics::FrameState::instance(protoval, Sawyer::Nothing(), /*pool*/nullptr);
     fstate->purpose(BaseSemantics::AddressSpace::Purpose::FRAMES);
 
     auto state = BaseSemantics::State::instance(rstate, mstate, istate, fstate);

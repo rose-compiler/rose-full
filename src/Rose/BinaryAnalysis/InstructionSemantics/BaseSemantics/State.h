@@ -3,6 +3,7 @@
 #include <featureTests.h>
 #ifdef ROSE_ENABLE_BINARY_ANALYSIS
 #include <Rose/BinaryAnalysis/InstructionSemantics/BaseSemantics/BasicTypes.h>
+#include <Rose/BinaryAnalysis/InstructionSemantics/BaseSemantics/State.h>
 #include <Rose/BinaryAnalysis/InstructionSemantics/BaseSemantics/SValue.h>
 
 #include <Rose/BinaryAnalysis/RegisterDescriptor.h>
@@ -49,12 +50,12 @@ public:
     using Ptr = StatePtr;
 
 private:
-    std::vector<AddressSpacePtr> addressSpaces_;        // ordered address spaces
     SValuePtr protoval_;                                // Initial value used to create additional values as needed.
+    std::vector<AddressSpacePtr> addressSpaces_;        // All address spaces for this semantic state.
     RegisterStatePtr registers_;                        // All machine register values for this semantic state.
     MemoryStatePtr memory_;                             // All memory for this semantic state.
     RegisterStatePtr interrupts_;                       // Whether interrupts occurred.
-    FrameStatePtr frame_;                               // Stores JVM local variables and operand stack for executing method.
+
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     // Serialization.
@@ -71,7 +72,6 @@ private:
         s & BOOST_SERIALIZATION_NVP(registers_);
         s & BOOST_SERIALIZATION_NVP(memory_);
         s & BOOST_SERIALIZATION_NVP(interrupts_);
-        s & BOOST_SERIALIZATION_NVP(frame_);
     }
 #endif
 
@@ -336,6 +336,15 @@ public:
      *
      *  Calls @ref popOperand on the address space returned by @ref frameState, which must be non-null. */
     virtual SValuePtr popOperand();
+
+    /** Pushes a method invocation frame. */
+    virtual void pushFrame(const FrameStatePtr &frame);
+
+    /** Pops and returns the current method invocation frame. */
+    virtual FrameStatePtr popFrame();
+
+    /** Returns the current method invocation frame. */
+    virtual FrameStatePtr currentFrame() const;
 
     /** Read a value from a register.
      *

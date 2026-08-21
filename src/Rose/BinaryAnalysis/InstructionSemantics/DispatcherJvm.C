@@ -5,13 +5,16 @@
 #include <Rose/As.h>
 #include <Rose/Affirm.h>
 #include <Rose/BinaryAnalysis/Architecture/Base.h>
+#include <Rose/BinaryAnalysis/ByteCode/Jvm.h>
 #include <Rose/BinaryAnalysis/InstructionEnumsJvm.h>
 #include <Rose/BinaryAnalysis/InstructionSemantics.h>
+#include <Rose/BinaryAnalysis/InstructionSemantics/DescriptorParser.h>
 #include <Rose/BinaryAnalysis/InstructionSemantics/BaseSemantics/Dispatcher.h>
 #include <Rose/BinaryAnalysis/InstructionSemantics/BaseSemantics/Exception.h>
 #include <Rose/BinaryAnalysis/InstructionSemantics/BaseSemantics/MemoryState.h>
 #include <Rose/BinaryAnalysis/InstructionSemantics/BaseSemantics/RiscOperators.h>
 #include <Rose/BinaryAnalysis/InstructionSemantics/BaseSemantics/State.h>
+#include <Rose/BinaryAnalysis/InstructionSemantics/BaseSemantics/SValue.h>
 #include <Rose/StringUtility/Diagnostics.h>
 
 #include <SgAsmExpression.h>
@@ -231,16 +234,11 @@ namespace JvmSemantics {
     void execute_athrow(Ops ops, I insn, Args args);
     void execute_checkcast(Ops ops, I insn, Args args);
     void execute_getfield(Ops ops, I insn, Args args);
-    void execute_getstatic(Ops ops, I insn, Args args);
     void execute_instanceof(Ops ops, I insn, Args args);
     void execute_invokedynamic(Ops ops, I insn, Args args);
     void execute_invokeinterface(Ops ops, I insn, Args args);
-    void execute_invokespecial(Ops ops, I insn, Args args);
     void execute_invokestatic(Ops ops, I insn, Args args);
     void execute_invokevirtual(Ops ops, I insn, Args args);
-    void execute_ldc(Ops ops, I insn, Args args);
-    void execute_ldc_w(Ops ops, I insn, Args args);
-    void execute_ldc2_w(Ops ops, I insn, Args args);
     void execute_monitorenter(Ops ops, I insn, Args args);
     void execute_monitorexit(Ops ops, I insn, Args args);
     void execute_multianewarray(Ops ops, I insn, Args args);
@@ -317,6 +315,80 @@ namespace JvmSemantics {
 
     SValue::Ptr rem(Ops ops, SValue::Ptr a, SValue::Ptr b) {
         return ops->signedModulo(a, b);
+    }
+
+    SgAsmJvmConstantPool* constantPool(Ops ops) {
+        auto frame = ops->currentState()->frameState();
+        ASSERT_not_null(frame);
+        auto bcMethod = frame->analysisMethod();
+        ASSERT_not_null(bcMethod);
+
+        auto jvmMethod = ByteCode::JvmMethod::promote(bcMethod);
+        ASSERT_not_null(jvmMethod);
+
+        auto pool = jvmMethod->constant_pool();
+        ASSERT_not_null(pool);
+
+        return pool;
+    }
+
+    SgAsmJvmConstantPoolEntry* constantPoolEntry(Ops ops, size_t index) {
+        return constantPool(ops)->get_entry(index);
+    }
+
+    std::string constantPoolUtf8(Ops ops, size_t index) {
+        auto entry = constantPoolEntry(ops, index);
+        ASSERT_require(entry->get_tag() == SgAsmJvmConstantPoolEntry::CONSTANT_Utf8);
+
+        auto pool = constantPool(ops);
+        return pool->get_utf8_string(index);
+    }
+
+    std::string className(Ops ops, size_t index) {
+        auto entry = constantPoolEntry(ops, index);
+        ASSERT_require(entry && entry->get_tag() == SgAsmJvmConstantPoolEntry::CONSTANT_Fieldref);
+
+        entry = constantPoolEntry(ops, entry->get_class_index());
+        return constantPoolUtf8(ops, entry->get_name_index());
+    }
+
+    std::string fieldName(Ops ops, size_t index) {
+        auto entry = constantPoolEntry(ops, index);
+        ASSERT_require(entry && entry->get_tag() == SgAsmJvmConstantPoolEntry::CONSTANT_Fieldref);
+
+        entry = constantPoolEntry(ops, entry->get_name_and_type_index());
+        return constantPoolUtf8(ops, entry->get_name_index());
+    }
+
+    std::string nameAndTypeDescriptor(Ops ops, size_t index) {
+        auto entry = constantPoolEntry(ops, index);
+        ASSERT_require(entry && entry->get_tag() == SgAsmJvmConstantPoolEntry::CONSTANT_NameAndType);
+
+        return constantPoolUtf8(ops, entry->get_descriptor_index());
+    }
+
+    std::string descriptor(Ops ops, size_t index) {
+        auto entry = constantPoolEntry(ops, index);
+        ASSERT_require(entry && entry->get_tag() == SgAsmJvmConstantPoolEntry::CONSTANT_Fieldref);
+
+        entry = constantPoolEntry(ops, entry->get_name_and_type_index());
+        ASSERT_require(entry && entry->get_tag() == SgAsmJvmConstantPoolEntry::CONSTANT_NameAndType);
+
+        return constantPoolUtf8(ops, entry->get_descriptor_index());
+    }
+
+    std::string methodDescriptor(Ops ops, size_t index) {
+        auto entry = constantPoolEntry(ops, index);
+        auto nameTypeIdx = entry->get_name_and_type_index();
+
+        entry = constantPoolEntry(ops, nameTypeIdx);
+        ASSERT_require(entry->get_tag() == SgAsmJvmConstantPoolEntry::CONSTANT_NameAndType);
+
+        auto descIdx = entry->get_descriptor_index();
+        entry = constantPoolEntry(ops, descIdx);
+        ASSERT_require(entry->get_tag() == SgAsmJvmConstantPoolEntry::CONSTANT_Utf8);
+
+        return constantPoolUtf8(ops, descIdx);
     }
 
     template<class UnaryFunc>
@@ -504,20 +576,169 @@ namespace JvmSemantics {
         ops->writeLocal(index, ref);
     }
 
+    void execute_ldc(Ops ops, size_t index, bool requireCategory2) {
+        ASSERT_not_null(ops);
+
+        auto state = ops->currentState();
+        ASSERT_not_null(state);
+
+        auto frame = state->currentFrame();
+        ASSERT_not_null(frame);
+
+        auto pool = frame->jvmConstantPool();
+        ASSERT_not_null(pool);
+
+        auto entry = pool->get_entry(index);
+        ASSERT_not_null(entry);
+
+        SValuePtr sval;
+
+        switch (entry->get_tag()) {
+          case SgAsmJvmConstantPoolEntry::CONSTANT_Integer:
+              ASSERT_require(!requireCategory2);
+              sval = ops->number_(32, entry->get_bytes());
+              sval->kind(ValueKind::Integer32);
+              break;
+          case SgAsmJvmConstantPoolEntry::CONSTANT_Float:
+              ASSERT_require(!requireCategory2);
+              sval = ops->number_(32, entry->get_bytes());
+              sval->kind(ValueKind::Float32);
+              break;
+        case SgAsmJvmConstantPoolEntry::CONSTANT_Long:
+              ASSERT_require(requireCategory2);
+              sval = ops->number_(64, entry->get_bytes());
+              sval->kind(ValueKind::Integer64);
+              break;
+          case SgAsmJvmConstantPoolEntry::CONSTANT_Double:
+              ASSERT_require(requireCategory2);
+              sval = ops->number_(64, entry->get_bytes());
+              sval->kind(ValueKind::Float64);
+              break;
+          case SgAsmJvmConstantPoolEntry::CONSTANT_String:
+              ASSERT_require(!requireCategory2);
+              ASSERT_not_implemented("CONSTANT_Class unsupported constant-pool entry for execute_ldc");
+              entry->get_string_index();
+              //sval = makeStringReference(ops, pool, entry);
+              break;
+          case SgAsmJvmConstantPoolEntry::CONSTANT_Class:
+              ASSERT_require(!requireCategory2);
+              ASSERT_not_implemented("CONSTANT_Class unsupported constant-pool entry for execute_ldc");
+              entry->get_name_index();
+              //sval = makeClassReference(ops, pool, entry);
+              break;
+          default: ASSERT_not_implemented("unsupported constant-pool entry for execute_ldc");
+        }
+
+        ASSERT_not_null(sval);
+        ops->pushOperand(sval);
+    }
+
+    void execute_getstatic(Ops ops, size_t index) {
+        const std::string symName = className(ops, index) + "." + fieldName(ops, index);
+        const std::string fieldDesc = descriptor(ops, index);
+
+        // Determine the ValueKind of the field descriptor
+        auto descType = DescriptorParser::parseFieldDescriptor(fieldDesc);
+        auto kind = descType.kind;
+
+        auto sval = ops->undefined_(32);
+        sval->kind(kind);
+        sval->symbolName(symName);
+        sval->typeDescriptor(fieldDesc);
+
+        ops->pushOperand(sval);
+    }
+
+    void execute_invokespecial(Ops ops, uint16_t index) {
+        auto state = ops->currentState();
+        auto callerFrame = state->currentFrame();
+        auto calleeFrame = FrameState::instance(state->protoval(), Sawyer::Nothing(), callerFrame->jvmConstantPool());
+
+        auto pool = callerFrame->jvmConstantPool();
+        ASSERT_not_null(pool);
+
+        bool hasReceiver = true; // for invoke{virtual,special,interface}
+        std::string descriptor = DispatcherJvm::methodDescriptor(pool, index);
+        DispatcherJvm::initializeInvocationLocals(ops, calleeFrame, descriptor, hasReceiver);
+
+        // Conceptually, do the following:
+        // -------------------------------
+        //   - push calleeFrame
+        //   - execute summary (transfer execution to the first instruction of calleeMethod)
+        //   - pop calleeFrame (by calleeMethod)
+        //   - resume frame callerFrame
+        //
+        // Conclusion: for now no summary, so just push then pop the calleeFrame
+
+        // Transfer execution to the resolved callee.
+        state->pushFrame(calleeFrame);
+
+        // Resume execution with caller
+        auto popped = state->popFrame();
+        ASSERT_require(popped == calleeFrame);
+}
+
+    void execute_invokevirtual(Ops ops, size_t index, SgAsmInstruction *insn) {
+        ASSERT_not_null(insn);
+
+        auto state = ops->currentState();
+        auto callerFrame = state->currentFrame();
+        auto calleeFrame = FrameState::instance(state->protoval(), Sawyer::Nothing(), callerFrame->jvmConstantPool());
+
+        auto pool = callerFrame->jvmConstantPool();
+        ASSERT_not_null(pool);
+
+        std::string descriptor = DispatcherJvm::methodDescriptor(pool, index);
+
+        DispatcherJvm::initializeInvocationLocals(ops, calleeFrame, descriptor, /*hasReceiver=*/true);
+
+        const Address callerResumeAddress = insn->get_address() + insn->get_size();
+        calleeFrame->returnAddress(callerResumeAddress);
+
+        // Conceptually, an interpreted invocation would:
+        //   - initialize the callee frame
+        //   - save the caller's resume address in the callee frame
+        //   - push the callee frame
+        //   - set PC to the callee's entry address
+        //   - execute the callee
+        //   - let the callee's return instruction pop the frame
+        //   - restore PC to the caller's resume address
+        //
+        // For now the callee is not interpreted and no summary is applied.
+        // Push and immediately pop the initialized frame so that invocation
+        // instrumentation can observe the normal frame lifecycle.
+
+        state->pushFrame(calleeFrame);
+
+        const auto popped = state->popFrame();
+        ASSERT_require(popped == calleeFrame);
+    }
+
+    void execute_return(Ops ops) {
+        ASSERT_require2(false, "needs fixing");
+        auto state = ops->currentState();
+        auto calleeFrame = ops->currentState()->frameState();
+        ASSERT_not_null(calleeFrame);
+
+        state->popFrame();
+
+        // Caller frame is now current.
+#if 0
+        const Sawyer::Optional<Address>& returnAddress = calleeFrame->returnAddress();
+        REG_PC(arch->registerDictionary()->findOrThrow("pc")),
+        auto ip = ops->number_(ops->instructionPointerRegister().nBits(), returnAddress);
+        ops->writeRegister(ops->instructionPointerRegister(), ip);
+#endif
+    }
+
 
     void execute_athrow(Ops, I, Args) { jvmUnsupported("execute_athrow"); }
     void execute_checkcast(Ops, I, Args) { jvmUnsupported("execute_checkcast"); }
     void execute_getfield(Ops, I, Args) { jvmUnsupported("execute_getfield"); }
-    void execute_getstatic(Ops, I, Args) { jvmUnsupported("execute_getstatic"); }
     void execute_instanceof(Ops, I, Args) { jvmUnsupported("execute_instanceof"); }
     void execute_invokedynamic(Ops, I, Args) { jvmUnsupported("execute_invokedynamic"); }
     void execute_invokeinterface(Ops, I, Args) { jvmUnsupported("execute_invokeinterface"); }
-    void execute_invokespecial(Ops, I, Args) { jvmUnsupported("execute_invokespecial"); }
     void execute_invokestatic(Ops, I, Args) { jvmUnsupported("execute_invokestatic"); }
-    void execute_invokevirtual(Ops, I, Args) { jvmUnsupported("execute_invokevirtual"); }
-    void execute_ldc(Ops, I, Args) { jvmUnsupported("execute_ldc"); }
-    void execute_ldc_w(Ops, I, Args) { jvmUnsupported("execute_ldc_w"); }
-    void execute_ldc2_w(Ops, I, Args) { jvmUnsupported("execute_ldc2_w"); }
     void execute_monitorenter(Ops, I, Args) { jvmUnsupported("execute_monitorenter"); }
     void execute_monitorexit(Ops, I, Args) { jvmUnsupported("execute_monitorexit"); }
     void execute_multianewarray(Ops, I, Args) { jvmUnsupported("execute_multianewarray"); }
@@ -898,6 +1119,29 @@ struct IP_areturn: P {
         assert_args(insn, args, 0);
         SValue::Ptr value = ops->popOperand();
         JvmSemantics::methodReturn(ops, insn, value);
+    }
+};
+
+// return_ (177 (0xb1))
+        // Description:
+        //   Return from the current method; typed returns move the return value to the invoker frame, while return returns void.
+        // Run-time Exceptions:
+        //   IllegalMonitorStateException can be thrown for synchronized methods if structured locking ownership rules are violated.
+struct IP_return_: P {
+    void p(D d, Ops ops, I insn, Args args) {
+        assert_args(insn, args, 0);
+        auto state = ops->currentState();
+
+        // Remove the callee; the caller frame becomes current.
+        auto frame = state->popFrame();
+        ASSERT_not_null(frame);
+
+        if (frame->returnAddress()) {
+            const RegisterDescriptor pc = d->instructionPointerRegister();
+            ops->writeRegister(pc, ops->number_(pc.nBits(), *frame->returnAddress()));
+        } else {
+            // Returned from the root method: execution is finished.
+        }
     }
 };
 
@@ -2136,9 +2380,9 @@ struct IP_getfield: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_getstatic: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
-        assert_args(insn, args, 2);
-        JvmSemantics::execute_getstatic(ops, insn, args);
+    void p(D d, Ops ops, I insn, Args args) {
+        assert_args(insn, args, 1);
+        JvmSemantics::execute_getstatic(ops, d->asU2(args[0]));
     }
 };
 
@@ -2822,9 +3066,9 @@ struct IP_invokeinterface: P {
         //   NullPointerException if an instance invocation receiver is null.
         //   Errors from method resolution or class/interface initialization may be observed as specified by the JVM.
 struct IP_invokespecial: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
-        assert_args(insn, args, 2);
-        JvmSemantics::execute_invokespecial(ops, insn, args);
+    void p(D d, Ops ops, I insn, Args args) {
+        assert_args(insn, args, 1);
+        JvmSemantics::execute_invokespecial(ops, d->asU2(args[0]));
     }
 };
 
@@ -2848,9 +3092,9 @@ struct IP_invokestatic: P {
         //   NullPointerException if an instance invocation receiver is null.
         //   Errors from method resolution or class/interface initialization may be observed as specified by the JVM.
 struct IP_invokevirtual: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
-        assert_args(insn, args, 2);
-        JvmSemantics::execute_invokevirtual(ops, insn, args);
+    void p(D d, Ops ops, I insn, Args args) {
+        assert_args(insn, args, 1);
+        JvmSemantics::execute_invokevirtual(ops, d->asU2(args[0]), insn);
     }
 };
 
@@ -2897,7 +3141,19 @@ struct IP_ireturn: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
         SValue::Ptr value = ops->popOperand();
+#if 1
         JvmSemantics::methodReturn(ops, insn, value);
+#else
+        auto state = ops->currentState();
+        auto result = ops->popOperand();
+        ASSERT_require(result->kind() == ValueKind::Integer32);
+        auto callee = state->frame();
+        Address returnAddress = callee->returnAddress();
+        state->popFrame();
+        // We are now operating on the caller frame.
+        ops->pushOperand(result);
+        // restore PC to caller continuation
+#endif
     }
 };
 
@@ -3289,9 +3545,10 @@ struct IP_lconst_1: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_ldc: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
+    void p(D d, Ops ops, I insn, Args args) {
         assert_args(insn, args, 1);
-        JvmSemantics::execute_ldc(ops, insn, args);
+        // ldc: unsigned 8-bit constant-pool index, the compact form, others are 16-bit
+        JvmSemantics::execute_ldc(ops, d->asU1(args[0]), false);
     }
 };
 
@@ -3303,9 +3560,10 @@ struct IP_ldc: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_ldc_w: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
+    void p(D d, Ops ops, I insn, Args args) {
         assert_args(insn, args, 2);
-        JvmSemantics::execute_ldc_w(ops, insn, args);
+        // ldc_w: unsigned 16-bit constant-pool index
+        JvmSemantics::execute_ldc(ops, d->asU2(args[0]), false);
     }
 };
 
@@ -3317,9 +3575,10 @@ struct IP_ldc_w: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_ldc2_w: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
-        assert_args(insn, args, 2);
-        JvmSemantics::execute_ldc2_w(ops, insn, args);
+    void p(D d, Ops ops, I insn, Args args) {
+        assert_args(insn, args, 1);
+        // the instruction pushes an Integer64 or Float64 value, respectively.
+        JvmSemantics::execute_ldc(ops, d->asU2(args[0]), true);
     }
 };
 
@@ -3907,7 +4166,15 @@ struct IP_ret: P {
 struct IP_return: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        JvmSemantics::methodReturn(ops, insn);
+        auto state = ops->currentState();
+
+        auto arch = Architecture::findByName("jvm").orThrow();
+        RegisterDictionary::Ptr regdict = arch->registerDictionary();
+
+        // The caller frame is now current automatically.
+        //
+        // Eventually restore control to the instruction following
+        // the invoke that created the callee frame.
     }
 };
 
@@ -4087,9 +4354,13 @@ struct IP_wide: P {
 void
 DispatcherJvm::initializeDispatchTable() {
     iprocSet(0x00,  new Jvm::IP_nop);
+//  iprocSet(0x01,  new Jvm::IP_aconst_null);
+
     iprocSet(0xbc,  new Jvm::IP_newarray);
     iprocSet(0xbd,  new Jvm::IP_anewarray);
     iprocSet(0xbe,  new Jvm::IP_arraylength);
+//  iprocSet(0xbf,  new Jvm::IP_athrow);
+
     iprocSet(0x10,  new Jvm::IP_bipush);
     iprocSet(0x11,  new Jvm::IP_sipush);
 
@@ -4098,12 +4369,21 @@ DispatcherJvm::initializeDispatchTable() {
     iprocSet(0x2b,  new Jvm::IP_aload_1);
     iprocSet(0x2c,  new Jvm::IP_aload_2);
     iprocSet(0x2d,  new Jvm::IP_aload_3);
+//  iprocSet(0x2e,  new Jvm::IP_iaload);
+//  iprocSet(0x2f,  new Jvm::IP_laload);
+//  iprocSet(0x30,  new Jvm::IP_faload);
+//  iprocSet(0x31,  new Jvm::IP_daload);
+//  iprocSet(0x32,  new Jvm::IP_aaload);
+//  iprocSet(0x33,  new Jvm::IP_baload);
+//  iprocSet(0x34,  new Jvm::IP_caload);
+//  iprocSet(0x35,  new Jvm::IP_saload);
 
     iprocSet(0x3a,  new Jvm::IP_astore);
     iprocSet(0x4b,  new Jvm::IP_astore_0);
     iprocSet(0x4c,  new Jvm::IP_astore_1);
     iprocSet(0x4d,  new Jvm::IP_astore_2);
     iprocSet(0x4e,  new Jvm::IP_astore_3);
+//  iprocSet(0x4f,  new Jvm::IP_istore);
 
     iprocSet(0x0b,  new Jvm::IP_fconst_0);
     iprocSet(0x0c,  new Jvm::IP_fconst_1);
@@ -4132,6 +4412,19 @@ DispatcherJvm::initializeDispatchTable() {
     iprocSet(0x45,  new Jvm::IP_fstore_2);
     iprocSet(0x46,  new Jvm::IP_fstore_3);
 
+//  iprocSet(0x47,  new Jvm::IP_dstore_0);
+//  iprocSet(0x48,  new Jvm::IP_dstore_1);
+//  iprocSet(0x49,  new Jvm::IP_dstore_2);
+//  iprocSet(0x4a,  new Jvm::IP_dstore_3);
+
+//  iprocSet(0x50,  new Jvm::IP_lastore);
+//  iprocSet(0x51,  new Jvm::IP_fastore);
+//  iprocSet(0x52,  new Jvm::IP_dastore);
+//  iprocSet(0x53,  new Jvm::IP_aastore);
+//  iprocSet(0x54,  new Jvm::IP_bastore);
+//  iprocSet(0x55,  new Jvm::IP_castore);
+//  iprocSet(0x56,  new Jvm::IP_sastore);
+
     iprocSet(0x02,  new Jvm::IP_iconst_m1);
     iprocSet(0x03,  new Jvm::IP_iconst_0);
     iprocSet(0x04,  new Jvm::IP_iconst_1);
@@ -4140,6 +4433,9 @@ DispatcherJvm::initializeDispatchTable() {
     iprocSet(0x07,  new Jvm::IP_iconst_4);
     iprocSet(0x08,  new Jvm::IP_iconst_5);
 
+    iprocSet(0x12,  new Jvm::IP_ldc);
+    iprocSet(0x13,  new Jvm::IP_ldc_w);
+    iprocSet(0x14,  new Jvm::IP_ldc2_w);
     iprocSet(0x15,  new Jvm::IP_iload);
     iprocSet(0x1a,  new Jvm::IP_iload_0);
     iprocSet(0x1b,  new Jvm::IP_iload_1);
@@ -4167,16 +4463,14 @@ DispatcherJvm::initializeDispatchTable() {
     iprocSet(0x41,  new Jvm::IP_lstore_2);
     iprocSet(0x42,  new Jvm::IP_lstore_3);
 
+    iprocSet(0x57,  new Jvm::IP_pop);
+    iprocSet(0x58,  new Jvm::IP_pop2);
     iprocSet(0x59,  new Jvm::IP_dup);
     iprocSet(0x5a,  new Jvm::IP_dup_x1);
     iprocSet(0x5b,  new Jvm::IP_dup_x2);
     iprocSet(0x5c,  new Jvm::IP_dup2);
     iprocSet(0x5d,  new Jvm::IP_dup2_x1);
     iprocSet(0x5e,  new Jvm::IP_dup2_x2);
-
-    iprocSet(0x57,  new Jvm::IP_pop);
-    iprocSet(0x58,  new Jvm::IP_pop2);
-
     iprocSet(0x5f,  new Jvm::IP_swap);
 
     // Binary operators
@@ -4235,7 +4529,63 @@ DispatcherJvm::initializeDispatchTable() {
     iprocSet(0x92,  new Jvm::IP_i2c);
     iprocSet(0x93,  new Jvm::IP_i2s);
 
+//  iprocSet(0x94,  new Jvm::IP_lcmp);
+//  iprocSet(0x95,  new Jvm::IP_fcmp);
+//  iprocSet(0x96,  new Jvm::IP_fcmpg);
+//  iprocSet(0x97,  new Jvm::IP_dcmpl);
+//  iprocSet(0x98,  new Jvm::IP_dcmpg);
+//  iprocSet(0x99,  new Jvm::IP_ifeq);
+//  iprocSet(0x9a,  new Jvm::IP_ifne);
+//  iprocSet(0x9b,  new Jvm::IP_iflt);
+//  iprocSet(0x9c,  new Jvm::IP_ifge);
+//  iprocSet(0x9d,  new Jvm::IP_ifgt);
+//  iprocSet(0x9f,  new Jvm::IP_icmpeq);
+//  iprocSet(0xa0,  new Jvm::IP_icmpne);
+//  iprocSet(0xa1,  new Jvm::IP_icmplt);
+//  iprocSet(0xa2,  new Jvm::IP_icmpge);
+//  iprocSet(0xa3,  new Jvm::IP_icmpgt);
+//  iprocSet(0xa4,  new Jvm::IP_icmple);
+//  iprocSet(0xa5,  new Jvm::IP_icmpeq);
+//  iprocSet(0xa6,  new Jvm::IP_icmpne);
+
+//  iprocSet(0xa7,  new Jvm::IP_goto_);
+//  iprocSet(0xa8,  new Jvm::IP_jsr);
+//  iprocSet(0xa9,  new Jvm::IP_ret);
+//  iprocSet(0xaa,  new Jvm::IP_tableswitch);
+//  iprocSet(0xab,  new Jvm::IP_lookupswitch);
+//  iprocSet(0xac,  new Jvm::IP_ireturn);
+//  iprocSet(0xad,  new Jvm::IP_lreturn);
+//  iprocSet(0xae,  new Jvm::IP_freturn);
+//  iprocSet(0xaf,  new Jvm::IP_dreturn);
+//  iprocSet(0xb0,  new Jvm::IP_areturn);
+
+    iprocSet(0xb1,  new Jvm::IP_return_);
+    iprocSet(0xb2,  new Jvm::IP_getstatic);
+//  iprocSet(0xb3,  new Jvm::IP_putstatic);
+//  iprocSet(0xb4,  new Jvm::IP_getfield);
+//  iprocSet(0xb5,  new Jvm::IP_putfield);
+
+    iprocSet(0xb6,  new Jvm::IP_invokevirtual);
+    iprocSet(0xb7,  new Jvm::IP_invokespecial);
+//  iprocSet(0xb8,  new Jvm::IP_invokestatic);
+//  iprocSet(0xb9,  new Jvm::IP_invokeinterface);
+//  iprocSet(0xba,  new Jvm::IP_invokedynamic);
+//  iprocSet(0xc0,  new Jvm::IP_checkcast);
+//  iprocSet(0xc1,  new Jvm::IP_instanceof);
+//  iprocSet(0xc2,  new Jvm::IP_monitorenter);
+//  iprocSet(0xc3,  new Jvm::IP_monitorexit);
     iprocSet(0xc4,  new Jvm::IP_wide);
+//  iprocSet(0xc5,  new Jvm::IP_multianewarray);
+
+//  iprocSet(0xc6,  new Jvm::IP_ifnull);
+//  iprocSet(0xc7,  new Jvm::IP_ifnonnull);
+//  iprocSet(0xc8,  new Jvm::IP_goto_w);
+//  iprocSet(0xc9,  new Jvm::IP_jsr_w);
+
+//  breakpoint = 202, // 0xca
+//  impdep1    = 254, // 0xfe
+//  impdep2    = 255, // 0xff
+//  unknown    = 666  // unknown/illegal opcode
 }
 
 DispatcherJvm::~DispatcherJvm() {}
@@ -4280,6 +4630,55 @@ DispatcherJvm::iprocKey(SgAsmInstruction *insn_) const {
     SgAsmJvmInstruction *insn = isSgAsmJvmInstruction(insn_);
     ASSERT_not_null(insn);
     return static_cast<int>(insn->get_kind());
+}
+
+RegisterDescriptor
+DispatcherJvm::instructionPointerRegister() const {
+    return REG_PC;
+}
+
+std::string
+DispatcherJvm::methodDescriptor(SgAsmJvmConstantPool *pool, size_t index) {
+    auto entry = pool->get_entry(index);
+    ASSERT_not_null(entry);
+
+    ASSERT_require(entry->get_tag() == SgAsmJvmConstantPoolEntry::CONSTANT_Methodref);
+    entry = pool->get_entry(entry->get_name_and_type_index());
+
+    ASSERT_require(entry->get_tag() == SgAsmJvmConstantPoolEntry::CONSTANT_NameAndType);
+
+    return pool->get_utf8_string(entry->get_descriptor_index());
+}
+
+void
+DispatcherJvm::initializeInvocationLocals(BaseSemantics::RiscOperators *ops,
+                                          const BaseSemantics::FrameState::Ptr &calleeFrame,
+                                          const std::string &descriptor, bool hasReceiver) {
+    ASSERT_not_null(ops);
+    ASSERT_not_null(calleeFrame);
+    size_t localIndex{0};
+
+    const auto parser = DescriptorParser::parseMethodDescriptor(descriptor);
+
+    // The last declared argument is at the top of the caller's operand stack.
+    // Save the popped values in declaration order.
+    std::vector<BaseSemantics::SValue::Ptr> args(parser.arguments.size());
+
+    for (size_t i = args.size(); i > 0; --i) {
+        args[i-1] = ops->popOperand();
+    }
+
+    BaseSemantics::SValue::Ptr receiver{nullptr};
+    if (hasReceiver) {
+        receiver = ops->popOperand(); // "this" pointer
+        calleeFrame->writeLocal(localIndex++, receiver);
+    }
+
+    // Place explicit arguments into locals in declaration order.
+    for (size_t i = 0; i < args.size(); ++i) {
+        calleeFrame->writeLocal(localIndex, args[i]);
+        localIndex += parser.arguments[i].isCategory2() ? 2 : 1;
+    }
 }
 
 void

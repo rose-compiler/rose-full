@@ -16,6 +16,7 @@ static const char *description =
 #include <Rose/BinaryAnalysis/InstructionSemantics/PartialSymbolicSemantics.h>
 #include <Rose/BinaryAnalysis/InstructionSemantics/SymbolicSemantics.h>
 #include <Rose/BinaryAnalysis/InstructionSemantics/TraceSemantics.h>
+
 #include <Rose/BinaryAnalysis/MemoryMap.h>
 #include <Rose/BinaryAnalysis/Partitioner2/Partitioner.h>
 #include <Rose/CommandLine.h>
@@ -28,7 +29,8 @@ using namespace Rose::BinaryAnalysis;
 using namespace Rose::BinaryAnalysis::InstructionSemantics;
 using namespace Sawyer::Message::Common;
 namespace P2 = Rose::BinaryAnalysis::Partitioner2;
-namespace S2 = Rose::BinaryAnalysis::InstructionSemantics;
+namespace IS = Rose::BinaryAnalysis::InstructionSemantics;
+namespace BC = Rose::BinaryAnalysis::ByteCode;
 
 Sawyer::Message::Facility mlog;
 
@@ -178,55 +180,48 @@ main(int argc, char *argv[]) {
     bcClass = engine->analysisClass();
     InstructionSemantics::BaseSemantics::StatePtr state = engine->state();
 
-    // Add the ByteCode::ClassPtr to the frame
-    state->frameState()->analysisClass(bcClass);
-
-    // Initialize the state with a reference object
-    auto protoval = state->protoval();
-    auto svalRef = protoval->unspecified_(32);
-    svalRef->kind(S2::BaseSemantics::ValueKind::ObjectReference);
-
-    std::string desc = "<unspecified>";
-    svalRef->kind(InstructionSemantics::BaseSemantics::ValueKind::ObjectReference);
-    svalRef->typeDescriptor(desc);
-
-    state->frameState()->writeLocal(0, svalRef);
-
     SmtSolver::Ptr solver = SmtSolver::instance("none");
     ops = InstructionSemantics::SymbolicSemantics::RiscOperators::instanceFromState(state, solver);
     ASSERT_not_null(ops);
 
-    auto tops = S2::TraceSemantics::RiscOperators::instance(ops);
-    S2::BaseSemantics::Dispatcher::Ptr cpu = partitioner->newDispatcher(tops);
+    auto tops = IS::TraceSemantics::RiscOperators::instance(ops);
+    IS::BaseSemantics::Dispatcher::Ptr cpu = partitioner->newDispatcher(tops);
     ASSERT_not_null(cpu);
 
-    // Create an InstructionProvider and inject a nop instruction to show initial state
-    //
-    auto map = MemoryMap::instance();
-    std::vector<uint8_t> bytes;
-    bytes.push_back(/*nop*/0);
-
-    size_t va{0};
-    map->insert(AddressInterval::baseSize(va, bytes.size()),
-                MemoryMap::Segment(MemoryMap::AllocatingBuffer::instance(bytes.size()),
-                                   0, MemoryMap::READ_EXECUTE, "instructions"));
-    map->at(va).write(bytes);
-    auto provider = InstructionProvider::instance(architecture, map);
-
-    SgAsmInstruction *insn = provider->at(va);
-    std::cerr <<partitioner->unparse(insn) <<"\n";
-    printAst(std::cout, insn, "");
-    cpu->processInstruction(insn);
-    std::cerr <<*ops->currentState();
-
     // Process ByteCode methods and their instructions
-    for (auto bcMethod : bcClass->methods()) {
-        for (auto insn : bcMethod->instructions()->get_instructions()) {
-            std::cerr << partitioner->unparse(insn) << "\n";
-            printAst(std::cout, insn, "");
-            cpu->processInstruction(insn);
-            std::cerr <<*ops->currentState();
-        }
+    if (bcClass) {
+        for (auto bcMethod : bcClass->methods()) {
+            auto jvmMethod = BC::JvmMethod::promote(bcMethod);
 
+#if 0
+            std::cerr << "... need to initialize frame for method " << bcClass->name() << "::" << bcMethod->name() << "\n";
+            std::cerr << ".... METHOD::descriptor: " << bcMethod->descriptor() << "\n";
+#endif
+
+            // Create, initialize and push a new method frame
+            SgAsmJvmConstantPool* pool = jvmMethod->constant_pool();
+            auto frame = IS::BaseSemantics::FrameState::instance(state->protoval(), Sawyer::Nothing(), pool);
+
+            frame->initializeRootFrame(bcMethod);
+
+            state->pushFrame(frame);
+
+            for (auto insn : bcMethod->instructions()->get_instructions()) {
+                auto currentState = ops->currentState();
+                ASSERT_require(currentState == state);
+
+                auto currentFrame = state->currentFrame();
+                ASSERT_require(currentFrame == frame);
+
+                std::cerr << partitioner->unparse(insn) << "\n";
+                printAst(std::cout, insn, "");
+#if 0
+                std::cerr << "..... will execute::insn(comment): " << insn->get_comment() << "\n";
+#endif
+                cpu->processInstruction(insn);
+
+                std::cerr << *currentState;
+            }
+        }
     }
 }

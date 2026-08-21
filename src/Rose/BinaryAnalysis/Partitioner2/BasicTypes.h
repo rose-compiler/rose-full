@@ -584,7 +584,7 @@ struct PartitionerSettings {
 
     /** Whether to give names to constants.
      *
-     *  Within instruciton operands, any constants that fall within this set of addresses and which have a label associated
+     *  Within instruction operands, any constants that fall within this set of addresses and which have a label associated
      *  with them (such as names of symbols) are given a comment consisting of that label. Setting this to empty disables
      *  assigning such labels to integer values.
      *

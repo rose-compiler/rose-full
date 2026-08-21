@@ -46,6 +46,16 @@ Code::~Code() {}
 Method::Method(Address va) : classAddr_{va} {}
 Method::~Method() {}
 
+Class::Ptr
+Method::analysisClass() {
+    return class_;
+}
+
+void
+Method::analysisClass(Class::Ptr c) {
+    class_ = c;
+}
+
 const std::vector<BasicBlock::Ptr>&
 Method::blocks() const {
     return blocks_;
@@ -122,7 +132,7 @@ Class::strings() {
 }
 
 void
-Class::partition(const PartitionerPtr &partitioner, std::map<std::string,Address> &discoveredFunctions) const {
+Class::partition(const PartitionerPtr &partitioner, std::map<std::string,Address> &discoveredFunctions) {
     const size_t nBits = 64;
 
     for (auto method : methods()) {
@@ -132,6 +142,9 @@ Class::partition(const PartitionerPtr &partitioner, std::map<std::string,Address
         bool needNewBlock{true};
         bool insertFallthroughSuccessors{true};
         Address seenVa{0};
+
+        // Provide the ByteCode::Method with access to its containing ByteCode::Class
+        method->analysisClass(Class::Ptr(this));
 
         // Annotate the instructions
         method->annotate();
@@ -403,7 +416,7 @@ Namespace::append(Class::Ptr ptr) {
 }
 
 void
-Namespace::partition(const PartitionerPtr& partitioner, std::map<std::string,Address> &discoveredFunctions) const {
+Namespace::partition(const PartitionerPtr& partitioner, std::map<std::string,Address> &discoveredFunctions) {
     for (auto cls: classes()) {
         cls->partition(partitioner, discoveredFunctions);
     }
@@ -431,7 +444,7 @@ Container::namespaces() const {
 }
 
 void
-Container::partition(const PartitionerPtr& partitioner) const {
+Container::partition(const PartitionerPtr& partitioner) {
     // Both Cil and Jvm need call return edges to be added by Partitioner::attachBasicBlock()
     partitioner->autoAddCallReturnEdges(true);
 
