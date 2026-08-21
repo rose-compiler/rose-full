@@ -242,9 +242,7 @@ namespace JvmSemantics {
     void execute_monitorenter(Ops ops, I insn, Args args);
     void execute_monitorexit(Ops ops, I insn, Args args);
     void execute_multianewarray(Ops ops, I insn, Args args);
-    void execute_new(Ops ops, I insn, Args args);
     void execute_newarray(Ops ops, I insn, Args args);
-    void execute_putfield(Ops ops, I insn, Args args);
     void execute_putstatic(Ops ops, I insn, Args args);
 
 
@@ -742,9 +740,7 @@ namespace JvmSemantics {
     void execute_monitorenter(Ops, I, Args) { jvmUnsupported("execute_monitorenter"); }
     void execute_monitorexit(Ops, I, Args) { jvmUnsupported("execute_monitorexit"); }
     void execute_multianewarray(Ops, I, Args) { jvmUnsupported("execute_multianewarray"); }
-    void execute_new(Ops, I, Args) { jvmUnsupported("execute_new"); }
     void execute_newarray(Ops, I, Args) { jvmUnsupported("execute_newarray"); }
-    void execute_putfield(Ops, I, Args) { jvmUnsupported("execute_putfield"); }
     void execute_putstatic(Ops, I, Args) { jvmUnsupported("execute_putstatic"); }
 
     void throwIfNull(Ops /*ops*/, const char *exceptionName, SValue::Ptr ref) {
@@ -4010,15 +4006,39 @@ struct IP_multianewarray: P {
     }
 };
 
-// new (187 (0xbb))
+// new_ (187 (0xbb))
         // Description:
         //   Resolve the class, allocate an uninitialized instance, and push its reference.
         // Run-time Exceptions:
         //   InstantiationError/IllegalAccessError/other resolution errors can occur as specified by class resolution.
-struct IP_new: P {
+struct IP_new_: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
-        assert_args(insn, args, 2);
-        JvmSemantics::execute_new(ops, insn, args);
+        assert_args(insn, args, 1);
+
+        auto state = ops->currentState();
+        ASSERT_not_null(state);
+
+        auto frame = state->currentFrame();
+        ASSERT_not_null(frame);
+
+        auto pool = frame->jvmConstantPool();
+        ASSERT_not_null(pool);
+
+        auto ivExpr = isSgAsmIntegerValueExpression(args[0]);
+        ASSERT_not_null(ivExpr);
+        const size_t index = static_cast<uint16_t>(ivExpr->get_absoluteValue());
+
+        // Resolve CONSTANT_Class[index] to its internal class name
+        auto entry = pool->get_entry(index);
+        ASSERT_not_null(entry);
+
+        std::string className = pool->get_utf8_string(entry->get_name_index());
+
+        auto sval = ops->undefined_(32);
+        sval->kind(ValueKind::ObjectReference);
+        sval->typeDescriptor("L" + className + ";");
+
+        ops->pushOperand(sval);
     }
 };
 
@@ -4385,6 +4405,7 @@ DispatcherJvm::initializeDispatchTable() {
     iprocSet(0x00,  new Jvm::IP_nop);
 //  iprocSet(0x01,  new Jvm::IP_aconst_null);
 
+    iprocSet(0xbb,  new Jvm::IP_new_);
     iprocSet(0xbc,  new Jvm::IP_newarray);
     iprocSet(0xbd,  new Jvm::IP_anewarray);
     iprocSet(0xbe,  new Jvm::IP_arraylength);
