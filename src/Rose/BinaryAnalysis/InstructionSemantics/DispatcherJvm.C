@@ -233,7 +233,6 @@ namespace JvmSemantics {
     void execute_anewarray(Ops ops, I insn, Args args);
     void execute_athrow(Ops ops, I insn, Args args);
     void execute_checkcast(Ops ops, I insn, Args args);
-    void execute_getfield(Ops ops, I insn, Args args);
     void execute_instanceof(Ops ops, I insn, Args args);
     void execute_invokedynamic(Ops ops, I insn, Args args);
     void execute_invokeinterface(Ops ops, I insn, Args args);
@@ -732,7 +731,6 @@ namespace JvmSemantics {
 
     void execute_athrow(Ops, I, Args) { jvmUnsupported("execute_athrow"); }
     void execute_checkcast(Ops, I, Args) { jvmUnsupported("execute_checkcast"); }
-    void execute_getfield(Ops, I, Args) { jvmUnsupported("execute_getfield"); }
     void execute_instanceof(Ops, I, Args) { jvmUnsupported("execute_instanceof"); }
     void execute_invokedynamic(Ops, I, Args) { jvmUnsupported("execute_invokedynamic"); }
     void execute_invokeinterface(Ops, I, Args) { jvmUnsupported("execute_invokeinterface"); }
@@ -2365,8 +2363,38 @@ struct IP_fsub: P {
         //   NullPointerException if objectref is null.
 struct IP_getfield: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
-        assert_args(insn, args, 2);
-        JvmSemantics::execute_getfield(ops, insn, args);
+        assert_args(insn, args, 1);
+
+        auto sval = ops->popOperand();
+        ASSERT_not_null(sval);
+        ASSERT_require(sval->kind() == ValueKind::ObjectReference);
+
+        // Get the constant pool
+        auto state = ops->currentState();
+        ASSERT_not_null(state);
+        auto frame = state->currentFrame();
+        ASSERT_not_null(frame);
+        auto pool = frame->jvmConstantPool();
+        ASSERT_not_null(pool);
+
+        auto ivExpr = isSgAsmIntegerValueExpression(args[0]);
+        ASSERT_not_null(ivExpr);
+        const size_t index = static_cast<uint16_t>(ivExpr->get_absoluteValue());
+
+        // Determine the ValueKind of the field descriptor
+        std::string fieldDesc = DispatcherJvm::fieldDescriptor(pool, index);
+        auto descType = DescriptorParser::parseFieldDescriptor(fieldDesc);
+
+        auto value = ops->undefined_(DispatcherJvm::nBitsForKind(descType.kind));
+        ASSERT_not_null(value);
+        value->kind(descType.kind);
+
+        if (descType.isReference()) {
+            value->typeDescriptor(descType.descriptor);
+        }
+
+        // Without a heap model, this is an unknown value of the correct type.
+        ops->pushOperand(value);
     }
 };
 
@@ -4149,35 +4177,41 @@ struct IP_putfield: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 1);
 
-        const SValuePtr value = ops->popOperand();
-        const SValuePtr objectRef = ops->popOperand();
-
-        ASSERT_not_null(value);
-        ASSERT_not_null(objectRef);
-        ASSERT_require(objectRef->kind() == ValueKind::ObjectReference);
-
+        // Get the constant pool.
         auto state = ops->currentState();
         ASSERT_not_null(state);
-
         auto frame = state->currentFrame();
         ASSERT_not_null(frame);
-
         auto pool = frame->jvmConstantPool();
         ASSERT_not_null(pool);
 
         auto ivExpr = isSgAsmIntegerValueExpression(args[0]);
         ASSERT_not_null(ivExpr);
+
         const size_t index = static_cast<uint16_t>(ivExpr->get_absoluteValue());
 
-        std::string descriptor = DispatcherJvm::fieldDescriptor(pool, index);
-        (void) descriptor;
+        // Determine the declared field type.
+        const std::string fieldDesc =  DispatcherJvm::fieldDescriptor(pool, index);
+        const auto descType = DescriptorParser::parseFieldDescriptor(fieldDesc);
 
-        // Eventually:
+        // Stack shape:
         //
-        //     d->writeField(objectRef, fieldRef, value);
+        //     ..., objectref, value  ->  ...
         //
-        // For now, without an object/heap model, consuming the operands is
-        // the semantic effect we can represent.
+        const auto value = ops->popOperand();
+        ASSERT_not_null(value);
+        ASSERT_require(value->kind() == descType.kind);
+
+        const auto objectRef = ops->popOperand();
+        ASSERT_not_null(objectRef);
+        ASSERT_require(objectRef->kind() == ValueKind::ObjectReference);
+
+        if (descType.isReference()) {
+            ASSERT_require(value->kind() == ValueKind::ObjectReference ||
+                           value->kind() == ValueKind::ArrayReference);
+        }
+
+        // Without a heap model, the field assignment is not retained.
     }
 };
 
@@ -4612,7 +4646,7 @@ DispatcherJvm::initializeDispatchTable() {
     iprocSet(0xb1,  new Jvm::IP_return_);
     iprocSet(0xb2,  new Jvm::IP_getstatic);
 //  iprocSet(0xb3,  new Jvm::IP_putstatic);
-//  iprocSet(0xb4,  new Jvm::IP_getfield);
+    iprocSet(0xb4,  new Jvm::IP_getfield);
     iprocSet(0xb5,  new Jvm::IP_putfield);
 
     iprocSet(0xb6,  new Jvm::IP_invokevirtual);
@@ -4685,6 +4719,26 @@ DispatcherJvm::iprocKey(SgAsmInstruction *insn_) const {
 RegisterDescriptor
 DispatcherJvm::instructionPointerRegister() const {
     return REG_PC;
+}
+
+size_t
+DispatcherJvm::nBitsForKind(ValueKind kind) {
+    switch (kind) {
+        case ValueKind::Integer32:
+        case ValueKind::Float32:
+            return 32;
+
+        case ValueKind::Integer64:
+        case ValueKind::Float64:
+            return 64;
+
+        case ValueKind::ObjectReference:
+        case ValueKind::ArrayReference:
+            return 32;
+
+        default:
+            ASSERT_not_reachable("cannot determine bit width for JVM value kind");
+    }
 }
 
 std::string

@@ -89,6 +89,9 @@ public:
     /** Make a record of errors in the semantic analysis */
     void recordSemanticError(const std::string &msg);
 
+    /** Returns the bit width for a JVM value kind. */
+    static size_t nBitsForKind(BaseSemantics::ValueKind);
+
     /** Find and return the descriptor for a method from the constant pool at the given index */
     static std::string methodDescriptor(SgAsmJvmConstantPool *pool, size_t index);
 
