@@ -4,6 +4,7 @@
 #include <Rose/BinaryAnalysis/ByteCode/Analysis.h>
 #include <Rose/BinaryAnalysis/ByteCode/Jvm.h>
 #include <Rose/BinaryAnalysis/InstructionSemantics/DescriptorParser.h>
+#include <Rose/BinaryAnalysis/InstructionSemantics/DispatcherJvm.h>
 #include <Rose/BinaryAnalysis/InstructionSemantics/BaseSemantics/FrameState.h>
 #include <Rose/BinaryAnalysis/InstructionSemantics/BaseSemantics/Merger.h>
 #include <Rose/BinaryAnalysis/InstructionSemantics/BaseSemantics/RiscOperators.h>
@@ -204,12 +205,13 @@ FrameState::initializeRootFrame(const ByteCode::Method::Ptr &method) {
     // Make the constant pool available to the frame
     jvmConstantPool(jvmMethod->constant_pool());
 
-    // Synthesize the receiver
+    // Synthesize the receiver.
     if (!jvmMethod->isStatic()) {
         BaseSemantics::SValuePtr receiver = protoval->undefined_(protoval->nBits());
 
         receiver->kind(BaseSemantics::ValueKind::ObjectReference);
         receiver->typeDescriptor("L" + method->analysisClass()->name() + ";");
+        receiver->symbolName(method->analysisClass()->name() + "::this");
 
         writeLocal(local++, receiver);
     }
@@ -218,41 +220,23 @@ FrameState::initializeRootFrame(const ByteCode::Method::Ptr &method) {
 
     // Synthesize explicit arguments from the method descriptor.
     for (const IS::DescriptorType &argumentType: md.arguments) {
-        BaseSemantics::SValuePtr argument;
+        auto kind = argumentType.kind;
 
-        switch (argumentType.kind) {
-            case BaseSemantics::ValueKind::Integer32:
-            case BaseSemantics::ValueKind::Float32:
-                argument = protoval->undefined_(32);
-                break;
+        auto argument = protoval->undefined_(IS::DispatcherJvm::nBitsForKind(kind));
+        argument->kind(kind);
 
-            case BaseSemantics::ValueKind::Integer64:
-            case BaseSemantics::ValueKind::Float64:
-                argument = protoval->undefined_(64);
-                break;
-
-            case BaseSemantics::ValueKind::ObjectReference:
-                argument = protoval->undefined_(protoval->nBits());
-                break;
-
-            case BaseSemantics::ValueKind::ArrayReference: {
-                argument = protoval->undefined_(protoval->nBits());
-                auto length = protoval->undefined_(32);
-                length->kind(ValueKind::Integer32);
-                argument->arrayLength(length);
-                break;
-            }
-
-            default:
-                ASSERT_not_reachable("invalid JVM method argument kind");
+        if (kind == BaseSemantics::ValueKind::ArrayReference) {
+            // Set the length of the array
+            auto length = protoval->undefined_(32);
+            length->kind(ValueKind::Integer32);
+            argument->arrayLength(length);
         }
 
-        argument->kind(argumentType.kind);
         if (argumentType.isReference()) {
             argument->typeDescriptor(argumentType.descriptor);
         }
-        writeLocal(local, argument);
 
+        writeLocal(local, argument);
         local += argumentType.isCategory2() ? 2 : 1;
     }
 }

@@ -3,6 +3,7 @@
 #include <featureTests.h>
 #ifdef ROSE_ENABLE_BINARY_ANALYSIS
 
+#include <Rose/BinaryAnalysis/InstructionSemantics/DescriptorParser.h>
 #include <Rose/BinaryAnalysis/InstructionSemantics/BaseSemantics/Dispatcher.h>
 #include <Rose/BinaryAnalysis/InstructionSemantics/BaseSemantics/FrameState.h>
 
@@ -86,28 +87,58 @@ public:
     virtual int iprocKey(SgAsmInstruction*) const override;
     virtual RegisterDescriptor instructionPointerRegister() const override;
 
-    /** Make a record of errors in the semantic analysis */
+    /** Completes a return from the current JVM method.
+     *
+     *  Pops the current frame, pushes @p result onto the caller's operand stack
+     *  when non-null, and restores the caller's instruction pointer. A frame
+     *  without a return address is treated as the root analysis frame.
+     */
+    void completeReturn(BaseSemantics::RiscOperators*,
+                        const BaseSemantics::SValuePtr &result = BaseSemantics::SValuePtr());
+
+    /** Records an error in the semantic analysis */
     void recordSemanticError(const std::string &msg);
 
     /** Returns the bit width for a JVM value kind. */
     static size_t nBitsForKind(BaseSemantics::ValueKind);
 
-    /** Find and return the descriptor for a method from the constant pool at the given index */
+    /** Returns the constant pool */
+    static SgAsmJvmConstantPool* constantPool(BaseSemantics::RiscOperators *ops);
+
+    /** Finds and returns the descriptor for a method from the constant pool at the given index */
     static std::string methodDescriptor(SgAsmJvmConstantPool *pool, size_t index);
 
-    /** Find and return the descriptor for a field from the constant pool at the given index */
+    /** Finds and returns the descriptor for a field from the constant pool at the given index */
     static std::string fieldDescriptor(SgAsmJvmConstantPool *pool, size_t index);
 
-    /** Initialize local variables in advance of a method invocation */
+    /** Creates a synthetic JVM value having the specified descriptor type and unknown value. */
+    static BaseSemantics::SValuePtr
+    syntheticValue(const BaseSemantics::SValuePtr &protoval,
+                   const DescriptorType &type,
+                   const std::string &symbolName = "");
+
+    /** Creates a synthetic JVM object reference with an unknown reference value. */
+    static BaseSemantics::SValuePtr
+    syntheticObjectReference(const BaseSemantics::SValuePtr &protoval,
+                             const std::string &descriptor,
+                             const std::string &symbolName = "");
+
+    /** Creates a synthetic JVM array reference with an unknown reference and length. */
+    static BaseSemantics::SValuePtr
+    syntheticArrayReference(const BaseSemantics::SValuePtr &protoval,
+                            const std::string &descriptor,
+                            const std::string &symbolName = "");
+
+    /** Initializes local variables in advance of a method invocation */
     static void initializeInvocationLocals(BaseSemantics::RiscOperators *ops,
                                            const BaseSemantics::FrameState::Ptr &frame,
                                            const std::string &descriptor, bool hasReceiver);
 
 private:
-    // Initialize the dispatch table that handles each kind of instruction
+    // Initializes the dispatch table that handles each kind of instruction
     void initializeDispatchTable();
 
-    // Initialize memory state, such as the default byte order
+    // Initializes memory state, such as the default byte order
     void initializeMemoryState();
 };
 

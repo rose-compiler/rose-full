@@ -237,7 +237,6 @@ namespace JvmSemantics {
     void execute_invokedynamic(Ops ops, I insn, Args args);
     void execute_invokeinterface(Ops ops, I insn, Args args);
     void execute_invokestatic(Ops ops, I insn, Args args);
-    void execute_invokevirtual(Ops ops, I insn, Args args);
     void execute_monitorenter(Ops ops, I insn, Args args);
     void execute_monitorexit(Ops ops, I insn, Args args);
     void execute_multianewarray(Ops ops, I insn, Args args);
@@ -315,18 +314,13 @@ namespace JvmSemantics {
     }
 
     SgAsmJvmConstantPool* constantPool(Ops ops) {
-        auto frame = ops->currentState()->frameState();
+        auto state = ops->currentState();
+        ASSERT_not_null(state);
+
+        auto frame = state->currentFrame();
         ASSERT_not_null(frame);
-        auto bcMethod = frame->analysisMethod();
-        ASSERT_not_null(bcMethod);
 
-        auto jvmMethod = ByteCode::JvmMethod::promote(bcMethod);
-        ASSERT_not_null(jvmMethod);
-
-        auto pool = jvmMethod->constant_pool();
-        ASSERT_not_null(pool);
-
-        return pool;
+        return frame->jvmConstantPool();
     }
 
     SgAsmJvmConstantPoolEntry* constantPoolEntry(Ops ops, size_t index) {
@@ -338,6 +332,8 @@ namespace JvmSemantics {
         ASSERT_require(entry->get_tag() == SgAsmJvmConstantPoolEntry::CONSTANT_Utf8);
 
         auto pool = constantPool(ops);
+        ASSERT_not_null(pool);
+
         return pool->get_utf8_string(index);
     }
 
@@ -573,61 +569,50 @@ namespace JvmSemantics {
         ops->writeLocal(index, ref);
     }
 
-    void execute_ldc(Ops ops, size_t index, bool requireCategory2) {
+    void execute_ldc(Ops ops, size_t index) {
         ASSERT_not_null(ops);
+        SValuePtr value;
 
-        auto state = ops->currentState();
-        ASSERT_not_null(state);
-
-        auto frame = state->currentFrame();
-        ASSERT_not_null(frame);
-
-        auto pool = frame->jvmConstantPool();
+        auto pool = DispatcherJvm::constantPool(ops);
         ASSERT_not_null(pool);
 
         auto entry = pool->get_entry(index);
         ASSERT_not_null(entry);
 
-        SValuePtr sval;
-
         switch (entry->get_tag()) {
-          case SgAsmJvmConstantPoolEntry::CONSTANT_Integer:
-              ASSERT_require(!requireCategory2);
-              sval = ops->number_(32, entry->get_bytes());
-              sval->kind(ValueKind::Integer32);
-              break;
-          case SgAsmJvmConstantPoolEntry::CONSTANT_Float:
-              ASSERT_require(!requireCategory2);
-              sval = ops->number_(32, entry->get_bytes());
-              sval->kind(ValueKind::Float32);
-              break;
-        case SgAsmJvmConstantPoolEntry::CONSTANT_Long:
-              ASSERT_require(requireCategory2);
-              sval = ops->number_(64, entry->get_bytes());
-              sval->kind(ValueKind::Integer64);
-              break;
-          case SgAsmJvmConstantPoolEntry::CONSTANT_Double:
-              ASSERT_require(requireCategory2);
-              sval = ops->number_(64, entry->get_bytes());
-              sval->kind(ValueKind::Float64);
-              break;
-          case SgAsmJvmConstantPoolEntry::CONSTANT_String:
-              ASSERT_require(!requireCategory2);
-              ASSERT_not_implemented("CONSTANT_Class unsupported constant-pool entry for execute_ldc");
-              entry->get_string_index();
-              //sval = makeStringReference(ops, pool, entry);
-              break;
-          case SgAsmJvmConstantPoolEntry::CONSTANT_Class:
-              ASSERT_require(!requireCategory2);
-              ASSERT_not_implemented("CONSTANT_Class unsupported constant-pool entry for execute_ldc");
-              entry->get_name_index();
-              //sval = makeClassReference(ops, pool, entry);
-              break;
-          default: ASSERT_not_implemented("unsupported constant-pool entry for execute_ldc");
+            case SgAsmJvmConstantPoolEntry::CONSTANT_Integer:
+                value = ops->number_(32, entry->get_bytes());
+                value->kind(ValueKind::Integer32);
+                break;
+
+            case SgAsmJvmConstantPoolEntry::CONSTANT_Float:
+                value = ops->number_(32, entry->get_bytes());
+                value->kind(ValueKind::Float32);
+                break;
+
+            case SgAsmJvmConstantPoolEntry::CONSTANT_Long:
+                value = ops->number_(64, entry->get_bytes());
+                value->kind(ValueKind::Integer64);
+                break;
+
+            case SgAsmJvmConstantPoolEntry::CONSTANT_Double:
+                value = ops->number_(64, entry->get_bytes());
+                value->kind(ValueKind::Float64);
+                break;
+
+            case SgAsmJvmConstantPoolEntry::CONSTANT_String:
+                value = DispatcherJvm::syntheticObjectReference(ops->protoval(), "Ljava/lang/String;");
+                break;
+
+            case SgAsmJvmConstantPoolEntry::CONSTANT_Class:
+                value = DispatcherJvm::syntheticObjectReference(ops->protoval(), "Ljava/lang/Class;");
+                break;
+
+            default: ASSERT_not_implemented("unsupported constant-pool entry for execute_ldc");
         }
 
-        ASSERT_not_null(sval);
-        ops->pushOperand(sval);
+        ASSERT_not_null(value);
+        ops->pushOperand(value);
     }
 
     void execute_getstatic(Ops ops, size_t index) {
@@ -673,61 +658,48 @@ namespace JvmSemantics {
         // Resume execution with caller
         auto popped = state->popFrame();
         ASSERT_require(popped == calleeFrame);
-}
+    }
 
     void execute_invokevirtual(Ops ops, size_t index, SgAsmInstruction *insn) {
+        ASSERT_not_null(ops);
         ASSERT_not_null(insn);
 
         auto state = ops->currentState();
+        ASSERT_not_null(state);
+
         auto callerFrame = state->currentFrame();
-        auto calleeFrame = FrameState::instance(state->protoval(), Sawyer::Nothing(), callerFrame->jvmConstantPool());
+        ASSERT_not_null(callerFrame);
 
         auto pool = callerFrame->jvmConstantPool();
         ASSERT_not_null(pool);
 
-        std::string descriptor = DispatcherJvm::methodDescriptor(pool, index);
+        const std::string descriptor = DispatcherJvm::methodDescriptor(pool, index);
+        const auto methodDescriptor = DescriptorParser::parseMethodDescriptor(descriptor);
 
+        auto calleeFrame = FrameState::instance(state->protoval(), Sawyer::Nothing(), callerFrame->jvmConstantPool());
+        ASSERT_not_null(calleeFrame);
+
+        // Pops the explicit arguments and receiver from the caller stack,
+        // and places them into the callee's locals.
         DispatcherJvm::initializeInvocationLocals(ops, calleeFrame, descriptor, /*hasReceiver=*/true);
 
         const Address callerResumeAddress = insn->get_address() + insn->get_size();
         calleeFrame->returnAddress(callerResumeAddress);
 
-        // Conceptually, an interpreted invocation would:
-        //   - initialize the callee frame
-        //   - save the caller's resume address in the callee frame
-        //   - push the callee frame
-        //   - set PC to the callee's entry address
-        //   - execute the callee
-        //   - let the callee's return instruction pop the frame
-        //   - restore PC to the caller's resume address
-        //
-        // For now the callee is not interpreted and no summary is applied.
-        // Push and immediately pop the initialized frame so that invocation
-        // instrumentation can observe the normal frame lifecycle.
-
+        // The callee is currently summarized rather than interpreted.
         state->pushFrame(calleeFrame);
 
         const auto popped = state->popFrame();
         ASSERT_require(popped == calleeFrame);
+
+        // The caller frame is current again. Synthesize the summarized result.
+        if (!methodDescriptor.returnType.isVoid()) {
+            auto result = DispatcherJvm::syntheticValue(state->protoval(), methodDescriptor.returnType);
+            ASSERT_not_null(result);
+
+            ops->pushOperand(result);
+        }
     }
-
-    void execute_return(Ops ops) {
-        ASSERT_require2(false, "needs fixing");
-        auto state = ops->currentState();
-        auto calleeFrame = ops->currentState()->frameState();
-        ASSERT_not_null(calleeFrame);
-
-        state->popFrame();
-
-        // Caller frame is now current.
-#if 0
-        const Sawyer::Optional<Address>& returnAddress = calleeFrame->returnAddress();
-        REG_PC(arch->registerDictionary()->findOrThrow("pc")),
-        auto ip = ops->number_(ops->instructionPointerRegister().nBits(), returnAddress);
-        ops->writeRegister(ops->instructionPointerRegister(), ip);
-#endif
-    }
-
 
     void execute_athrow(Ops, I, Args) { jvmUnsupported("execute_athrow"); }
     void execute_checkcast(Ops, I, Args) { jvmUnsupported("execute_checkcast"); }
@@ -1109,10 +1081,15 @@ struct IP_anewarray: P {
         // Run-time Exceptions:
         //   IllegalMonitorStateException can be thrown for synchronized methods if structured locking ownership rules are violated.
 struct IP_areturn: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
+    void p(D d, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr value = ops->popOperand();
-        JvmSemantics::methodReturn(ops, insn, value);
+
+        auto result = ops->popOperand();
+        ASSERT_not_null(result);
+        ASSERT_require(result->kind() == ValueKind::ObjectReference ||
+                       result->kind() == ValueKind::ArrayReference);
+
+        d->completeReturn(ops, result);
     }
 };
 
@@ -1124,18 +1101,8 @@ struct IP_areturn: P {
 struct IP_return_: P {
     void p(D d, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        auto state = ops->currentState();
 
-        // Remove the callee; the caller frame becomes current.
-        auto frame = state->popFrame();
-        ASSERT_not_null(frame);
-
-        if (frame->returnAddress()) {
-            const RegisterDescriptor pc = d->instructionPointerRegister();
-            ops->writeRegister(pc, ops->number_(pc.nBits(), *frame->returnAddress()));
-        } else {
-            // Returned from the root method: execution is finished.
-        }
+        d->completeReturn(ops);
     }
 };
 
@@ -1668,9 +1635,14 @@ struct IP_drem: P {
         // Run-time Exceptions:
         //   IllegalMonitorStateException can be thrown for synchronized methods if structured locking ownership rules are violated.
 struct IP_dreturn: P {
-    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
+    void p(D d, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ASSERT_require2(false, "dreturn unimplemented");
+
+        auto result = ops->popOperand();
+        ASSERT_not_null(result);
+        ASSERT_require(result->kind() == ValueKind::Float64);
+
+        d->completeReturn(ops, result);
     }
 };
 
@@ -2255,9 +2227,14 @@ struct IP_frem: P {
         // Run-time Exceptions:
         //   IllegalMonitorStateException can be thrown for synchronized methods if structured locking ownership rules are violated.
 struct IP_freturn: P {
-    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
+    void p(D d, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ASSERT_require2(false, "freturn unimplemented");
+
+        auto result = ops->popOperand();
+        ASSERT_not_null(result);
+        ASSERT_require(result->kind() == ValueKind::Float32);
+
+        d->completeReturn(ops, result);
     }
 };
 
@@ -2369,12 +2346,7 @@ struct IP_getfield: P {
         ASSERT_not_null(sval);
         ASSERT_require(sval->kind() == ValueKind::ObjectReference);
 
-        // Get the constant pool
-        auto state = ops->currentState();
-        ASSERT_not_null(state);
-        auto frame = state->currentFrame();
-        ASSERT_not_null(frame);
-        auto pool = frame->jvmConstantPool();
+        auto pool = DispatcherJvm::constantPool(ops);
         ASSERT_not_null(pool);
 
         auto ivExpr = isSgAsmIntegerValueExpression(args[0]);
@@ -3162,22 +3134,14 @@ struct IP_irem: P {
         // Run-time Exceptions:
         //   IllegalMonitorStateException can be thrown for synchronized methods if structured locking ownership rules are violated.
 struct IP_ireturn: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
+    void p(D d, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr value = ops->popOperand();
-#if 1
-        JvmSemantics::methodReturn(ops, insn, value);
-#else
-        auto state = ops->currentState();
+
         auto result = ops->popOperand();
+        ASSERT_not_null(result);
         ASSERT_require(result->kind() == ValueKind::Integer32);
-        auto callee = state->frame();
-        Address returnAddress = callee->returnAddress();
-        state->popFrame();
-        // We are now operating on the caller frame.
-        ops->pushOperand(result);
-        // restore PC to caller continuation
-#endif
+
+        d->completeReturn(ops, result);
     }
 };
 
@@ -3572,7 +3536,7 @@ struct IP_ldc: P {
     void p(D d, Ops ops, I insn, Args args) {
         assert_args(insn, args, 1);
         // ldc: unsigned 8-bit constant-pool index, the compact form, others are 16-bit
-        JvmSemantics::execute_ldc(ops, d->asU1(args[0]), false);
+        JvmSemantics::execute_ldc(ops, d->asU1(args[0]));
     }
 };
 
@@ -3587,7 +3551,7 @@ struct IP_ldc_w: P {
     void p(D d, Ops ops, I insn, Args args) {
         assert_args(insn, args, 2);
         // ldc_w: unsigned 16-bit constant-pool index
-        JvmSemantics::execute_ldc(ops, d->asU2(args[0]), false);
+        JvmSemantics::execute_ldc(ops, d->asU2(args[0]));
     }
 };
 
@@ -3602,7 +3566,7 @@ struct IP_ldc2_w: P {
     void p(D d, Ops ops, I insn, Args args) {
         assert_args(insn, args, 1);
         // the instruction pushes an Integer64 or Float64 value, respectively.
-        JvmSemantics::execute_ldc(ops, d->asU2(args[0]), true);
+        JvmSemantics::execute_ldc(ops, d->asU2(args[0]));
     }
 };
 
@@ -3798,10 +3762,14 @@ struct IP_lrem: P {
         // Run-time Exceptions:
         //   IllegalMonitorStateException can be thrown for synchronized methods if structured locking ownership rules are violated.
 struct IP_lreturn: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
+    void p(D d, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr value = ops->popOperand();
-        JvmSemantics::methodReturn(ops, insn, value);
+
+        auto result = ops->popOperand();
+        ASSERT_not_null(result);
+        ASSERT_require(result->kind() == ValueKind::Integer64);
+
+        d->completeReturn(ops, result);
     }
 };
 
@@ -4043,13 +4011,7 @@ struct IP_new_: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 1);
 
-        auto state = ops->currentState();
-        ASSERT_not_null(state);
-
-        auto frame = state->currentFrame();
-        ASSERT_not_null(frame);
-
-        auto pool = frame->jvmConstantPool();
+        auto pool = DispatcherJvm::constantPool(ops);
         ASSERT_not_null(pool);
 
         auto ivExpr = isSgAsmIntegerValueExpression(args[0]);
@@ -4061,10 +4023,8 @@ struct IP_new_: P {
         ASSERT_not_null(entry);
 
         std::string className = pool->get_utf8_string(entry->get_name_index());
-
-        auto sval = ops->undefined_(32);
-        sval->kind(ValueKind::ObjectReference);
-        sval->typeDescriptor("L" + className + ";");
+        const std::string descriptor = "L" + className + ";";
+        auto sval = DispatcherJvm::syntheticObjectReference(ops->protoval(), descriptor, className + "::new");
 
         ops->pushOperand(sval);
     }
@@ -4177,12 +4137,7 @@ struct IP_putfield: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 1);
 
-        // Get the constant pool.
-        auto state = ops->currentState();
-        ASSERT_not_null(state);
-        auto frame = state->currentFrame();
-        ASSERT_not_null(frame);
-        auto pool = frame->jvmConstantPool();
+        auto pool = DispatcherJvm::constantPool(ops);
         ASSERT_not_null(pool);
 
         auto ivExpr = isSgAsmIntegerValueExpression(args[0]);
@@ -4191,7 +4146,7 @@ struct IP_putfield: P {
         const size_t index = static_cast<uint16_t>(ivExpr->get_absoluteValue());
 
         // Determine the declared field type.
-        const std::string fieldDesc =  DispatcherJvm::fieldDescriptor(pool, index);
+        const std::string fieldDesc = DispatcherJvm::fieldDescriptor(pool, index);
         const auto descType = DescriptorParser::parseFieldDescriptor(fieldDesc);
 
         // Stack shape:
@@ -4238,26 +4193,6 @@ struct IP_ret: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 1);
         JS::execute_ret(ops, insn, args);
-    }
-};
-
-// return (177 (0xb1))
-        // Description:
-        //   Return from the current method; typed returns move the return value to the invoker frame, while return returns void.
-        // Run-time Exceptions:
-        //   IllegalMonitorStateException can be thrown for synchronized methods if structured locking ownership rules are violated.
-struct IP_return: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
-        assert_args(insn, args, 0);
-        auto state = ops->currentState();
-
-        auto arch = Architecture::findByName("jvm").orThrow();
-        RegisterDictionary::Ptr regdict = arch->registerDictionary();
-
-        // The caller frame is now current automatically.
-        //
-        // Eventually restore control to the instruction following
-        // the invoke that created the callee frame.
     }
 };
 
@@ -4637,11 +4572,11 @@ DispatcherJvm::initializeDispatchTable() {
 //  iprocSet(0xa9,  new Jvm::IP_ret);
 //  iprocSet(0xaa,  new Jvm::IP_tableswitch);
 //  iprocSet(0xab,  new Jvm::IP_lookupswitch);
-//  iprocSet(0xac,  new Jvm::IP_ireturn);
-//  iprocSet(0xad,  new Jvm::IP_lreturn);
-//  iprocSet(0xae,  new Jvm::IP_freturn);
-//  iprocSet(0xaf,  new Jvm::IP_dreturn);
-//  iprocSet(0xb0,  new Jvm::IP_areturn);
+    iprocSet(0xac,  new Jvm::IP_ireturn);
+    iprocSet(0xad,  new Jvm::IP_lreturn);
+    iprocSet(0xae,  new Jvm::IP_freturn);
+    iprocSet(0xaf,  new Jvm::IP_dreturn);
+    iprocSet(0xb0,  new Jvm::IP_areturn);
 
     iprocSet(0xb1,  new Jvm::IP_return_);
     iprocSet(0xb2,  new Jvm::IP_getstatic);
@@ -4721,6 +4656,17 @@ DispatcherJvm::instructionPointerRegister() const {
     return REG_PC;
 }
 
+SgAsmJvmConstantPool*
+DispatcherJvm::constantPool(BaseSemantics::RiscOperators *ops) {
+    auto state = ops->currentState();
+    ASSERT_not_null(state);
+
+    auto frame = state->currentFrame();
+    ASSERT_not_null(frame);
+
+    return frame->jvmConstantPool();
+}
+
 size_t
 DispatcherJvm::nBitsForKind(ValueKind kind) {
     switch (kind) {
@@ -4767,6 +4713,93 @@ DispatcherJvm::methodDescriptor(SgAsmJvmConstantPool *pool, size_t index) {
     return pool->get_utf8_string(entry->get_descriptor_index());
 }
 
+BaseSemantics::SValuePtr
+DispatcherJvm::syntheticValue(const BaseSemantics::SValuePtr &protoval,
+                              const DescriptorType &type,
+                              const std::string &symbolName) {
+    ASSERT_not_null(protoval);
+    BaseSemantics::SValuePtr value;
+
+    switch (type.kind) {
+        case ValueKind::ObjectReference:
+            value = syntheticObjectReference(protoval, type.descriptor, symbolName);
+            break;
+
+        case ValueKind::ArrayReference:
+            value = syntheticArrayReference(protoval, type.descriptor, symbolName);
+            break;
+
+        case ValueKind::Integer32:
+        case ValueKind::Integer64:
+        case ValueKind::Float32:
+        case ValueKind::Float64:
+            value = protoval->undefined_(nBitsForKind(type.kind));
+            ASSERT_not_null(value);
+
+            value->kind(type.kind);
+
+            if (!symbolName.empty())
+                value->symbolName(symbolName);
+            break;
+
+        default:
+            ASSERT_not_reachable("cannot create a synthetic value for this JVM value kind");
+    }
+
+    ASSERT_not_null(value);
+    return value;
+}
+
+BaseSemantics::SValuePtr
+DispatcherJvm::syntheticObjectReference(const BaseSemantics::SValuePtr &protoval,
+                                        const std::string &descriptor,
+                                        const std::string &symbolName) {
+    ASSERT_not_null(protoval);
+    ASSERT_require(descriptor.size() >= 2);
+    ASSERT_require(descriptor.front() == 'L');
+    ASSERT_require(descriptor.back() == ';');
+
+    BaseSemantics::SValuePtr reference = protoval->undefined_(protoval->nBits());
+    ASSERT_not_null(reference);
+
+    reference->kind(BaseSemantics::ValueKind::ObjectReference);
+    reference->typeDescriptor(descriptor);
+
+    if (!symbolName.empty()) {
+        reference->symbolName(symbolName);
+    }
+
+    return reference;
+}
+
+BaseSemantics::SValuePtr
+DispatcherJvm::syntheticArrayReference(const BaseSemantics::SValuePtr &protoval,
+                                       const std::string &descriptor,
+                                       const std::string &symbolName) {
+    ASSERT_not_null(protoval);
+    ASSERT_require(!descriptor.empty());
+    ASSERT_require(descriptor.front() == '[');
+
+    BaseSemantics::SValuePtr reference = protoval->undefined_(protoval->nBits());
+    ASSERT_not_null(reference);
+
+    reference->kind(BaseSemantics::ValueKind::ArrayReference);
+    reference->typeDescriptor(descriptor);
+
+    if (!symbolName.empty()) {
+        reference->symbolName(symbolName);
+    }
+
+    // The array type is known, but its length is not.
+    BaseSemantics::SValuePtr length = protoval->undefined_(32);
+    ASSERT_not_null(length);
+
+    length->kind(BaseSemantics::ValueKind::Integer32);
+    reference->arrayLength(length);
+
+    return reference;
+}
+
 void
 DispatcherJvm::initializeInvocationLocals(BaseSemantics::RiscOperators *ops,
                                           const BaseSemantics::FrameState::Ptr &calleeFrame,
@@ -4811,6 +4844,38 @@ DispatcherJvm::initializeMemoryState() {
                     break;
             }
         }
+    }
+}
+
+void
+DispatcherJvm::completeReturn(BaseSemantics::RiscOperators *ops, const BaseSemantics::SValuePtr &result) {
+    ASSERT_not_null(ops);
+
+    auto state = ops->currentState();
+    ASSERT_not_null(state);
+
+    auto calleeFrame = state->currentFrame();
+    ASSERT_not_null(calleeFrame);
+
+    // Save before removing the frame.
+    const auto returnAddress = calleeFrame->returnAddress();
+
+    auto poppedFrame = state->popFrame();
+    ASSERT_require(poppedFrame == calleeFrame);
+
+    if (returnAddress) {
+        // The caller frame is now current.
+        if (result) {
+            ops->pushOperand(result);
+        }
+        const RegisterDescriptor pcReg = instructionPointerRegister();
+        ops->writeRegister(pcReg, ops->number_(pcReg.nBits(), *returnAddress));
+    }
+    else {
+        // The root analysis frame returned.
+        //
+        // If desired, store result as the final analysis result here.
+        // For a void return, result is null.
     }
 }
 

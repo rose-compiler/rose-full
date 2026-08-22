@@ -142,24 +142,25 @@ Dispatcher::asU2(const SgAsmExpression *expr) {
 
 SValue::Ptr
 Dispatcher::makeConstant(ValueKind kind, int64_t value) {
-        size_t nBits;
+    size_t nBits;
 
-        switch (kind) {
-            case ValueKind::Integer32:
-                nBits = 32;
-                break;
-            case ValueKind::Integer64:
-                nBits = 64;
-                break;
-            default: ASSERT_not_reachable("invalid kind for makeConstant");
-        }
-
-        // Create the SValue and set its type/kind
-        auto sval = operators_->number_(nBits, value);
-        sval->kind(kind);
-
-        return sval;
+    switch (kind) {
+        case ValueKind::Integer32:
+            nBits = 32;
+            break;
+        case ValueKind::Integer64:
+            nBits = 64;
+            break;
+        default: ASSERT_not_reachable("invalid kind for makeConstant");
     }
+
+    // Create the SValue and set its type/kind
+    auto sval = operators_->number_(nBits, value);
+    ASSERT_not_null(sval);
+
+    sval->kind(kind);
+    return sval;
+}
 
 RegisterDictionary::Ptr
 Dispatcher::registerDictionary() const {
