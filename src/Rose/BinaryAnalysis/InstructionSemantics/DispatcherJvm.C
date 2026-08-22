@@ -530,45 +530,6 @@ namespace JvmSemantics {
         ops->pushOperand(sval);
     }
 
-    void execute_istore(Ops ops, size_t index) {
-        auto sval = ops->popOperand();
-        ASSERT_require(sval->nBits() == 32);
-        ASSERT_require2(sval->kind() == ValueKind::Integer32, "top of stack must be Integer32");
-
-        ops->writeLocal(index, sval);
-    }
-
-    void execute_lstore(Ops ops, size_t index) {
-        auto sval = ops->popOperand();
-        ASSERT_require(sval->nBits() == 64);
-        ASSERT_require2(sval->kind() == ValueKind::Integer64, "top of stack must be Integer64");
-
-        ops->writeLocal(index, sval);
-    }
-
-    void execute_fstore(Ops ops, size_t index) {
-        auto sval = ops->popOperand();
-        ASSERT_require(sval->nBits() == 32);
-        ASSERT_require2(sval->kind() == ValueKind::Float32, "top of stack must be Float32");
-
-        ops->writeLocal(index, sval);
-    }
-
-    void execute_dstore(Ops ops, size_t index) {
-        auto sval = ops->popOperand();
-        ASSERT_require(sval->nBits() == 64);
-        ASSERT_require2(sval->kind() == ValueKind::Float64, "top of stack must be Float64");
-
-        ops->writeLocal(index, sval);
-    }
-
-    void execute_astore(Ops ops, size_t index) {
-        auto ref = ops->popOperand();
-        ASSERT_require2(isReference(ref), "astore requires top of stack to be a Reference");
-
-        ops->writeLocal(index, ref);
-    }
-
     void execute_ldc(Ops ops, size_t index) {
         ASSERT_not_null(ops);
         SValuePtr value;
@@ -699,6 +660,48 @@ namespace JvmSemantics {
 
             ops->pushOperand(result);
         }
+    }
+
+    enum class LocalStoreKind {
+        Integer32,
+        Integer64,
+        Float32,
+        Float64,
+        Reference
+    };
+
+    static void execute_store(Ops ops, size_t index, LocalStoreKind expectedKind) {
+        ASSERT_not_null(ops);
+
+        auto value = ops->popOperand();
+        ASSERT_not_null(value);
+
+        switch (expectedKind) {
+            case LocalStoreKind::Integer32:
+                ASSERT_require(value->kind() == ValueKind::Integer32);
+                break;
+            case LocalStoreKind::Integer64:
+                ASSERT_require(value->kind() == ValueKind::Integer64);
+                break;
+            case LocalStoreKind::Float32:
+                ASSERT_require(value->kind() == ValueKind::Float32);
+                break;
+            case LocalStoreKind::Float64:
+                ASSERT_require(value->kind() == ValueKind::Float64);
+                break;
+            case LocalStoreKind::Reference:
+                ASSERT_require(value->kind() == ValueKind::ObjectReference ||
+                               value->kind() == ValueKind::ArrayReference);
+                break;
+        }
+
+        auto state = ops->currentState();
+        ASSERT_not_null(state);
+
+        auto frame = state->currentFrame();
+        ASSERT_not_null(frame);
+
+        frame->writeLocal(index, value);
     }
 
     void execute_athrow(Ops, I, Args) { jvmUnsupported("execute_athrow"); }
@@ -929,6 +932,7 @@ namespace JS = JvmSemantics;
 using JvmSemantics::asU1;
 using JvmSemantics::doBinaryOp;
 using JvmSemantics::doUnaryOp;
+using JvmSemantics::LocalStoreKind;
 
 // aaload (50 (0x32))
         // Description:
@@ -948,7 +952,6 @@ struct IP_aaload: P {
         ops->pushOperand(JvmSemantics::arrayLoad(ops, "a", arrayref, index));
     }
 };
-
 
 // aastore (83 (0x53))
         // Description:
@@ -1135,7 +1138,7 @@ struct IP_arraylength: P {
 struct IP_astore: P {
     void p(D d, Ops ops, I insn, Args args) {
         assert_args(insn, args, 1);
-        JS::execute_astore(ops, d->asU1(args[0]));
+        execute_store(ops, d->asU1(args[0]), LocalStoreKind::Reference);
     }
 };
 
@@ -1149,11 +1152,7 @@ struct IP_astore: P {
 struct IP_astore_0: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-
-        auto ref = ops->popOperand();
-        ASSERT_require2(JS::isReference(ref), "astore_0 requires top of stack to be a Reference");
-
-        ops->writeLocal(0, ref);
+        execute_store(ops, 0, LocalStoreKind::Reference);
     }
 };
 
@@ -1167,11 +1166,7 @@ struct IP_astore_0: P {
 struct IP_astore_1: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-
-        auto ref = ops->popOperand();
-        ASSERT_require2(JS::isReference(ref), "astore_1 requires top of stack to be a Reference");
-
-        ops->writeLocal(1, ref);
+        execute_store(ops, 1, LocalStoreKind::Reference);
     }
 };
 
@@ -1185,11 +1180,7 @@ struct IP_astore_1: P {
 struct IP_astore_2: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-
-        auto ref = ops->popOperand();
-        ASSERT_require2(JS::isReference(ref), "astore_2 requires top of stack to be a Reference");
-
-        ops->writeLocal(2, ref);
+        execute_store(ops, 2, LocalStoreKind::Reference);
     }
 };
 
@@ -1203,11 +1194,7 @@ struct IP_astore_2: P {
 struct IP_astore_3: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-
-        auto ref = ops->popOperand();
-        ASSERT_require2(JS::isReference(ref), "astore_3 requires top of stack to be a Reference");
-
-        ops->writeLocal(3, ref);
+        execute_store(ops, 3, LocalStoreKind::Reference);
     }
 };
 
@@ -1656,7 +1643,7 @@ struct IP_dreturn: P {
 struct IP_dstore: P {
     void p(D d, Ops ops, I insn, Args args) {
         assert_args(insn, args, 1);
-        JS::execute_dstore(ops, d->asU1(args[0]));
+        execute_store(ops, d->asU1(args[0]), LocalStoreKind::Float64);
     }
 };
 
@@ -1670,10 +1657,7 @@ struct IP_dstore: P {
 struct IP_dstore_0: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        auto sval = ops->popOperand();
-        ASSERT_require2(sval->kind() == ValueKind::Float64, "top of stack must be Float64");
-
-        ops->writeLocal(0, sval);
+        execute_store(ops, 0, LocalStoreKind::Float64);
     }
 };
 
@@ -1687,10 +1671,7 @@ struct IP_dstore_0: P {
 struct IP_dstore_1: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        auto sval = ops->popOperand();
-        ASSERT_require2(sval->kind() == ValueKind::Float64, "top of stack must be Float64");
-
-        ops->writeLocal(1, sval);
+        execute_store(ops, 1, LocalStoreKind::Float64);
     }
 };
 
@@ -1704,10 +1685,7 @@ struct IP_dstore_1: P {
 struct IP_dstore_2: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        auto sval = ops->popOperand();
-        ASSERT_require2(sval->kind() == ValueKind::Float64, "top of stack must be Float64");
-
-        ops->writeLocal(2, sval);
+        execute_store(ops, 2, LocalStoreKind::Float64);
     }
 };
 
@@ -1721,10 +1699,7 @@ struct IP_dstore_2: P {
 struct IP_dstore_3: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        auto sval = ops->popOperand();
-        ASSERT_require2(sval->kind() == ValueKind::Float64, "top of stack must be Float64");
-
-        ops->writeLocal(3, sval);
+        execute_store(ops, 3, LocalStoreKind::Float64);
     }
 };
 
@@ -2248,7 +2223,7 @@ struct IP_freturn: P {
 struct IP_fstore: P {
     void p(D d, Ops ops, I insn, Args args) {
         assert_args(insn, args, 1);
-        JS::execute_fstore(ops, d->asU1(args[0]));
+        execute_store(ops, d->asU1(args[0]), LocalStoreKind::Float32);
     }
 };
 
@@ -2262,10 +2237,7 @@ struct IP_fstore: P {
 struct IP_fstore_0: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        auto sval = ops->popOperand();
-        ASSERT_require2(sval->kind() == ValueKind::Float32, "top of stack must be Float32");
-
-        ops->writeLocal(0, sval);
+        execute_store(ops, 0, LocalStoreKind::Float32);
     }
 };
 
@@ -2279,10 +2251,7 @@ struct IP_fstore_0: P {
 struct IP_fstore_1: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        auto sval = ops->popOperand();
-        ASSERT_require2(sval->kind() == ValueKind::Float32, "top of stack must be Float32");
-
-        ops->writeLocal(1, sval);
+        execute_store(ops, 1, LocalStoreKind::Float32);
     }
 };
 
@@ -2296,10 +2265,7 @@ struct IP_fstore_1: P {
 struct IP_fstore_2: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        auto sval = ops->popOperand();
-        ASSERT_require2(sval->kind() == ValueKind::Float32, "top of stack must be Float32");
-
-        ops->writeLocal(2, sval);
+        execute_store(ops, 2, LocalStoreKind::Float32);
     }
 };
 
@@ -2313,10 +2279,7 @@ struct IP_fstore_2: P {
 struct IP_fstore_3: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        auto sval = ops->popOperand();
-        ASSERT_require2(sval->kind() == ValueKind::Float32, "top of stack must be Float32");
-
-        ops->writeLocal(3, sval);
+        execute_store(ops, 3, LocalStoreKind::Float32);
     }
 };
 
@@ -3210,7 +3173,7 @@ struct IP_ishr: P {
 struct IP_istore: P {
     void p(D d, Ops ops, I insn, Args args) {
         assert_args(insn, args, 1);
-        JS::execute_istore(ops, d->asU1(args[0]));
+        execute_store(ops, d->asU1(args[0]), LocalStoreKind::Integer32);
     }
 };
 
@@ -3224,10 +3187,7 @@ struct IP_istore: P {
 struct IP_istore_0: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        auto sval = ops->popOperand();
-        ASSERT_require2(sval->kind() == ValueKind::Integer32, "top of stack must be Integer32");
-
-        ops->writeLocal(0, sval);
+        execute_store(ops, 0, LocalStoreKind::Integer32);
     }
 };
 
@@ -3241,10 +3201,7 @@ struct IP_istore_0: P {
 struct IP_istore_1: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        auto sval = ops->popOperand();
-        ASSERT_require2(sval->kind() == ValueKind::Integer32, "top of stack must be Integer32");
-
-        ops->writeLocal(1, sval);
+        execute_store(ops, 1, LocalStoreKind::Integer32);
     }
 };
 
@@ -3258,10 +3215,7 @@ struct IP_istore_1: P {
 struct IP_istore_2: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        auto sval = ops->popOperand();
-        ASSERT_require2(sval->kind() == ValueKind::Integer32, "top of stack must be Integer32");
-
-        ops->writeLocal(2, sval);
+        execute_store(ops, 2, LocalStoreKind::Integer32);
     }
 };
 
@@ -3275,10 +3229,7 @@ struct IP_istore_2: P {
 struct IP_istore_3: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        auto sval = ops->popOperand();
-        ASSERT_require2(sval->kind() == ValueKind::Integer32, "top of stack must be Integer32");
-
-        ops->writeLocal(3, sval);
+        execute_store(ops, 3, LocalStoreKind::Integer32);
     }
 };
 
@@ -3839,7 +3790,7 @@ struct IP_lshr: P {
 struct IP_lstore: P {
     void p(D d, Ops ops, I insn, Args args) {
         assert_args(insn, args, 1);
-        JS::execute_lstore(ops, d->asU1(args[0]));
+        execute_store(ops, d->asU1(args[0]), LocalStoreKind::Integer64);
     }
 };
 
@@ -3853,10 +3804,7 @@ struct IP_lstore: P {
 struct IP_lstore_0: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        auto sval = ops->popOperand();
-        ASSERT_require2(sval->kind() == ValueKind::Integer64, "top of stack must be Integer64");
-
-        ops->writeLocal(0, sval);
+        execute_store(ops, 0, LocalStoreKind::Integer64);
     }
 };
 
@@ -3870,10 +3818,7 @@ struct IP_lstore_0: P {
 struct IP_lstore_1: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        auto sval = ops->popOperand();
-        ASSERT_require2(sval->kind() == ValueKind::Integer64, "top of stack must be Integer64");
-
-        ops->writeLocal(1, sval);
+        execute_store(ops, 1, LocalStoreKind::Integer64);
     }
 };
 
@@ -3887,10 +3832,7 @@ struct IP_lstore_1: P {
 struct IP_lstore_2: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        auto sval = ops->popOperand();
-        ASSERT_require2(sval->kind() == ValueKind::Integer64, "top of stack must be Integer64");
-
-        ops->writeLocal(2, sval);
+        execute_store(ops, 2, LocalStoreKind::Integer64);
     }
 };
 
@@ -3904,10 +3846,7 @@ struct IP_lstore_2: P {
 struct IP_lstore_3: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        auto sval = ops->popOperand();
-        ASSERT_require2(sval->kind() == ValueKind::Integer64, "top of stack must be Integer64");
-
-        ops->writeLocal(3, sval);
+        execute_store(ops, 3, LocalStoreKind::Integer64);
     }
 };
 
@@ -4332,23 +4271,23 @@ struct IP_wide: P {
                 break;
             case JIK::istore:
                 assert_args(insn, args, 2);
-                JS::execute_istore(ops, index);
+                execute_store(ops, index, LocalStoreKind::Integer32);
                 break;
             case JIK::lstore:
                 ASSERT_require(args.size() == 2);
-                JS::execute_lstore(ops, index);
+                execute_store(ops, index, LocalStoreKind::Integer64);
                 break;
             case JIK::fstore:
                 ASSERT_require(args.size() == 2);
-                JS::execute_fstore(ops, index);
+                execute_store(ops, index, LocalStoreKind::Float32);
                 break;
             case JIK::dstore:
                 ASSERT_require(args.size() == 2);
-                JS::execute_dstore(ops, index);
+                execute_store(ops, index, LocalStoreKind::Float64);
                 break;
             case JIK::astore:
                 ASSERT_require(args.size() == 2);
-                JS::execute_astore(ops, index);
+                execute_store(ops, index, LocalStoreKind::Reference);
                 break;
             case JIK::iinc:
                 ASSERT_require(args.size() == 3);
@@ -4402,7 +4341,7 @@ DispatcherJvm::initializeDispatchTable() {
     iprocSet(0x4c,  new Jvm::IP_astore_1);
     iprocSet(0x4d,  new Jvm::IP_astore_2);
     iprocSet(0x4e,  new Jvm::IP_astore_3);
-//  iprocSet(0x4f,  new Jvm::IP_istore);
+//  iprocSet(0x4f,  new Jvm::IP_iastore);
 
     iprocSet(0x0b,  new Jvm::IP_fconst_0);
     iprocSet(0x0c,  new Jvm::IP_fconst_1);
@@ -4431,10 +4370,10 @@ DispatcherJvm::initializeDispatchTable() {
     iprocSet(0x45,  new Jvm::IP_fstore_2);
     iprocSet(0x46,  new Jvm::IP_fstore_3);
 
-//  iprocSet(0x47,  new Jvm::IP_dstore_0);
-//  iprocSet(0x48,  new Jvm::IP_dstore_1);
-//  iprocSet(0x49,  new Jvm::IP_dstore_2);
-//  iprocSet(0x4a,  new Jvm::IP_dstore_3);
+    iprocSet(0x47,  new Jvm::IP_dstore_0);
+    iprocSet(0x48,  new Jvm::IP_dstore_1);
+    iprocSet(0x49,  new Jvm::IP_dstore_2);
+    iprocSet(0x4a,  new Jvm::IP_dstore_3);
 
 //  iprocSet(0x50,  new Jvm::IP_lastore);
 //  iprocSet(0x51,  new Jvm::IP_fastore);
