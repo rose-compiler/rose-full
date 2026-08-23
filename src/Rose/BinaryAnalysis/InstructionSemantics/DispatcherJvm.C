@@ -235,8 +235,6 @@ namespace JvmSemantics {
     void execute_checkcast(Ops ops, I insn, Args args);
     void execute_instanceof(Ops ops, I insn, Args args);
     void execute_invokedynamic(Ops ops, I insn, Args args);
-    void execute_invokeinterface(Ops ops, I insn, Args args);
-    void execute_invokestatic(Ops ops, I insn, Args args);
     void execute_monitorenter(Ops ops, I insn, Args args);
     void execute_monitorexit(Ops ops, I insn, Args args);
     void execute_multianewarray(Ops ops, I insn, Args args);
@@ -592,36 +590,13 @@ namespace JvmSemantics {
         ops->pushOperand(sval);
     }
 
-    void execute_invokespecial(Ops ops, uint16_t index) {
-        auto state = ops->currentState();
-        auto callerFrame = state->currentFrame();
-        auto calleeFrame = FrameState::instance(state->protoval(), Sawyer::Nothing(), callerFrame->jvmConstantPool());
+    enum class InvocationKind {
+        Special,
+        Virtual,
+        Static
+    };
 
-        auto pool = callerFrame->jvmConstantPool();
-        ASSERT_not_null(pool);
-
-        bool hasReceiver = true; // for invoke{virtual,special,interface}
-        std::string descriptor = DispatcherJvm::methodDescriptor(pool, index);
-        DispatcherJvm::initializeInvocationLocals(ops, calleeFrame, descriptor, hasReceiver);
-
-        // Conceptually, do the following:
-        // -------------------------------
-        //   - push calleeFrame
-        //   - execute summary (transfer execution to the first instruction of calleeMethod)
-        //   - pop calleeFrame (by calleeMethod)
-        //   - resume frame callerFrame
-        //
-        // Conclusion: for now no summary, so just push then pop the calleeFrame
-
-        // Transfer execution to the resolved callee.
-        state->pushFrame(calleeFrame);
-
-        // Resume execution with caller
-        auto popped = state->popFrame();
-        ASSERT_require(popped == calleeFrame);
-    }
-
-    void execute_invokevirtual(Ops ops, size_t index, SgAsmInstruction *insn) {
+    void execute_invoke(Ops ops, size_t index, SgAsmInstruction *insn, InvocationKind invocationKind) {
         ASSERT_not_null(ops);
         ASSERT_not_null(insn);
 
@@ -635,29 +610,32 @@ namespace JvmSemantics {
         ASSERT_not_null(pool);
 
         const std::string descriptor = DispatcherJvm::methodDescriptor(pool, index);
-        const auto methodDescriptor = DescriptorParser::parseMethodDescriptor(descriptor);
+        const MethodDescriptor methodDesc = DescriptorParser::parseMethodDescriptor(descriptor);
+        const bool hasReceiver = invocationKind != InvocationKind::Static;
 
-        auto calleeFrame = FrameState::instance(state->protoval(), Sawyer::Nothing(), callerFrame->jvmConstantPool());
+        auto calleeFrame = FrameState::instance(state->protoval(), Sawyer::Nothing(), pool);
+
         ASSERT_not_null(calleeFrame);
 
-        // Pops the explicit arguments and receiver from the caller stack,
-        // and places them into the callee's locals.
-        DispatcherJvm::initializeInvocationLocals(ops, calleeFrame, descriptor, /*hasReceiver=*/true);
+        // Pops arguments and, for instance methods, the receiver from the
+        // caller's stack and installs them in the callee's locals.
+        DispatcherJvm::initializeInvocationLocals(ops, calleeFrame, descriptor, hasReceiver);
 
         const Address callerResumeAddress = insn->get_address() + insn->get_size();
         calleeFrame->returnAddress(callerResumeAddress);
 
-        // The callee is currently summarized rather than interpreted.
+        // For now, represent the invocation frame lifecycle without
+        // interpreting the callee.
         state->pushFrame(calleeFrame);
 
-        const auto popped = state->popFrame();
-        ASSERT_require(popped == calleeFrame);
+        const auto poppedFrame = state->popFrame();
+        ASSERT_require(poppedFrame == calleeFrame);
 
-        // The caller frame is current again. Synthesize the summarized result.
-        if (!methodDescriptor.returnType.isVoid()) {
-            auto result = DispatcherJvm::syntheticValue(state->protoval(), methodDescriptor.returnType);
+        // Since the callee was summarized rather than interpreted, create
+        // an unknown result of the declared return type.
+        if (!methodDesc.returnType.isVoid()) {
+            auto result = DispatcherJvm::syntheticValue(state->protoval(), methodDesc.returnType);
             ASSERT_not_null(result);
-
             ops->pushOperand(result);
         }
     }
@@ -709,7 +687,6 @@ namespace JvmSemantics {
     void execute_instanceof(Ops, I, Args) { jvmUnsupported("execute_instanceof"); }
     void execute_invokedynamic(Ops, I, Args) { jvmUnsupported("execute_invokedynamic"); }
     void execute_invokeinterface(Ops, I, Args) { jvmUnsupported("execute_invokeinterface"); }
-    void execute_invokestatic(Ops, I, Args) { jvmUnsupported("execute_invokestatic"); }
     void execute_monitorenter(Ops, I, Args) { jvmUnsupported("execute_monitorenter"); }
     void execute_monitorexit(Ops, I, Args) { jvmUnsupported("execute_monitorexit"); }
     void execute_multianewarray(Ops, I, Args) { jvmUnsupported("execute_multianewarray"); }
@@ -933,6 +910,7 @@ using JvmSemantics::asU1;
 using JvmSemantics::doBinaryOp;
 using JvmSemantics::doUnaryOp;
 using JvmSemantics::LocalStoreKind;
+using JvmSemantics::InvocationKind;
 
 // aaload (50 (0x32))
         // Description:
@@ -3027,7 +3005,7 @@ struct IP_invokeinterface: P {
 struct IP_invokespecial: P {
     void p(D d, Ops ops, I insn, Args args) {
         assert_args(insn, args, 1);
-        JvmSemantics::execute_invokespecial(ops, d->asU2(args[0]));
+        JvmSemantics::execute_invoke(ops, d->asU2(args[0]), insn, InvocationKind::Special);
     }
 };
 
@@ -3038,9 +3016,9 @@ struct IP_invokespecial: P {
         //   NullPointerException if an instance invocation receiver is null.
         //   Errors from method resolution or class/interface initialization may be observed as specified by the JVM.
 struct IP_invokestatic: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
-        assert_args(insn, args, 2);
-        JvmSemantics::execute_invokestatic(ops, insn, args);
+    void p(D d, Ops ops, I insn, Args args) {
+        assert_args(insn, args, 1);
+        JvmSemantics::execute_invoke(ops, d->asU2(args[0]), insn, InvocationKind::Static);
     }
 };
 
@@ -3053,7 +3031,7 @@ struct IP_invokestatic: P {
 struct IP_invokevirtual: P {
     void p(D d, Ops ops, I insn, Args args) {
         assert_args(insn, args, 1);
-        JvmSemantics::execute_invokevirtual(ops, d->asU2(args[0]), insn);
+        JvmSemantics::execute_invoke(ops, d->asU2(args[0]), insn, InvocationKind::Virtual);
     }
 };
 
@@ -4525,7 +4503,7 @@ DispatcherJvm::initializeDispatchTable() {
 
     iprocSet(0xb6,  new Jvm::IP_invokevirtual);
     iprocSet(0xb7,  new Jvm::IP_invokespecial);
-//  iprocSet(0xb8,  new Jvm::IP_invokestatic);
+    iprocSet(0xb8,  new Jvm::IP_invokestatic);
 //  iprocSet(0xb9,  new Jvm::IP_invokeinterface);
 //  iprocSet(0xba,  new Jvm::IP_invokedynamic);
 //  iprocSet(0xc0,  new Jvm::IP_checkcast);
