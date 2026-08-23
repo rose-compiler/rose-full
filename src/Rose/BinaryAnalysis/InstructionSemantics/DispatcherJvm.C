@@ -200,7 +200,6 @@ namespace JvmSemantics {
 
     SValue::Ptr nullReference(Ops ops);
     SValue::Ptr arrayLoad(Ops ops, const char *kind, SValue::Ptr arrayref, SValue::Ptr index);
-    void        arrayStore(Ops ops, const char *kind, SValue::Ptr arrayref, SValue::Ptr index, SValue::Ptr value);
 
     SValue::Ptr rem(Ops ops, SValue::Ptr a, SValue::Ptr b);
     SValue::Ptr convert(Ops ops, const char *op, SValue::Ptr a);
@@ -294,17 +293,6 @@ namespace JvmSemantics {
 
      // 4. Call readMemory with all 4 required SValue::Ptr arguments
         return ops->readMemory(RegisterDescriptor(), addr, dflt, cond);
-    }
-
-    void arrayStore(Ops ops, const char * /*kind*/, SValue::Ptr arrayref, SValue::Ptr index, SValue::Ptr value) {
-     // 1. Calculate the effective address (base + index)
-        SValue::Ptr addr = ops->add(arrayref, index);
-
-     // 2. Define the condition (usually constant true)
-        SValue::Ptr cond = ops->boolean_(true);
-
-     // 3. Perform the memory write using RiscOperators
-        ops->writeMemory(RegisterDescriptor(), addr, value, cond);
     }
 
     SValue::Ptr rem(Ops ops, SValue::Ptr a, SValue::Ptr b) {
@@ -682,6 +670,79 @@ namespace JvmSemantics {
         frame->writeLocal(index, value);
     }
 
+    enum class ArrayStoreKind {
+        Integer32,
+        Integer64,
+        Float32,
+        Float64,
+        Reference,
+        ByteOrBoolean,
+        Character,
+        Short
+    };
+
+    void execute_array_store(Ops ops, ArrayStoreKind storeKind) {
+        ASSERT_not_null(ops);
+
+        auto value = ops->popOperand();
+        ASSERT_not_null(value);
+
+        auto index = ops->popOperand();
+        ASSERT_not_null(index);
+        ASSERT_require(index->kind() == ValueKind::Integer32);
+
+        auto arrayRef = ops->popOperand();
+        ASSERT_not_null(arrayRef);
+        ASSERT_require(arrayRef->kind() == ValueKind::ArrayReference);
+
+        const std::string descriptor = arrayRef->typeDescriptor();
+        ASSERT_require(!descriptor.empty());
+        ASSERT_require(descriptor[0] == '[');
+
+        switch (storeKind) {
+            case ArrayStoreKind::Integer32:
+                ASSERT_require(descriptor == "[I");
+                ASSERT_require(value->kind() == ValueKind::Integer32);
+                break;
+            case ArrayStoreKind::Integer64:
+                ASSERT_require(descriptor == "[J");
+                ASSERT_require(value->kind() == ValueKind::Integer64);
+                break;
+            case ArrayStoreKind::Float32:
+                ASSERT_require(descriptor == "[F");
+                ASSERT_require(value->kind() == ValueKind::Float32);
+                break;
+            case ArrayStoreKind::Float64:
+                ASSERT_require(descriptor == "[D");
+                ASSERT_require(value->kind() == ValueKind::Float64);
+                break;
+            case ArrayStoreKind::ByteOrBoolean:
+                ASSERT_require(descriptor == "[B" || descriptor == "[Z");
+                ASSERT_require(value->kind() == ValueKind::Integer32);
+                break;
+            case ArrayStoreKind::Character:
+                ASSERT_require(descriptor == "[C");
+                ASSERT_require(value->kind() == ValueKind::Integer32);
+                break;
+            case ArrayStoreKind::Short:
+                ASSERT_require(descriptor == "[S");
+                ASSERT_require(value->kind() == ValueKind::Integer32);
+                break;
+            case ArrayStoreKind::Reference: {
+                ASSERT_require(value->kind() == ValueKind::ObjectReference ||
+                               value->kind() == ValueKind::ArrayReference);
+
+                const std::string elementDescriptor = descriptor.substr(1);
+
+                ASSERT_require(!elementDescriptor.empty());
+                ASSERT_require(elementDescriptor[0] == 'L' ||
+                               elementDescriptor[0] == '[');
+                break;
+            }
+        }
+        // Without an array-content model, the assignment is not retained.
+    }
+
     void execute_athrow(Ops, I, Args) { jvmUnsupported("execute_athrow"); }
     void execute_checkcast(Ops, I, Args) { jvmUnsupported("execute_checkcast"); }
     void execute_instanceof(Ops, I, Args) { jvmUnsupported("execute_instanceof"); }
@@ -909,6 +970,7 @@ namespace JS = JvmSemantics;
 using JvmSemantics::asU1;
 using JvmSemantics::doBinaryOp;
 using JvmSemantics::doUnaryOp;
+using JvmSemantics::ArrayStoreKind;
 using JvmSemantics::LocalStoreKind;
 using JvmSemantics::InvocationKind;
 
@@ -941,16 +1003,7 @@ struct IP_aaload: P {
 struct IP_aastore: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr value = ops->popOperand();
-        SValue::Ptr index = ops->popOperand();
-        SValue::Ptr arrayref = ops->popOperand();
-        JvmSemantics::throwIfNull(ops, "NullPointerException", arrayref);
-
-        JvmSemantics::throwIfArrayIndexOutOfBounds(ops, arrayref, index);
-
-        JvmSemantics::throwIfArrayStoreNotCompatible(ops, arrayref, value);
-
-        JvmSemantics::arrayStore(ops, "a", arrayref, index, value);
+        execute_array_store(ops, ArrayStoreKind::Reference);
     }
 };
 
@@ -1218,14 +1271,7 @@ struct IP_baload: P {
 struct IP_bastore: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr value = ops->popOperand();
-        SValue::Ptr index = ops->popOperand();
-        SValue::Ptr arrayref = ops->popOperand();
-        JvmSemantics::throwIfNull(ops, "NullPointerException", arrayref);
-
-        JvmSemantics::throwIfArrayIndexOutOfBounds(ops, arrayref, index);
-
-        JvmSemantics::arrayStore(ops, "b", arrayref, index, value);
+        execute_array_store(ops, ArrayStoreKind::ByteOrBoolean);
     }
 };
 
@@ -1277,14 +1323,7 @@ struct IP_caload: P {
 struct IP_castore: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr value = ops->popOperand();
-        SValue::Ptr index = ops->popOperand();
-        SValue::Ptr arrayref = ops->popOperand();
-        JvmSemantics::throwIfNull(ops, "NullPointerException", arrayref);
-
-        JvmSemantics::throwIfArrayIndexOutOfBounds(ops, arrayref, index);
-
-        JvmSemantics::arrayStore(ops, "c", arrayref, index, value);
+        execute_array_store(ops, ArrayStoreKind::Character);
     }
 };
 
@@ -1397,14 +1436,7 @@ struct IP_daload: P {
 struct IP_dastore: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr value = ops->popOperand();
-        SValue::Ptr index = ops->popOperand();
-        SValue::Ptr arrayref = ops->popOperand();
-        JvmSemantics::throwIfNull(ops, "NullPointerException", arrayref);
-
-        JvmSemantics::throwIfArrayIndexOutOfBounds(ops, arrayref, index);
-
-        JvmSemantics::arrayStore(ops, "d", arrayref, index, value);
+        execute_array_store(ops, ArrayStoreKind::Float64);
     }
 };
 
@@ -1970,9 +2002,9 @@ struct IP_faload: P {
         //   NullPointerException if arrayref is null.
         //   ArrayIndexOutOfBoundsException if index is outside the array bounds.
 struct IP_fastore: P {
-    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
+    void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ASSERT_require2(false, "fastore unimplemented");
+        execute_array_store(ops, ArrayStoreKind::Float32);
     }
 };
 
@@ -2515,14 +2547,7 @@ struct IP_iand: P {
 struct IP_iastore: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr value = ops->popOperand();
-        SValue::Ptr index = ops->popOperand();
-        SValue::Ptr arrayref = ops->popOperand();
-        JvmSemantics::throwIfNull(ops, "NullPointerException", arrayref);
-
-        JvmSemantics::throwIfArrayIndexOutOfBounds(ops, arrayref, index);
-
-        JvmSemantics::arrayStore(ops, "i", arrayref, index, value);
+        execute_array_store(ops, ArrayStoreKind::Integer32);
     }
 };
 
@@ -3405,14 +3430,7 @@ struct IP_land: P {
 struct IP_lastore: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr value = ops->popOperand();
-        SValue::Ptr index = ops->popOperand();
-        SValue::Ptr arrayref = ops->popOperand();
-        JvmSemantics::throwIfNull(ops, "NullPointerException", arrayref);
-
-        JvmSemantics::throwIfArrayIndexOutOfBounds(ops, arrayref, index);
-
-        JvmSemantics::arrayStore(ops, "l", arrayref, index, value);
+        execute_array_store(ops, ArrayStoreKind::Integer64);
     }
 };
 
@@ -4141,14 +4159,7 @@ struct IP_saload: P {
 struct IP_sastore: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr value = ops->popOperand();
-        SValue::Ptr index = ops->popOperand();
-        SValue::Ptr arrayref = ops->popOperand();
-        JvmSemantics::throwIfNull(ops, "NullPointerException", arrayref);
-
-        JvmSemantics::throwIfArrayIndexOutOfBounds(ops, arrayref, index);
-
-        JvmSemantics::arrayStore(ops, "s", arrayref, index, value);
+        execute_array_store(ops, ArrayStoreKind::Short);
     }
 };
 
@@ -4319,7 +4330,6 @@ DispatcherJvm::initializeDispatchTable() {
     iprocSet(0x4c,  new Jvm::IP_astore_1);
     iprocSet(0x4d,  new Jvm::IP_astore_2);
     iprocSet(0x4e,  new Jvm::IP_astore_3);
-//  iprocSet(0x4f,  new Jvm::IP_iastore);
 
     iprocSet(0x0b,  new Jvm::IP_fconst_0);
     iprocSet(0x0c,  new Jvm::IP_fconst_1);
@@ -4353,13 +4363,14 @@ DispatcherJvm::initializeDispatchTable() {
     iprocSet(0x49,  new Jvm::IP_dstore_2);
     iprocSet(0x4a,  new Jvm::IP_dstore_3);
 
-//  iprocSet(0x50,  new Jvm::IP_lastore);
-//  iprocSet(0x51,  new Jvm::IP_fastore);
-//  iprocSet(0x52,  new Jvm::IP_dastore);
-//  iprocSet(0x53,  new Jvm::IP_aastore);
-//  iprocSet(0x54,  new Jvm::IP_bastore);
-//  iprocSet(0x55,  new Jvm::IP_castore);
-//  iprocSet(0x56,  new Jvm::IP_sastore);
+    iprocSet(0x4f,  new Jvm::IP_iastore);
+    iprocSet(0x50,  new Jvm::IP_lastore);
+    iprocSet(0x51,  new Jvm::IP_fastore);
+    iprocSet(0x52,  new Jvm::IP_dastore);
+    iprocSet(0x53,  new Jvm::IP_aastore);
+    iprocSet(0x54,  new Jvm::IP_bastore);
+    iprocSet(0x55,  new Jvm::IP_castore);
+    iprocSet(0x56,  new Jvm::IP_sastore);
 
     iprocSet(0x02,  new Jvm::IP_iconst_m1);
     iprocSet(0x03,  new Jvm::IP_iconst_0);
