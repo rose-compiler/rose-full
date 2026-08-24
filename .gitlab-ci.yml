@@ -136,6 +136,23 @@ Policy-Checker:
     script:
         - ./$TEST_DIRECTORY/util/policy_check.sh
 
+#This job only runs for merge requests
+AI-Review:
+    extends: .develop-base
+    rules:
+        - if: $PIPE_TYPE == "develop" && $CI_PIPELINE_SOURCE == "merge_request_event"
+          when: on_success
+        - when: never
+    stage: Policy
+    allow_failure: true
+    tags:
+        - workpool:mac
+    variables:
+        AI_REVIEW_MODEL: "gpt-5.4-mini"
+        AI_REVIEW_REASONING_EFFORT: "medium"
+        AI_REVIEW_MAX_REVIEW_TOKENS: "25000"
+        AI_REVIEW_GITLAB_HTTP_CLIENT: "curl"
+
 RHEL9-Main:
     extends: .develop-base
     tags:
