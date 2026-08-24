@@ -152,6 +152,8 @@ AI-Review:
         AI_REVIEW_REASONING_EFFORT: "medium"
         AI_REVIEW_MAX_REVIEW_TOKENS: "25000"
         AI_REVIEW_GITLAB_HTTP_CLIENT: "curl"
+    before_script:
+        - if [ -d $TEST_DIRECTORY ] ; then cd $TEST_DIRECTORY ; git pull origin master ; cd .. ; else git clone -b $TEST_SCRIPTS_BRANCH $TEST_SCRIPTS $TEST_DIRECTORY ; fi
 
 RHEL9-Main:
     extends: .develop-base
