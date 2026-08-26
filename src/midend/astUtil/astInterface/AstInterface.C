@@ -148,6 +148,7 @@ AstNodePtr GetFunctionDecl( const AstNodePtr& _s)
          return GetFunctionDecl( AstNodePtrImpl(isSgDotExp(s)->get_rhs_operand()));
     case V_SgVarRefExp:
          return AstNodePtrImpl(isSgVarRefExp(s)->get_symbol()->get_declaration());
+    case V_SgNonrealDecl: return _s;
     default: 
         mlog[ERROR] << "Error: not recognizable function type : " << s->sage_class_name() << std::endl;
         mlog[ERROR] << " at " << s->get_file_info()->get_filenameString() << ":" << s->get_file_info()->get_line() << std::endl;
@@ -958,7 +959,7 @@ GetGlobalUniqueName(const AstNodePtr& _scope, std::string expname, bool do_not_a
   std::string scopename = expname;
   if (function_name_mangling_ && IsFunctionDefinition(_scope)) { 
     SgFunctionDeclaration* d = isSgFunctionDeclaration(GetFunctionDecl(_scope).get_ptr());
-    assert(d != 0);
+    if(d == 0) { return "_UNKNOWN_"; }
     scopename = function_name_mangling_(d);
     if (expname != "") return scopename + "::" + expname;
     return scopename;
@@ -1740,6 +1741,14 @@ IsVariableDecl(const AstNodePtr& _s, AstNodeList* vars, AstNodeList* init, AstLi
   assert(vars == 0 || designators == 0 || designators->size() <= vars->size()); 
   assert(init == 0 || designators == 0 || designators->size() == init->size()); 
 
+  auto _init_push_back_if_needed_ = [&init,&vars,&designators]() {
+      if (!init->back().is_null()) { 
+             init->push_back(AST_NULL); 
+             if (vars != 0) vars->push_back(vars->back()); 
+             if (designators != 0) designators->push_back(designators->back()); 
+      }
+  };
+
   switch (s->variantT()) {
     case V_SgVariableDeclaration: {
       SgVariableDeclaration *decl = isSgVariableDeclaration(s);
@@ -1769,27 +1778,36 @@ IsVariableDecl(const AstNodePtr& _s, AstNodeList* vars, AstNodeList* init, AstLi
       IsVariableDecl(cur_var->get_initializer(), vars, init, designators);
       return true;
      }
+  case V_SgConstructorInitializer: {
+      DebugDecl([&_s]{return "Finding variable decl:" + AstToString(_s);});
+      if (vars!=0 && vars->empty()) return false; // calling initializer without variable.
+      if (init == 0) return true;
+      SgConstructorInitializer* ctorInit = isSgConstructorInitializer(s);
+      SgExprListExp *argsList = ctorInit->get_args();  
+      if (argsList != nullptr) {  
+        for (SgExpression *expr : argsList->get_expressions()) {  
+            _init_push_back_if_needed_();
+            init->back() = expr;
+        }  
+      }
+      return true;
+      }
   case V_SgDesignatedInitializer: {
       DebugDecl([&_s]{return "Finding variable decl:" + AstToString(_s);});
       SgDesignatedInitializer* design_init = isSgDesignatedInitializer(s);
       SgExpression *  designator  = design_init->get_designatorList()->get_expressions()[0];
       SgInitializer * initializer = design_init->get_memberInit();
-      if (designators != 0) designators->push_back(designator);
-      if (init != 0) init->push_back(initializer);
-      if (vars != 0) vars->push_back(vars->back()); // same aggregate variable. TODO: can extend to dot exp. 
+      _init_push_back_if_needed_();
+      if (designators != 0) designators->back() = designator;
+      if (init != 0) init->back() = initializer;
       return true;
    }
   case V_SgAggregateInitializer: {
       if (init==0 || init->empty()) return false; // No variables; only empty initializations.
       DebugDecl([&_s]{return "Finding variable decl:" + AstToString(_s);});
       SgAggregateInitializer* aggr_init = isSgAggregateInitializer(s);
-      if (init != 0) {
-         if (!init->back().is_null()) { 
-             init->push_back(AST_NULL); 
-             if (vars != 0) vars->push_back(vars->back()); 
-             if (designators != 0) designators->push_back(designators->back()); 
-         }
-         if (designators != 0) {
+      _init_push_back_if_needed_();
+      if (designators != 0) {
             auto* t = designators->back().get_ptr();
             assert(t != 0);
             switch (t->variantT()) {
@@ -1803,7 +1821,7 @@ IsVariableDecl(const AstNodePtr& _s, AstNodeList* vars, AstNodeList* init, AstLi
                 if (vars != 0) {
                   // Pop off aggregate entries to match members with elemental initializations.
                   // Here we assume there is at least one member variable inside class_def.
-                  while (vars->size() >= init->size()) vars->pop_back();
+                  while (vars->size() > init->size()) vars->pop_back();
                   for (auto* member :  class_def->get_members()) {  
                      // Here future variables are pushed in.
                      IsVariableDecl(member, vars, 0, 0);
@@ -1813,7 +1831,6 @@ IsVariableDecl(const AstNodePtr& _s, AstNodeList* vars, AstNodeList* init, AstLi
                 }
               default: break;
              }
-          }
       }
       auto& list = aggr_init->get_initializers()->get_expressions();
       for (auto& cur_var : list) {
@@ -1827,12 +1844,7 @@ IsVariableDecl(const AstNodePtr& _s, AstNodeList* vars, AstNodeList* init, AstLi
           if (init->empty()) return false; // We don't have an earlier SgInitializedName. Unexpected.
           auto* def = isSgAssignInitializer(s)->get_operand();
           auto cur_init= init->back();
-          if (!cur_init.is_null()) { 
-             // add new entry
-             init->push_back(def); 
-             if (vars != 0) vars->push_back(vars->back()); 
-             if (designators != 0) designators->push_back(designators->back()); 
-          } 
+          _init_push_back_if_needed_();
           init->back()  =  def;
           if (vars != 0 && vars->size() > init->size() && cur_init.is_null_field_index()) {
                // update the vars entry to be the member variable.
