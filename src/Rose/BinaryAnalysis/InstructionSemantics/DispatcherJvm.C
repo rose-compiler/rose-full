@@ -217,12 +217,6 @@ namespace JvmSemantics {
     void branch_if_icmpge(Ops ops, I insn, Args args);
     void branch_if_icmpgt(Ops ops, I insn, Args args);
     void branch_if_icmple(Ops ops, I insn, Args args);
-    void branch_ifeq(Ops ops, I insn, Args args);
-    void branch_ifne(Ops ops, I insn, Args args);
-    void branch_iflt(Ops ops, I insn, Args args);
-    void branch_ifge(Ops ops, I insn, Args args);
-    void branch_ifgt(Ops ops, I insn, Args args);
-    void branch_ifle(Ops ops, I insn, Args args);
     void branch_ifnonnull(Ops ops, I insn, Args args);
     void branch_ifnull(Ops ops, I insn, Args args);
     void branch_jsr(Ops ops, I insn, Args args);
@@ -278,7 +272,13 @@ namespace JvmSemantics {
     SValue::Ptr nullReference(Ops ops) {
         // The JVMS does not mandate a concrete representation for null.  This
         // default model uses a zero-valued reference-sized symbolic value.
-        return ops->number_(64, 0);
+        auto nullRef = ops->number_(32, 0);
+        ASSERT_not_null(nullRef);
+
+        nullRef->kind(ValueKind::ObjectReference);
+        nullRef->symbolName("null");
+
+        return nullRef;
     }
 
     SValue::Ptr arrayLoad(Ops ops, const char * /*kind*/, SValue::Ptr arrayref, SValue::Ptr index) {
@@ -426,14 +426,6 @@ namespace JvmSemantics {
     void branch_if_icmpge(Ops, I, Args) { jvmUnsupported("branch_if_icmpge"); }
     void branch_if_icmpgt(Ops, I, Args) { jvmUnsupported("branch_if_icmpgt"); }
     void branch_if_icmple(Ops, I, Args) { jvmUnsupported("branch_if_icmple"); }
-    void branch_ifeq(Ops, I, Args) { jvmUnsupported("branch_ifeq"); }
-    void branch_ifne(Ops, I, Args) { jvmUnsupported("branch_ifne"); }
-    void branch_iflt(Ops, I, Args) { jvmUnsupported("branch_iflt"); }
-    void branch_ifge(Ops, I, Args) { jvmUnsupported("branch_ifge"); }
-    void branch_ifgt(Ops, I, Args) { jvmUnsupported("branch_ifgt"); }
-    void branch_ifle(Ops, I, Args) { jvmUnsupported("branch_ifle"); }
-    void branch_ifnonnull(Ops, I, Args) { jvmUnsupported("branch_ifnonnull"); }
-    void branch_ifnull(Ops, I, Args) { jvmUnsupported("branch_ifnull"); }
     void branch_jsr(Ops, I, Args) { jvmUnsupported("branch_jsr"); }
     void branch_jsr_w(Ops, I, Args) { jvmUnsupported("branch_jsr_w"); }
     void branch_lookupswitch(Ops, I, Args) { jvmUnsupported("branch_lookupswitch"); }
@@ -474,46 +466,6 @@ namespace JvmSemantics {
         newValue->kind(ValueKind::Integer32);
 
         ops->writeLocal(index, newValue);
-    }
-
-    void execute_iload(Ops ops, size_t index) {
-        auto sval = ops->readLocal(index);
-        ASSERT_require(sval->nBits() == 32);
-        ASSERT_require2(sval->kind() == ValueKind::Integer32, "local variable for iload must be Integer32");
-
-        ops->pushOperand(sval);
-    }
-
-    void execute_lload(Ops ops, size_t index) {
-        auto sval = ops->readLocal(index);
-        ASSERT_require(sval->nBits() == 64);
-        ASSERT_require2(sval->kind() == ValueKind::Integer64, "local variable for lload must be Integer64");
-
-        ops->pushOperand(sval);
-    }
-
-    void execute_fload(Ops ops, size_t index) {
-        auto sval = ops->readLocal(index);
-        ASSERT_require(sval->nBits() == 32);
-        ASSERT_require2(sval->kind() == ValueKind::Float32, "local variable for fload must be Float32");
-
-        ops->pushOperand(sval);
-    }
-
-    void execute_dload(Ops ops, size_t index) {
-        auto sval = ops->readLocal(index);
-        ASSERT_require(sval->nBits() == 64);
-        ASSERT_require2(sval->kind() == ValueKind::Float64, "local variable for dload must be Float64");
-
-        ops->pushOperand(sval);
-    }
-
-    void execute_aload(Ops ops, size_t index) {
-        auto sval = ops->readLocal(index);
-        ASSERT_require(sval->kind() == ValueKind::ObjectReference ||
-                       sval->kind() == ValueKind::ArrayReference);
-
-        ops->pushOperand(sval);
     }
 
     void execute_ldc(Ops ops, size_t index) {
@@ -628,7 +580,7 @@ namespace JvmSemantics {
         }
     }
 
-    enum class LocalStoreKind {
+    enum class LocalKind {
         Integer32,
         Integer64,
         Float32,
@@ -636,26 +588,60 @@ namespace JvmSemantics {
         Reference
     };
 
-    static void execute_store(Ops ops, size_t index, LocalStoreKind expectedKind) {
+    void execute_load(Ops ops, size_t index, LocalKind expectedKind) {
+        ASSERT_not_null(ops);
+
+        auto state = ops->currentState();
+        ASSERT_not_null(state);
+
+        auto frame = state->currentFrame();
+        ASSERT_not_null(frame);
+
+        auto value = frame->readLocal(index);
+        ASSERT_not_null(value);
+
+        switch (expectedKind) {
+            case LocalKind::Integer32:
+                ASSERT_require(value->kind() == ValueKind::Integer32);
+                break;
+            case LocalKind::Integer64:
+                ASSERT_require(value->kind() == ValueKind::Integer64);
+                break;
+            case LocalKind::Float32:
+                ASSERT_require(value->kind() == ValueKind::Float32);
+                break;
+            case LocalKind::Float64:
+                ASSERT_require(value->kind() == ValueKind::Float64);
+                break;
+            case LocalKind::Reference:
+                ASSERT_require(value->kind() == ValueKind::ObjectReference ||
+                               value->kind() == ValueKind::ArrayReference);
+                break;
+        }
+
+        ops->pushOperand(value);
+    }
+
+    static void execute_store(Ops ops, size_t index, LocalKind expectedKind) {
         ASSERT_not_null(ops);
 
         auto value = ops->popOperand();
         ASSERT_not_null(value);
 
         switch (expectedKind) {
-            case LocalStoreKind::Integer32:
+            case LocalKind::Integer32:
                 ASSERT_require(value->kind() == ValueKind::Integer32);
                 break;
-            case LocalStoreKind::Integer64:
+            case LocalKind::Integer64:
                 ASSERT_require(value->kind() == ValueKind::Integer64);
                 break;
-            case LocalStoreKind::Float32:
+            case LocalKind::Float32:
                 ASSERT_require(value->kind() == ValueKind::Float32);
                 break;
-            case LocalStoreKind::Float64:
+            case LocalKind::Float64:
                 ASSERT_require(value->kind() == ValueKind::Float64);
                 break;
-            case LocalStoreKind::Reference:
+            case LocalKind::Reference:
                 ASSERT_require(value->kind() == ValueKind::ObjectReference ||
                                value->kind() == ValueKind::ArrayReference);
                 break;
@@ -741,6 +727,96 @@ namespace JvmSemantics {
             }
         }
         // Without an array-content model, the assignment is not retained.
+    }
+
+    Address branchTargetAddress(I insn, int32_t displacement) {
+        ASSERT_not_null(insn);
+
+        const int64_t target = static_cast<int64_t>(insn->get_address()) +
+                               static_cast<int64_t>(displacement);
+        ASSERT_require(target >= 0);
+
+        return static_cast<Address>(target);
+    }
+
+    void execute_condition(D d, Ops ops, I insn, int16_t displacement, const SValuePtr &cond) {
+        ASSERT_not_null(cond);
+
+        const RegisterDescriptor pcReg = d->instructionPointerRegister();
+
+        // PC has already advanced to the fall-through instruction.
+        auto fallThrough = ops->readRegister(pcReg);
+        ASSERT_not_null(fallThrough);
+
+        auto targetAddr = JvmSemantics::branchTargetAddress(insn, displacement);
+        auto target = ops->number_(pcReg.nBits(), targetAddr);
+        ASSERT_not_null(target);
+        ASSERT_require(target->nBits() == fallThrough->nBits());
+
+        auto nextPc = ops->ite(cond, target, fallThrough);
+        ops->writeRegister(pcReg, nextPc);
+    }
+
+    enum class NullBranchKind {
+        IfNull,
+        IfNonNull
+    };
+
+    void execute_null_branch(D d, Ops ops, I insn, Args args, NullBranchKind branchKind) {
+        ASSERT_not_null(d);
+        ASSERT_not_null(ops);
+        ASSERT_not_null(insn);
+
+        auto reference = ops->popOperand();
+        ASSERT_not_null(reference);
+
+        ASSERT_require(reference->kind() == ValueKind::ObjectReference ||
+                       reference->kind() == ValueKind::ArrayReference);
+
+        // This semantic model represents the null reference as zero.
+        auto nullRef = JvmSemantics::nullReference(ops);
+        ASSERT_not_null(nullRef);
+
+        SValuePtr condition;
+
+        switch (branchKind) {
+            case NullBranchKind::IfNull:
+                condition = ops->isEqual(reference, nullRef);
+                break;
+            case NullBranchKind::IfNonNull:
+                condition = ops->isNotEqual(reference, nullRef);
+                break;
+        }
+        ASSERT_not_null(condition);
+
+        const RegisterDescriptor pcReg = d->instructionPointerRegister();
+
+        // The dispatcher has already advanced PC to the fall-through address.
+        auto fallThrough = ops->readRegister(pcReg);
+        ASSERT_not_null(fallThrough);
+        ASSERT_require(fallThrough->nBits() == pcReg.nBits());
+
+#if 1
+        auto targetAddr = JvmSemantics::branchTargetAddress(insn, d->asS2(args[0]));
+        auto target = ops->number_(pcReg.nBits(), targetAddr);
+        ASSERT_not_null(target);
+        ASSERT_require(target->nBits() == fallThrough->nBits());
+
+        auto nextPc = ops->ite(condition, target, fallThrough);
+        ops->writeRegister(pcReg, nextPc);
+#else
+        const int16_t offset = d->asS2(args[0]);
+
+        const int64_t signedTarget = static_cast<int64_t>(insn->get_address()) + static_cast<int64_t>(offset);
+        ASSERT_require(signedTarget >= 0);
+
+        auto branchTarget = ops->number_(pcReg.nBits(), static_cast<Address>(signedTarget));
+        ASSERT_not_null(branchTarget);
+        ASSERT_require(branchTarget->nBits() == fallThrough->nBits());
+
+        auto nextPc = ops->ite(condition, branchTarget, fallThrough);
+        ops->writeRegister(pcReg, nextPc);
+#endif
     }
 
     void execute_athrow(Ops, I, Args) { jvmUnsupported("execute_athrow"); }
@@ -970,8 +1046,8 @@ namespace JS = JvmSemantics;
 using JvmSemantics::asU1;
 using JvmSemantics::doBinaryOp;
 using JvmSemantics::doUnaryOp;
+using JvmSemantics::LocalKind;
 using JvmSemantics::ArrayStoreKind;
-using JvmSemantics::LocalStoreKind;
 using JvmSemantics::InvocationKind;
 
 // aaload (50 (0x32))
@@ -1021,7 +1097,6 @@ struct IP_aconst_null: P {
     }
 };
 
-
 // aload (25 (0x19))
         // Description:
         //   Load a reference value from a local variable and push it.
@@ -1033,7 +1108,7 @@ struct IP_aconst_null: P {
 struct IP_aload: P {
     void p(D d, Ops ops, I insn, Args args) {
         assert_args(insn, args, 1);
-        JS::execute_aload(ops, d->asU1(args[0]));
+        execute_load(ops, d->asU1(args[0]), LocalKind::Reference);
     }
 };
 
@@ -1048,7 +1123,7 @@ struct IP_aload: P {
 struct IP_aload_0: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ops->pushOperand(ops->readLocal(0));
+        execute_load(ops, 0, LocalKind::Reference);
     }
 };
 
@@ -1063,7 +1138,7 @@ struct IP_aload_0: P {
 struct IP_aload_1: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ops->pushOperand(ops->readLocal(1));
+        execute_load(ops, 1, LocalKind::Reference);
     }
 };
 
@@ -1078,7 +1153,7 @@ struct IP_aload_1: P {
 struct IP_aload_2: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ops->pushOperand(ops->readLocal(2));
+        execute_load(ops, 2, LocalKind::Reference);
     }
 };
 
@@ -1093,7 +1168,7 @@ struct IP_aload_2: P {
 struct IP_aload_3: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ops->pushOperand(ops->readLocal(3));
+        execute_load(ops, 3, LocalKind::Reference);
     }
 };
 
@@ -1169,7 +1244,7 @@ struct IP_arraylength: P {
 struct IP_astore: P {
     void p(D d, Ops ops, I insn, Args args) {
         assert_args(insn, args, 1);
-        execute_store(ops, d->asU1(args[0]), LocalStoreKind::Reference);
+        execute_store(ops, d->asU1(args[0]), LocalKind::Reference);
     }
 };
 
@@ -1183,7 +1258,7 @@ struct IP_astore: P {
 struct IP_astore_0: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        execute_store(ops, 0, LocalStoreKind::Reference);
+        execute_store(ops, 0, LocalKind::Reference);
     }
 };
 
@@ -1197,7 +1272,7 @@ struct IP_astore_0: P {
 struct IP_astore_1: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        execute_store(ops, 1, LocalStoreKind::Reference);
+        execute_store(ops, 1, LocalKind::Reference);
     }
 };
 
@@ -1211,7 +1286,7 @@ struct IP_astore_1: P {
 struct IP_astore_2: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        execute_store(ops, 2, LocalStoreKind::Reference);
+        execute_store(ops, 2, LocalKind::Reference);
     }
 };
 
@@ -1225,7 +1300,7 @@ struct IP_astore_2: P {
 struct IP_astore_3: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        execute_store(ops, 3, LocalStoreKind::Reference);
+        execute_store(ops, 3, LocalKind::Reference);
     }
 };
 
@@ -1517,7 +1592,7 @@ struct IP_ddiv: P {
 struct IP_dload: P {
     void p(D d, Ops ops, I insn, Args args) {
         assert_args(insn, args, 1);
-        JS::execute_dload(ops, d->asU1(args[0]));
+        execute_load(ops, d->asU1(args[0]), LocalKind::Float64);
     }
 };
 
@@ -1531,7 +1606,7 @@ struct IP_dload: P {
 struct IP_dload_0: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ops->pushOperand(ops->readLocal(0));
+        execute_load(ops, 0, LocalKind::Float64);
     }
 };
 
@@ -1545,7 +1620,7 @@ struct IP_dload_0: P {
 struct IP_dload_1: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ops->pushOperand(ops->readLocal(1));
+        execute_load(ops, 1, LocalKind::Float64);
     }
 };
 
@@ -1559,7 +1634,7 @@ struct IP_dload_1: P {
 struct IP_dload_2: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ops->pushOperand(ops->readLocal(2));
+        execute_load(ops, 2, LocalKind::Float64);
     }
 };
 
@@ -1573,7 +1648,7 @@ struct IP_dload_2: P {
 struct IP_dload_3: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ops->pushOperand(ops->readLocal(3));
+        execute_load(ops, 3, LocalKind::Float64);
     }
 };
 
@@ -1653,7 +1728,7 @@ struct IP_dreturn: P {
 struct IP_dstore: P {
     void p(D d, Ops ops, I insn, Args args) {
         assert_args(insn, args, 1);
-        execute_store(ops, d->asU1(args[0]), LocalStoreKind::Float64);
+        execute_store(ops, d->asU1(args[0]), LocalKind::Float64);
     }
 };
 
@@ -1667,7 +1742,7 @@ struct IP_dstore: P {
 struct IP_dstore_0: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        execute_store(ops, 0, LocalStoreKind::Float64);
+        execute_store(ops, 0, LocalKind::Float64);
     }
 };
 
@@ -1681,7 +1756,7 @@ struct IP_dstore_0: P {
 struct IP_dstore_1: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        execute_store(ops, 1, LocalStoreKind::Float64);
+        execute_store(ops, 1, LocalKind::Float64);
     }
 };
 
@@ -1695,7 +1770,7 @@ struct IP_dstore_1: P {
 struct IP_dstore_2: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        execute_store(ops, 2, LocalStoreKind::Float64);
+        execute_store(ops, 2, LocalKind::Float64);
     }
 };
 
@@ -1709,7 +1784,7 @@ struct IP_dstore_2: P {
 struct IP_dstore_3: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        execute_store(ops, 3, LocalStoreKind::Float64);
+        execute_store(ops, 3, LocalKind::Float64);
     }
 };
 
@@ -2097,7 +2172,7 @@ struct IP_fdiv: P {
 struct IP_fload: P {
     void p(D d, Ops ops, I insn, Args args) {
         assert_args(insn, args, 1);
-        JS::execute_fload(ops, d->asU1(args[0]));
+        execute_load(ops, d->asU1(args[0]), LocalKind::Float32);
     }
 };
 
@@ -2233,7 +2308,7 @@ struct IP_freturn: P {
 struct IP_fstore: P {
     void p(D d, Ops ops, I insn, Args args) {
         assert_args(insn, args, 1);
-        execute_store(ops, d->asU1(args[0]), LocalStoreKind::Float32);
+        execute_store(ops, d->asU1(args[0]), LocalKind::Float32);
     }
 };
 
@@ -2247,7 +2322,7 @@ struct IP_fstore: P {
 struct IP_fstore_0: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        execute_store(ops, 0, LocalStoreKind::Float32);
+        execute_store(ops, 0, LocalKind::Float32);
     }
 };
 
@@ -2261,7 +2336,7 @@ struct IP_fstore_0: P {
 struct IP_fstore_1: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        execute_store(ops, 1, LocalStoreKind::Float32);
+        execute_store(ops, 1, LocalKind::Float32);
     }
 };
 
@@ -2275,7 +2350,7 @@ struct IP_fstore_1: P {
 struct IP_fstore_2: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        execute_store(ops, 2, LocalStoreKind::Float32);
+        execute_store(ops, 2, LocalKind::Float32);
     }
 };
 
@@ -2289,7 +2364,7 @@ struct IP_fstore_2: P {
 struct IP_fstore_3: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        execute_store(ops, 3, LocalStoreKind::Float32);
+        execute_store(ops, 3, LocalKind::Float32);
     }
 };
 
@@ -2776,9 +2851,19 @@ struct IP_if_icmple: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_ifeq: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
-        assert_args(insn, args, 2);
-        JvmSemantics::branch_ifeq(ops, insn, args);
+    void p(D d, Ops ops, I insn, Args args) {
+        assert_args(insn, args, 1);
+
+        auto value = ops->popOperand();
+        ASSERT_not_null(value);
+        ASSERT_require(value->kind() == ValueKind::Integer32);
+
+        auto zero = ops->number_(value->nBits(), 0);
+        ASSERT_not_null(zero);
+
+        const auto condition = ops->isEqual(value, zero);
+
+        JvmSemantics::execute_condition(d, ops, insn, d->asS2(args[0]), ops->isEqual(value, zero));
     }
 };
 
@@ -2788,9 +2873,19 @@ struct IP_ifeq: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_ifne: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
-        assert_args(insn, args, 2);
-        JvmSemantics::branch_ifne(ops, insn, args);
+    void p(D d, Ops ops, I insn, Args args) {
+        assert_args(insn, args, 1);
+
+        auto value = ops->popOperand();
+        ASSERT_not_null(value);
+        ASSERT_require(value->kind() == ValueKind::Integer32);
+
+        auto zero = ops->number_(value->nBits(), 0);
+        ASSERT_not_null(zero);
+
+        const auto condition = ops->isNotEqual(value, zero);
+
+        JvmSemantics::execute_condition(d, ops, insn, d->asS2(args[0]), condition);
     }
 };
 
@@ -2800,9 +2895,19 @@ struct IP_ifne: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_iflt: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
-        assert_args(insn, args, 2);
-        JvmSemantics::branch_iflt(ops, insn, args);
+    void p(D d, Ops ops, I insn, Args args) {
+        assert_args(insn, args, 1);
+
+        auto value = ops->popOperand();
+        ASSERT_not_null(value);
+        ASSERT_require(value->kind() == ValueKind::Integer32);
+
+        auto zero = ops->number_(value->nBits(), 0);
+        ASSERT_not_null(zero);
+
+        const auto condition = ops->isSignedLessThan(value, zero);
+
+        JvmSemantics::execute_condition(d, ops, insn, d->asS2(args[0]), condition);
     }
 };
 
@@ -2812,9 +2917,19 @@ struct IP_iflt: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_ifge: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
-        assert_args(insn, args, 2);
-        JvmSemantics::branch_ifge(ops, insn, args);
+    void p(D d, Ops ops, I insn, Args args) {
+        assert_args(insn, args, 1);
+
+        auto value = ops->popOperand();
+        ASSERT_not_null(value);
+        ASSERT_require(value->kind() == ValueKind::Integer32);
+
+        auto zero = ops->number_(value->nBits(), 0);
+        ASSERT_not_null(zero);
+
+        const auto condition = ops->isSignedGreaterThanOrEqual(value, zero);
+
+        JvmSemantics::execute_condition(d, ops, insn, d->asS2(args[0]), condition);
     }
 };
 
@@ -2824,9 +2939,19 @@ struct IP_ifge: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_ifgt: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
-        assert_args(insn, args, 2);
-        JvmSemantics::branch_ifgt(ops, insn, args);
+    void p(D d, Ops ops, I insn, Args args) {
+        assert_args(insn, args, 1);
+
+        auto value = ops->popOperand();
+        ASSERT_not_null(value);
+        ASSERT_require(value->kind() == ValueKind::Integer32);
+
+        auto zero = ops->number_(value->nBits(), 0);
+        ASSERT_not_null(zero);
+
+        const auto condition = ops->isSignedGreaterThan(value, zero);
+
+        JvmSemantics::execute_condition(d, ops, insn, d->asS2(args[0]), condition);
     }
 };
 
@@ -2836,9 +2961,19 @@ struct IP_ifgt: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_ifle: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
-        assert_args(insn, args, 2);
-        JvmSemantics::branch_ifle(ops, insn, args);
+    void p(D d, Ops ops, I insn, Args args) {
+        assert_args(insn, args, 1);
+
+        auto value = ops->popOperand();
+        ASSERT_not_null(value);
+        ASSERT_require(value->kind() == ValueKind::Integer32);
+
+        auto zero = ops->number_(value->nBits(), 0);
+        ASSERT_not_null(zero);
+
+        const auto condition = ops->isSignedLessThanOrEqual(value, zero);
+
+        JvmSemantics::execute_condition(d, ops, insn, d->asS2(args[0]), condition);
     }
 };
 
@@ -2848,9 +2983,9 @@ struct IP_ifle: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_ifnonnull: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
-        assert_args(insn, args, 2);
-        JvmSemantics::branch_ifnonnull(ops, insn, args);
+    void p(D d, Ops ops, I insn, Args args) {
+        assert_args(insn, args, 1);
+        execute_null_branch(d, ops, insn, args, JvmSemantics::NullBranchKind::IfNonNull);
     }
 };
 
@@ -2860,9 +2995,9 @@ struct IP_ifnonnull: P {
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
 struct IP_ifnull: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
-        assert_args(insn, args, 2);
-        JvmSemantics::branch_ifnull(ops, insn, args);
+    void p(D d, Ops ops, I insn, Args args) {
+        assert_args(insn, args, 1);
+        execute_null_branch(d, ops, insn, args, JvmSemantics::NullBranchKind::IfNull);
     }
 };
 
@@ -2891,7 +3026,7 @@ struct IP_iinc: P {
 struct IP_iload: P {
     void p(D d, Ops ops, I insn, Args args) {
         assert_args(insn, args, 1);
-        JS::execute_iload(ops, d->asU1(args[0]));
+        execute_load(ops, d->asU1(args[0]), LocalKind::Integer32);
     }
 };
 
@@ -3176,7 +3311,7 @@ struct IP_ishr: P {
 struct IP_istore: P {
     void p(D d, Ops ops, I insn, Args args) {
         assert_args(insn, args, 1);
-        execute_store(ops, d->asU1(args[0]), LocalStoreKind::Integer32);
+        execute_store(ops, d->asU1(args[0]), LocalKind::Integer32);
     }
 };
 
@@ -3190,7 +3325,7 @@ struct IP_istore: P {
 struct IP_istore_0: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        execute_store(ops, 0, LocalStoreKind::Integer32);
+        execute_store(ops, 0, LocalKind::Integer32);
     }
 };
 
@@ -3204,7 +3339,7 @@ struct IP_istore_0: P {
 struct IP_istore_1: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        execute_store(ops, 1, LocalStoreKind::Integer32);
+        execute_store(ops, 1, LocalKind::Integer32);
     }
 };
 
@@ -3218,7 +3353,7 @@ struct IP_istore_1: P {
 struct IP_istore_2: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        execute_store(ops, 2, LocalStoreKind::Integer32);
+        execute_store(ops, 2, LocalKind::Integer32);
     }
 };
 
@@ -3232,7 +3367,7 @@ struct IP_istore_2: P {
 struct IP_istore_3: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        execute_store(ops, 3, LocalStoreKind::Integer32);
+        execute_store(ops, 3, LocalKind::Integer32);
     }
 };
 
@@ -3566,7 +3701,7 @@ struct IP_ldiv: P {
 struct IP_lload: P {
     void p(D d, Ops ops, I insn, Args args) {
         assert_args(insn, args, 1);
-        JS::execute_lload(ops, d->asU1(args[0]));
+        execute_load(ops, d->asU1(args[0]), LocalKind::Integer64);
     }
 };
 
@@ -3580,7 +3715,7 @@ struct IP_lload: P {
 struct IP_lload_0: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ops->pushOperand(ops->readLocal(0));
+        execute_load(ops, 0, LocalKind::Integer64);
     }
 };
 
@@ -3594,7 +3729,7 @@ struct IP_lload_0: P {
 struct IP_lload_1: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ops->pushOperand(ops->readLocal(1));
+        execute_load(ops, 1, LocalKind::Integer64);
     }
 };
 
@@ -3608,7 +3743,7 @@ struct IP_lload_1: P {
 struct IP_lload_2: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ops->pushOperand(ops->readLocal(2));
+        execute_load(ops, 2, LocalKind::Integer64);
     }
 };
 
@@ -3622,7 +3757,7 @@ struct IP_lload_2: P {
 struct IP_lload_3: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ops->pushOperand(ops->readLocal(3));
+        execute_load(ops, 3, LocalKind::Integer64);
     }
 };
 
@@ -3786,7 +3921,7 @@ struct IP_lshr: P {
 struct IP_lstore: P {
     void p(D d, Ops ops, I insn, Args args) {
         assert_args(insn, args, 1);
-        execute_store(ops, d->asU1(args[0]), LocalStoreKind::Integer64);
+        execute_store(ops, d->asU1(args[0]), LocalKind::Integer64);
     }
 };
 
@@ -3800,7 +3935,7 @@ struct IP_lstore: P {
 struct IP_lstore_0: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        execute_store(ops, 0, LocalStoreKind::Integer64);
+        execute_store(ops, 0, LocalKind::Integer64);
     }
 };
 
@@ -3814,7 +3949,7 @@ struct IP_lstore_0: P {
 struct IP_lstore_1: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        execute_store(ops, 1, LocalStoreKind::Integer64);
+        execute_store(ops, 1, LocalKind::Integer64);
     }
 };
 
@@ -3828,7 +3963,7 @@ struct IP_lstore_1: P {
 struct IP_lstore_2: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        execute_store(ops, 2, LocalStoreKind::Integer64);
+        execute_store(ops, 2, LocalKind::Integer64);
     }
 };
 
@@ -3842,7 +3977,7 @@ struct IP_lstore_2: P {
 struct IP_lstore_3: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        execute_store(ops, 3, LocalStoreKind::Integer64);
+        execute_store(ops, 3, LocalKind::Integer64);
     }
 };
 
@@ -4240,43 +4375,43 @@ struct IP_wide: P {
         switch (opcode) {
             case JIK::iload:
                 ASSERT_require(args.size() == 2);
-                JS::execute_iload(ops, index);
+                execute_load(ops, index, LocalKind::Integer32);
                 break;
             case JIK::lload:
                 ASSERT_require(args.size() == 2);
-                JS::execute_lload(ops, index);
+                execute_load(ops, index, LocalKind::Integer64);
                 break;
             case JIK::fload:
                 ASSERT_require(args.size() == 2);
-                JS::execute_fload(ops, index);
+                execute_load(ops, index, LocalKind::Float32);
                 break;
             case JIK::dload:
                 ASSERT_require(args.size() == 2);
-                JS::execute_dload(ops, index);
+                execute_load(ops, index, LocalKind::Float64);
                 break;
             case JIK::aload:
                 ASSERT_require(args.size() == 2);
-                JS::execute_aload(ops, index);
+                execute_load(ops, index, LocalKind::Reference);
                 break;
             case JIK::istore:
                 assert_args(insn, args, 2);
-                execute_store(ops, index, LocalStoreKind::Integer32);
+                execute_store(ops, index, LocalKind::Integer32);
                 break;
             case JIK::lstore:
                 ASSERT_require(args.size() == 2);
-                execute_store(ops, index, LocalStoreKind::Integer64);
+                execute_store(ops, index, LocalKind::Integer64);
                 break;
             case JIK::fstore:
                 ASSERT_require(args.size() == 2);
-                execute_store(ops, index, LocalStoreKind::Float32);
+                execute_store(ops, index, LocalKind::Float32);
                 break;
             case JIK::dstore:
                 ASSERT_require(args.size() == 2);
-                execute_store(ops, index, LocalStoreKind::Float64);
+                execute_store(ops, index, LocalKind::Float64);
                 break;
             case JIK::astore:
                 ASSERT_require(args.size() == 2);
-                execute_store(ops, index, LocalStoreKind::Reference);
+                execute_store(ops, index, LocalKind::Reference);
                 break;
             case JIK::iinc:
                 ASSERT_require(args.size() == 3);
@@ -4481,11 +4616,12 @@ DispatcherJvm::initializeDispatchTable() {
 //  iprocSet(0x96,  new Jvm::IP_fcmpg);
 //  iprocSet(0x97,  new Jvm::IP_dcmpl);
 //  iprocSet(0x98,  new Jvm::IP_dcmpg);
-//  iprocSet(0x99,  new Jvm::IP_ifeq);
-//  iprocSet(0x9a,  new Jvm::IP_ifne);
-//  iprocSet(0x9b,  new Jvm::IP_iflt);
-//  iprocSet(0x9c,  new Jvm::IP_ifge);
-//  iprocSet(0x9d,  new Jvm::IP_ifgt);
+    iprocSet(0x99,  new Jvm::IP_ifeq);
+    iprocSet(0x9a,  new Jvm::IP_ifne);
+    iprocSet(0x9b,  new Jvm::IP_iflt);
+    iprocSet(0x9c,  new Jvm::IP_ifge);
+    iprocSet(0x9d,  new Jvm::IP_ifgt);
+    iprocSet(0x9e,  new Jvm::IP_ifle);
 //  iprocSet(0x9f,  new Jvm::IP_icmpeq);
 //  iprocSet(0xa0,  new Jvm::IP_icmpne);
 //  iprocSet(0xa1,  new Jvm::IP_icmplt);
@@ -4524,8 +4660,8 @@ DispatcherJvm::initializeDispatchTable() {
     iprocSet(0xc4,  new Jvm::IP_wide);
 //  iprocSet(0xc5,  new Jvm::IP_multianewarray);
 
-//  iprocSet(0xc6,  new Jvm::IP_ifnull);
-//  iprocSet(0xc7,  new Jvm::IP_ifnonnull);
+    iprocSet(0xc6,  new Jvm::IP_ifnull);
+    iprocSet(0xc7,  new Jvm::IP_ifnonnull);
 //  iprocSet(0xc8,  new Jvm::IP_goto_w);
 //  iprocSet(0xc9,  new Jvm::IP_jsr_w);
 
