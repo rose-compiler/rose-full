@@ -207,7 +207,6 @@ namespace JvmSemantics {
     void methodReturn(Ops ops, I insn);
     void methodReturn(Ops ops, I insn, SValue::Ptr value);
 
-    void branch_goto(Ops ops, I insn, Args args);
     void branch_goto_w(Ops ops, I insn, Args args);
     void branch_if_acmpeq(Ops ops, I insn, Args args);
     void branch_if_acmpne(Ops ops, I insn, Args args);
@@ -416,7 +415,6 @@ namespace JvmSemantics {
     void methodReturn(Ops /*ops*/, I /*insn*/) { jvmUnsupported("methodReturn(void)"); }
     void methodReturn(Ops /*ops*/, I /*insn*/, SValue::Ptr /*value*/) { jvmUnsupported("methodReturn(value)"); }
 
-    void branch_goto(Ops, I, Args) { jvmUnsupported("branch_goto"); }
     void branch_goto_w(Ops, I, Args) { jvmUnsupported("branch_goto_w"); }
     void branch_if_acmpeq(Ops, I, Args) { jvmUnsupported("branch_if_acmpeq"); }
     void branch_if_acmpne(Ops, I, Args) { jvmUnsupported("branch_if_acmpne"); }
@@ -2435,10 +2433,14 @@ struct IP_getstatic: P {
         //   Branch unconditionally by the signed offset.
         // Run-time Exceptions:
         //   None specified other than VirtualMachineError subclasses.
-struct IP_goto: P {
-    void p(D /*d*/, Ops ops, I insn, Args args) {
-        assert_args(insn, args, 2);
-        JvmSemantics::branch_goto(ops, insn, args);
+struct IP_goto_: P {
+    void p(D d, Ops ops, I insn, Args args) {
+        assert_args(insn, args, 1);
+
+        auto targetAddr = JvmSemantics::branchTargetAddress(insn, d->asS2(args[0]));
+        const RegisterDescriptor pcReg = d->instructionPointerRegister();
+
+        ops->writeRegister(pcReg, ops->number_(pcReg.nBits(), targetAddr));
     }
 };
 
@@ -4631,7 +4633,7 @@ DispatcherJvm::initializeDispatchTable() {
 //  iprocSet(0xa5,  new Jvm::IP_icmpeq);
 //  iprocSet(0xa6,  new Jvm::IP_icmpne);
 
-//  iprocSet(0xa7,  new Jvm::IP_goto_);
+    iprocSet(0xa7,  new Jvm::IP_goto_);
 //  iprocSet(0xa8,  new Jvm::IP_jsr);
 //  iprocSet(0xa9,  new Jvm::IP_ret);
 //  iprocSet(0xaa,  new Jvm::IP_tableswitch);
