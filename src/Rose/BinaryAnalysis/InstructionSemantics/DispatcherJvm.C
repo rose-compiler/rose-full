@@ -188,7 +188,7 @@ namespace JvmSemantics {
         }
     };
 
-    }
+    } // namespace MyDomain
 
     uint8_t asU1(const SgAsmExpression* expr) {
         auto ivExpr = isSgAsmIntegerValueExpression(expr);
@@ -199,8 +199,6 @@ namespace JvmSemantics {
     using Args = std::vector<SgAsmExpression*>;
 
     SValue::Ptr nullReference(Ops ops);
-    SValue::Ptr arrayLoad(Ops ops, const char *kind, SValue::Ptr arrayref, SValue::Ptr index);
-
     SValue::Ptr rem(Ops ops, SValue::Ptr a, SValue::Ptr b);
     SValue::Ptr convert(Ops ops, const char *op, SValue::Ptr a);
 
@@ -278,24 +276,6 @@ namespace JvmSemantics {
         nullRef->symbolName("null");
 
         return nullRef;
-    }
-
-    SValue::Ptr arrayLoad(Ops ops, const char * /*kind*/, SValue::Ptr arrayref, SValue::Ptr index) {
-     // 1. Calculate the address (base + index)
-        SValue::Ptr addr = ops->add(arrayref, index);
-
-     // 2. Define the size of the read (e.g., 32 bits) using an undefined value as a template
-        SValue::Ptr dflt = ops->undefined_(32);
-
-     // 3. Define the condition (usually constant true)
-        SValue::Ptr cond = ops->boolean_(true);
-
-     // 4. Call readMemory with all 4 required SValue::Ptr arguments
-        return ops->readMemory(RegisterDescriptor(), addr, dflt, cond);
-    }
-
-    SValue::Ptr rem(Ops ops, SValue::Ptr a, SValue::Ptr b) {
-        return ops->signedModulo(a, b);
     }
 
     SgAsmJvmConstantPool* constantPool(Ops ops) {
@@ -654,7 +634,7 @@ namespace JvmSemantics {
         frame->writeLocal(index, value);
     }
 
-    enum class ArrayStoreKind {
+    enum class ArrayElementKind {
         Integer32,
         Integer64,
         Float32,
@@ -665,7 +645,90 @@ namespace JvmSemantics {
         Short
     };
 
-    void execute_array_store(Ops ops, ArrayStoreKind storeKind) {
+    // Synthesize the result of reading an array element
+    SValuePtr readArrayElement(Ops ops, const SValuePtr &arrayRef, const SValuePtr &index, size_t nBits) {
+        ASSERT_not_null(ops);
+        ASSERT_not_null(arrayRef);
+        ASSERT_not_null(index);
+
+        ASSERT_require(arrayRef->kind() == ValueKind::ArrayReference);
+        ASSERT_require(index->kind() == ValueKind::Integer32);
+
+        // Array contents are not modeled yet.
+        return ops->undefined_(nBits);
+    }
+
+    void execute_array_load(Ops ops, ArrayElementKind loadKind) {
+        ASSERT_not_null(ops);
+
+        auto index = ops->popOperand();
+        ASSERT_not_null(index);
+        ASSERT_require(index->kind() == ValueKind::Integer32);
+
+        auto arrayRef = ops->popOperand();
+        ASSERT_not_null(arrayRef);
+        ASSERT_require(arrayRef->kind() == ValueKind::ArrayReference);
+
+        const std::string descriptor = arrayRef->typeDescriptor();
+        ASSERT_require(!descriptor.empty());
+        ASSERT_require(descriptor[0] == '[');
+
+        SValuePtr result;
+
+        switch (loadKind) {
+          case ArrayElementKind::Integer32:
+              result = readArrayElement(ops, arrayRef, index, 32);
+              result->kind(ValueKind::Integer32);
+              break;
+          case ArrayElementKind::Integer64:
+              result = readArrayElement(ops, arrayRef, index, 64);
+              result->kind(ValueKind::Integer64);
+              break;
+          case ArrayElementKind::Float32:
+              result = readArrayElement(ops, arrayRef, index, 32);
+              result->kind(ValueKind::Float32);
+              break;
+          case ArrayElementKind::Float64:
+              result = readArrayElement(ops, arrayRef, index, 64);
+              result->kind(ValueKind::Float64);
+              break;
+          case ArrayElementKind::Reference:
+              result = readArrayElement(ops, arrayRef, index, 32);
+              result->kind(ValueKind::ObjectReference);
+              break;
+          case ArrayElementKind::ByteOrBoolean: {
+              ASSERT_require(descriptor == "[B" || descriptor == "[Z");
+
+              auto value = readArrayElement(ops, arrayRef, index, 8);
+
+              // byte[] requires sign extension; boolean[] requires
+              // zero extension. The array descriptor must distinguish them.
+              result = descriptor == "[Z"
+                  ? ops->unsignedExtend(value, 32)
+                  : ops->signExtend(value, 32);
+
+              result->kind(ValueKind::Integer32);
+              break;
+          }
+          case ArrayElementKind::Character: {
+              auto value = readArrayElement(ops, arrayRef, index, 16);
+              result = ops->unsignedExtend(value, 32);
+              result->kind(ValueKind::Integer32);
+              break;
+          }
+          case ArrayElementKind::Short: {
+              auto value = readArrayElement(ops, arrayRef, index, 16);
+              result = ops->signExtend(value, 32);
+              result->kind(ValueKind::Integer32);
+              break;
+          }
+        }
+
+        ASSERT_not_null(result);
+        ops->pushOperand(result);
+    }
+
+    void execute_array_store(Ops ops, ArrayElementKind storeKind) {
         ASSERT_not_null(ops);
 
         auto value = ops->popOperand();
@@ -684,35 +747,35 @@ namespace JvmSemantics {
         ASSERT_require(descriptor[0] == '[');
 
         switch (storeKind) {
-            case ArrayStoreKind::Integer32:
+            case ArrayElementKind::Integer32:
                 ASSERT_require(descriptor == "[I");
                 ASSERT_require(value->kind() == ValueKind::Integer32);
                 break;
-            case ArrayStoreKind::Integer64:
+            case ArrayElementKind::Integer64:
                 ASSERT_require(descriptor == "[J");
                 ASSERT_require(value->kind() == ValueKind::Integer64);
                 break;
-            case ArrayStoreKind::Float32:
+            case ArrayElementKind::Float32:
                 ASSERT_require(descriptor == "[F");
                 ASSERT_require(value->kind() == ValueKind::Float32);
                 break;
-            case ArrayStoreKind::Float64:
+            case ArrayElementKind::Float64:
                 ASSERT_require(descriptor == "[D");
                 ASSERT_require(value->kind() == ValueKind::Float64);
                 break;
-            case ArrayStoreKind::ByteOrBoolean:
+            case ArrayElementKind::ByteOrBoolean:
                 ASSERT_require(descriptor == "[B" || descriptor == "[Z");
                 ASSERT_require(value->kind() == ValueKind::Integer32);
                 break;
-            case ArrayStoreKind::Character:
+            case ArrayElementKind::Character:
                 ASSERT_require(descriptor == "[C");
                 ASSERT_require(value->kind() == ValueKind::Integer32);
                 break;
-            case ArrayStoreKind::Short:
+            case ArrayElementKind::Short:
                 ASSERT_require(descriptor == "[S");
                 ASSERT_require(value->kind() == ValueKind::Integer32);
                 break;
-            case ArrayStoreKind::Reference: {
+            case ArrayElementKind::Reference: {
                 ASSERT_require(value->kind() == ValueKind::ObjectReference ||
                                value->kind() == ValueKind::ArrayReference);
 
@@ -794,7 +857,6 @@ namespace JvmSemantics {
         ASSERT_not_null(fallThrough);
         ASSERT_require(fallThrough->nBits() == pcReg.nBits());
 
-#if 1
         auto targetAddr = JvmSemantics::branchTargetAddress(insn, d->asS2(args[0]));
         auto target = ops->number_(pcReg.nBits(), targetAddr);
         ASSERT_not_null(target);
@@ -802,19 +864,6 @@ namespace JvmSemantics {
 
         auto nextPc = ops->ite(condition, target, fallThrough);
         ops->writeRegister(pcReg, nextPc);
-#else
-        const int16_t offset = d->asS2(args[0]);
-
-        const int64_t signedTarget = static_cast<int64_t>(insn->get_address()) + static_cast<int64_t>(offset);
-        ASSERT_require(signedTarget >= 0);
-
-        auto branchTarget = ops->number_(pcReg.nBits(), static_cast<Address>(signedTarget));
-        ASSERT_not_null(branchTarget);
-        ASSERT_require(branchTarget->nBits() == fallThrough->nBits());
-
-        auto nextPc = ops->ite(condition, branchTarget, fallThrough);
-        ops->writeRegister(pcReg, nextPc);
-#endif
     }
 
     void execute_athrow(Ops, I, Args) { jvmUnsupported("execute_athrow"); }
@@ -1045,7 +1094,7 @@ using JvmSemantics::asU1;
 using JvmSemantics::doBinaryOp;
 using JvmSemantics::doUnaryOp;
 using JvmSemantics::LocalKind;
-using JvmSemantics::ArrayStoreKind;
+using JvmSemantics::ArrayElementKind;
 using JvmSemantics::InvocationKind;
 
 // aaload (50 (0x32))
@@ -1057,13 +1106,7 @@ using JvmSemantics::InvocationKind;
 struct IP_aaload: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr index = ops->popOperand();
-        SValue::Ptr arrayref = ops->popOperand();
-        JvmSemantics::throwIfNull(ops, "NullPointerException", arrayref);
-
-        JvmSemantics::throwIfArrayIndexOutOfBounds(ops, arrayref, index);
-
-        ops->pushOperand(JvmSemantics::arrayLoad(ops, "a", arrayref, index));
+        execute_array_load(ops, ArrayElementKind::Reference);
     }
 };
 
@@ -1077,7 +1120,7 @@ struct IP_aaload: P {
 struct IP_aastore: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        execute_array_store(ops, ArrayStoreKind::Reference);
+        execute_array_store(ops, ArrayElementKind::Reference);
     }
 };
 
@@ -1325,13 +1368,7 @@ struct IP_athrow: P {
 struct IP_baload: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr index = ops->popOperand();
-        SValue::Ptr arrayref = ops->popOperand();
-        JvmSemantics::throwIfNull(ops, "NullPointerException", arrayref);
-
-        JvmSemantics::throwIfArrayIndexOutOfBounds(ops, arrayref, index);
-
-        ops->pushOperand(JvmSemantics::arrayLoad(ops, "b", arrayref, index));
+        execute_array_load(ops, ArrayElementKind::ByteOrBoolean);
     }
 };
 
@@ -1344,7 +1381,7 @@ struct IP_baload: P {
 struct IP_bastore: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        execute_array_store(ops, ArrayStoreKind::ByteOrBoolean);
+        execute_array_store(ops, ArrayElementKind::ByteOrBoolean);
     }
 };
 
@@ -1377,13 +1414,7 @@ struct IP_bipush: P {
 struct IP_caload: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr index = ops->popOperand();
-        SValue::Ptr arrayref = ops->popOperand();
-        JvmSemantics::throwIfNull(ops, "NullPointerException", arrayref);
-
-        JvmSemantics::throwIfArrayIndexOutOfBounds(ops, arrayref, index);
-
-        ops->pushOperand(JvmSemantics::arrayLoad(ops, "c", arrayref, index));
+        execute_array_load(ops, ArrayElementKind::Character);
     }
 };
 
@@ -1396,7 +1427,7 @@ struct IP_caload: P {
 struct IP_castore: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        execute_array_store(ops, ArrayStoreKind::Character);
+        execute_array_store(ops, ArrayElementKind::Character);
     }
 };
 
@@ -1490,13 +1521,7 @@ struct IP_dadd: P {
 struct IP_daload: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr index = ops->popOperand();
-        SValue::Ptr arrayref = ops->popOperand();
-        JvmSemantics::throwIfNull(ops, "NullPointerException", arrayref);
-
-        JvmSemantics::throwIfArrayIndexOutOfBounds(ops, arrayref, index);
-
-        ops->pushOperand(JvmSemantics::arrayLoad(ops, "d", arrayref, index));
+        execute_array_load(ops, ArrayElementKind::Float64);
     }
 };
 
@@ -1509,7 +1534,7 @@ struct IP_daload: P {
 struct IP_dastore: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        execute_array_store(ops, ArrayStoreKind::Float64);
+        execute_array_store(ops, ArrayElementKind::Float64);
     }
 };
 
@@ -2062,9 +2087,9 @@ struct IP_fadd: P {
         //   NullPointerException if arrayref is null.
         //   ArrayIndexOutOfBoundsException if index is outside the array bounds.
 struct IP_faload: P {
-    void p(D /*d*/, Ops /*ops*/, I insn, Args args) {
+    void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        ASSERT_require2(false, "faload unimplemented");
+        execute_array_load(ops, ArrayElementKind::Float32);
     }
 };
 
@@ -2077,7 +2102,7 @@ struct IP_faload: P {
 struct IP_fastore: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        execute_array_store(ops, ArrayStoreKind::Float32);
+        execute_array_store(ops, ArrayElementKind::Float32);
     }
 };
 
@@ -2592,13 +2617,7 @@ struct IP_iadd: P {
 struct IP_iaload: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr index = ops->popOperand();
-        SValue::Ptr arrayref = ops->popOperand();
-        JvmSemantics::throwIfNull(ops, "NullPointerException", arrayref);
-
-        JvmSemantics::throwIfArrayIndexOutOfBounds(ops, arrayref, index);
-
-        ops->pushOperand(JvmSemantics::arrayLoad(ops, "i", arrayref, index));
+        execute_array_load(ops, ArrayElementKind::Integer32);
     }
 };
 
@@ -2624,7 +2643,7 @@ struct IP_iand: P {
 struct IP_iastore: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        execute_array_store(ops, ArrayStoreKind::Integer32);
+        execute_array_store(ops, ArrayElementKind::Integer32);
     }
 };
 
@@ -3535,13 +3554,7 @@ struct IP_ladd: P {
 struct IP_laload: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr index = ops->popOperand();
-        SValue::Ptr arrayref = ops->popOperand();
-        JvmSemantics::throwIfNull(ops, "NullPointerException", arrayref);
-
-        JvmSemantics::throwIfArrayIndexOutOfBounds(ops, arrayref, index);
-
-        ops->pushOperand(JvmSemantics::arrayLoad(ops, "l", arrayref, index));
+        execute_array_load(ops, ArrayElementKind::Integer64);
     }
 };
 
@@ -3567,7 +3580,7 @@ struct IP_land: P {
 struct IP_lastore: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        execute_array_store(ops, ArrayStoreKind::Integer64);
+        execute_array_store(ops, ArrayElementKind::Integer64);
     }
 };
 
@@ -4277,13 +4290,7 @@ struct IP_ret: P {
 struct IP_saload: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        SValue::Ptr index = ops->popOperand();
-        SValue::Ptr arrayref = ops->popOperand();
-        JvmSemantics::throwIfNull(ops, "NullPointerException", arrayref);
-
-        JvmSemantics::throwIfArrayIndexOutOfBounds(ops, arrayref, index);
-
-        ops->pushOperand(JvmSemantics::arrayLoad(ops, "s", arrayref, index));
+        execute_array_load(ops, ArrayElementKind::Short);
     }
 };
 
@@ -4296,7 +4303,7 @@ struct IP_saload: P {
 struct IP_sastore: P {
     void p(D /*d*/, Ops ops, I insn, Args args) {
         assert_args(insn, args, 0);
-        execute_array_store(ops, ArrayStoreKind::Short);
+        execute_array_store(ops, ArrayElementKind::Short);
     }
 };
 
@@ -4453,14 +4460,14 @@ DispatcherJvm::initializeDispatchTable() {
     iprocSet(0x2b,  new Jvm::IP_aload_1);
     iprocSet(0x2c,  new Jvm::IP_aload_2);
     iprocSet(0x2d,  new Jvm::IP_aload_3);
-//  iprocSet(0x2e,  new Jvm::IP_iaload);
-//  iprocSet(0x2f,  new Jvm::IP_laload);
-//  iprocSet(0x30,  new Jvm::IP_faload);
-//  iprocSet(0x31,  new Jvm::IP_daload);
-//  iprocSet(0x32,  new Jvm::IP_aaload);
-//  iprocSet(0x33,  new Jvm::IP_baload);
-//  iprocSet(0x34,  new Jvm::IP_caload);
-//  iprocSet(0x35,  new Jvm::IP_saload);
+    iprocSet(0x2e,  new Jvm::IP_iaload);
+    iprocSet(0x2f,  new Jvm::IP_laload);
+    iprocSet(0x30,  new Jvm::IP_faload);
+    iprocSet(0x31,  new Jvm::IP_daload);
+    iprocSet(0x32,  new Jvm::IP_aaload);
+    iprocSet(0x33,  new Jvm::IP_baload);
+    iprocSet(0x34,  new Jvm::IP_caload);
+    iprocSet(0x35,  new Jvm::IP_saload);
 
     iprocSet(0x3a,  new Jvm::IP_astore);
     iprocSet(0x4b,  new Jvm::IP_astore_0);
